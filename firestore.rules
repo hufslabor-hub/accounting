@@ -1,0 +1,30 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAllowedUser() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/allowedUsers/$(request.auth.uid));
+    }
+
+    match /allowedUsers/{userId} {
+      allow get: if isSignedIn() && request.auth.uid == userId;
+      allow list, create, update, delete: if false;
+    }
+
+    match /accountingData/{documentId} {
+      allow read: if isAllowedUser();
+      allow create, update: if isAllowedUser()
+        && request.resource.data.keys().hasOnly(['value', 'updatedAt', 'updatedBy', 'updatedByEmail'])
+        && request.resource.data.value is string
+        && request.resource.data.value.size() < 900000
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedByEmail is string;
+      allow delete: if false;
+    }
+  }
+}
