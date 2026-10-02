@@ -2515,9 +2515,14 @@ async function getDriveAccessToken(){
   if(!auth?.currentUser) throw new Error('Google 계정에 로그인한 뒤 다시 시도해 주세요.');
   const provider = new firebase.auth.GoogleAuthProvider();
   provider.addScope('https://www.googleapis.com/auth/drive.file');
+  const customParameters = {prompt:'consent'};
+  if(auth.currentUser.email) customParameters.login_hint = auth.currentUser.email;
+  provider.setCustomParameters(customParameters);
   const result = await auth.currentUser.reauthenticateWithPopup(provider);
-  const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
-  if(!credential?.accessToken) throw new Error('Google Drive 접근 권한을 받지 못했습니다.');
+  const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result) || result.credential;
+  if(!credential?.accessToken){
+    throw new Error('Google에서 Drive 파일 접근 동의를 완료하지 않아 접근 토큰을 받지 못했습니다. 팝업에서 Drive 권한을 허용하고 다시 시도해 주세요.');
+  }
   return credential.accessToken;
 }
 
