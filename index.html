@@ -100,22 +100,23 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .transaction-table td:first-child{white-space:nowrap;}
   .income-row{background:var(--income-row);}
   .expense-row{background:var(--paper-2);}
-  .transaction-table .col-date{width:13%;}
-  .transaction-table .col-type{width:7%;}
-  .transaction-table .col-description{width:18%;}
-  .transaction-table .col-mok{width:14%;}
-  .transaction-table .col-payee{width:14%;}
-  .transaction-table .col-amount{width:12%;}
-  .transaction-table .col-status{width:8%;}
-  .transaction-table .col-actions{width:14%;}
+  .transaction-table .col-date{width:11%;}
+  .transaction-table .col-type{width:6%;}
+  .transaction-table .col-description{width:15%;}
+  .transaction-table .col-mok{width:11%;}
+  .transaction-table .col-payee{width:10%;}
+  .transaction-table .col-spender{width:10%;}
+  .transaction-table .col-amount{width:11%;}
+  .transaction-table .col-status{width:14%;}
+  .transaction-table .col-actions{width:12%;}
   .transaction-table td.num{white-space:nowrap;}
-  .entry-table td:nth-child(7){white-space:nowrap;}
+  .entry-table td:nth-child(8){white-space:nowrap;}
   tfoot tr{background:#e9eef4;font-weight:700;}
   tfoot th,tfoot td{border-top:2px solid var(--navy-2);vertical-align:middle;}
   .report-total-row{background:#e9eef4;font-weight:700;}
   .hierarchy-total-label{text-align:right;font-weight:700;}
   .hierarchy-total-value{text-align:right;font-weight:700;white-space:nowrap;}
-  .status-confirmed{background:var(--income-row);color:var(--navy);}
+  .status-approved,.status-confirmed{background:var(--income-row);color:var(--navy);}
   .report-transaction-table .col-date{width:10%;}
   .report-transaction-table .col-description{width:20%;}
   .report-transaction-table .col-mok{width:13%;}
@@ -125,17 +126,25 @@ body { background-color:var(--paper-2); color:var(--ink); }
     .transaction-table th,.transaction-table td{padding:6px 3px;font-size:12px;}
     .transaction-table td.num{font-size:11px;white-space:normal;}
     .entry-table .col-date{width:13%;}
-    .entry-table .col-description{width:18%;}
-    .entry-table .col-mok{width:13%;}
-    .entry-table .col-payee{width:13%;}
-    .entry-table .col-amount{width:14%;}
-    .entry-table .col-actions{width:14%;}
+    .entry-table .col-date{width:11%;}
+    .entry-table .col-type{width:6%;}
+    .entry-table .col-description{width:14%;}
+    .entry-table .col-mok{width:11%;}
+    .entry-table .col-payee{width:10%;}
+    .entry-table .col-spender{width:10%;}
+    .entry-table .col-amount{width:11%;}
+    .entry-table .col-status{width:15%;}
+    .entry-table .col-actions{width:12%;}
   }
   th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
   th+th,td+td{border-left:1px solid var(--line);}
   thead th+th{border-left-color:rgba(219,226,239,.42);}
   th{color:var(--ink-soft);font-weight:500;font-size:14px;text-align:center;}
   .field label{font-size:14px;color:var(--ink-soft);}
+  .date-entry-control{position:relative;display:flex;gap:8px;align-items:center;}
+  .date-entry-control input[type="text"]{flex:1;min-width:0;}
+  .date-picker-native{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;}
+  .date-picker-button{flex:0 0 auto;border:1px solid var(--line);background:var(--paper-2);color:var(--navy);padding:8px 12px;font:inherit;cursor:pointer;}
   td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
   th.num{text-align:center;}
   tr:last-child td{border-bottom:none;}
@@ -470,7 +479,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
   </div>
   <div class="view" id="view-entry">
     <div class="notice" style="margin-top:28px;">
-      이 화면에 입력한 내역은 <b>이 페이지를 함께 보는 재정담당자 전원에게 공유</b>됩니다. 새 내역은 <b>입력완료</b>로 등록되며, 같은 담당자의 내역을 선택해 제출·처리할 수 있습니다. 지출은 <b>지급완료</b>, 수입은 <b>확인완료</b>된 건만 보고서 탭 집계에 반영됩니다. 기존 엑셀에서 가져온 내역(8월 24일 이전)은 원본 보존을 위해 삭제할 수 없습니다.
+      이 화면에 입력한 내역은 <b>이 페이지를 함께 보는 재정담당자 전원에게 공유</b>됩니다. 새 내역은 <b>입력완료</b>로 등록되며, 같은 담당자의 내역을 선택해 제출·처리할 수 있습니다. 승인된 내역은 보고서 탭 집계에 반영됩니다. 기존 엑셀에서 가져온 내역(8월 24일 이전)은 원본 보존을 위해 삭제할 수 없습니다.
       <b id="entry-storage-warning"></b>
     </div>
 
@@ -485,17 +494,25 @@ body { background-color:var(--paper-2); color:var(--ink); }
               <button type="button" id="btn-gubun-expense" class="on-expense selected">지출</button>
             </div>
           </div>
-          <div class="field"><label>결제일</label><input type="date" id="f-date"></div>
+          <div class="field">
+            <label for="f-date">결제일</label>
+            <div class="date-entry-control">
+              <input type="text" id="f-date" inputmode="numeric" placeholder="YYYY-MM-DD" autocomplete="off">
+              <input type="date" id="f-date-picker" class="date-picker-native" tabindex="-1" aria-label="달력에서 결제일 선택">
+              <button class="date-picker-button" id="btn-open-date-picker" type="button" aria-label="달력 열기">달력</button>
+            </div>
+          </div>
           <div class="field"><label for="f-mok">세부 계정과목</label><select id="f-mok"></select></div>
           <div class="field"><label>담당자</label><input type="text" id="f-spender" placeholder="입력자 이름" list="staff-name-options"><datalist id="staff-name-options"></datalist></div>
 
           <div class="field span2"><label>내용</label><input type="text" id="f-desc" placeholder="예: 집행부 회의 식비" list="dl-desc"></div>
-          <div class="field"><label>지급처</label><input type="text" id="f-payee" placeholder="예: 배달의민족"></div>
+          <div class="field"><label>지급처</label><input type="text" id="f-payee" placeholder="예: 배달의민족" list="recent-payee-options"><datalist id="recent-payee-options"></datalist></div>
           <div class="field"><label>금액(원)</label><input type="number" id="f-amount" placeholder="예: 50000"></div>
         </div>
         <datalist id="dl-desc"></datalist>
 
         <button class="btn-primary" id="btn-add">내역 추가</button>
+        <button class="btn-revert hidden" id="btn-cancel-entry-edit" type="button">수정 취소</button>
         <span id="save-status"></span>
       </div>
     </section>
@@ -514,9 +531,9 @@ body { background-color:var(--paper-2); color:var(--ink); }
           <table class="transaction-table entry-table">
             <colgroup>
               <col class="col-date"><col class="col-type"><col class="col-description"><col class="col-mok">
-              <col class="col-payee"><col class="col-amount"><col class="col-status"><col class="col-actions">
+              <col class="col-payee"><col class="col-spender"><col class="col-amount"><col class="col-status"><col class="col-actions">
             </colgroup>
-            <thead><tr><th>결제일</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th class="num">금액</th><th>상태</th><th></th></tr></thead>
+            <thead><tr><th>결제일</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th>담당자</th><th class="num">금액</th><th>상태</th><th></th></tr></thead>
             <tbody id="tx-body-entry"></tbody>
           </table>
         </div>
@@ -567,6 +584,7 @@ let staffNames = [];
 let staffBankDetails = [];
 let paymentReportEntryIds = [];
 let paymentReportSourceStatus = '';
+let editingEntryId = '';
 let accountCategories = createDefaultAccountCategories();
 let charts = {};
 let currentMonthReport = '전체';
@@ -574,12 +592,15 @@ let currentMonthEntry = '전체';
 let currentStatusEntry = '전체';
 let currentGubun = '지출';
 let budgetMigrationMessage = '';
+let categoriesNeedMigration = false;
+let budgetNeedsMigration = false;
 
 const STATUS_LABEL = {
   'input-complete':'입력완료',
   submitted:'제출완료',
-  paid:'지급완료',
-  confirmed:'확인완료',
+  approved:'승인',
+  paid:'승인',
+  confirmed:'승인',
   rejected:'반려됨'
 };
 const DRIVE_FOLDER_ID = '1gMzC9jbjYONOXv9ZCqJpB8kH8NYmb2it';
@@ -601,31 +622,41 @@ function createDefaultAccountCategories(){
       group('기타수입_기부금등_관',[account('기타수입_기부금등_항',['기타수입(기부금 등)'])])
     ],
     expense:[
-      group('운영비_관',[account('사무실운영비_항',['사무실운영비'])]),
-      group('사업비_관',[account('신문도서비_항',['신문도서비'])]),
-      group('회의비_관',[account('통신비_SMS등_항',['통신비(SMS 등)'])]),
-      group('행사비_관',[account('조직사업비_항',['조직강화비','생일축하사업비','부서별간담회비','소모임지원비'])]),
-      group('활동비_관',[account('교육사업비_항',['대의원/중집수련회비','간부/교섭위원교육비'])]),
-      group('여비_관',[account('홍보사업비_항',['홍보물/선전물제작비','홈페이지 관리비'])]),
-      group('예비비_관',[account('정책사업비_항',['정책개발비','법률자문비'])]),
-      group('조합비환불비_관',[account('후생복지사업비_항',['경조비','퇴직조합원기념품구입비','포상비','문화사업지원비'])]),
-      group('차기이월금_관',[
-        account('연대사업비_항',['교내외 연대사업비']),
+      group('운영비_관',[
+        account('사무실운영비_항',['사무실운영비']),
+        account('신문도서비_항',['신문도서비']),
+        account('통신비_SMS등_항',['통신비(SMS 등)'])
+      ]),
+      group('사업비_관',[
+        account('조직사업비_항',['조직강화비','생일축하사업비','부서별간담회비','소모임지원비']),
+        account('교육사업비_항',['대의원/중집수련회비','간부/교섭위원교육비']),
+        account('홍보사업비_항',['홍보물/선전물제작비','홈페이지 관리비']),
+        account('정책사업비_항',['정책개발비','법률자문비']),
+        account('후생복지사업비_항',['경조비','퇴직조합원기념품구입비','포상비','문화사업지원비']),
+        account('연대사업비_항',['교내외 연대사업비'])
+      ]),
+      group('회의비_관',[
         account('임원중집위회의비_항',['임원/중집/대의원회의비']),
         account('단체교섭회의비_항',['단체교섭회의비']),
-        account('회계감사선관위회의비_항',['회계감사/선관위회의비']),
+        account('회계감사선관위회의비_항',['회계감사/선관위회의비'])
+      ]),
+      group('행사비_관',[
         account('조합원총회비_항',['조합원총회비']),
         account('창립기념행사비_항',['창립기념행사비']),
         account('야외행사비_항',['야외행사비']),
         account('퇴직조합원환송회비_항',['퇴직조합원 환송회비']),
-        account('노동절행사비_항',['노동절행사비']),
+        account('노동절행사비_항',['노동절행사비'])
+      ]),
+      group('활동비_관',[
         account('중앙집행위원활동비_항',['중앙집행위원활동비']),
-        account('대의원활동비_항',['대의원활동비']),
+        account('대의원활동비_항',['대의원활동비'])
+      ]),
+      group('예비비_관',[
         account('교통유류비_항',['교통유류비']),
-        account('예비비_항',['예비비']),
-        account('조합비환불비_항',['조합비환불비']),
-        account('차기이월금_항',['차기이월금'])
-      ])
+        account('예비비_항',['예비비'])
+      ]),
+      group('조합비환불비_관',[account('조합비환불비_항',['조합비환불비'])]),
+      group('차기이월금_관',[account('차기이월금_항',['차기이월금'])])
     ]
   };
 }
@@ -638,6 +669,7 @@ const accountBalanceKey = y => 'account-balance:' + y;
 const STAFF_NAMES_KEY = 'staff-names:list';
 const STAFF_BANK_DETAILS_KEY = 'staff-bank-details:list';
 const SUBMISSION_SEQUENCE_KEY = 'management-sequence:submission';
+const CATEGORY_SCHEMA_VERSION = 2;
 const categoryKey = y => 'categories:' + y;
 const fyStart = y => `${y}-01-01`;
 const fyEnd = y => `${y}-12-31`;
@@ -889,10 +921,9 @@ function applyFixes(list){
   const fixes = DATE_FIXES[currentYear] || {};
   let changed = false;
   list.forEach(t=>{
-    if(!t.status){ t.status = t.locked ? (t.gubun==='수입'?'confirmed':'paid') : 'input-complete'; changed = true; }
+    if(!t.status){ t.status = t.locked ? 'approved' : 'input-complete'; changed = true; }
     else if(t.status==='pending'){ t.status = 'input-complete'; changed = true; }
-    else if(t.status==='approved'){ t.status = 'paid'; changed = true; }
-    if(t.gubun==='수입' && t.status==='paid'){ t.status='confirmed'; changed=true; }
+    else if(t.status==='paid' || t.status==='confirmed'){ t.status='approved'; changed=true; }
     if(fixes[t.id] && t.date !== fixes[t.id]){ t.date = fixes[t.id]; changed = true; }
   });
   return changed;
@@ -1009,12 +1040,7 @@ function renderStaffNames(){
   const datalist = document.getElementById('staff-name-options');
   const list = document.getElementById('staff-name-list');
   if(!datalist || !list) return;
-  datalist.replaceChildren();
-  staffNames.forEach(name=>{
-    const option = document.createElement('option');
-    option.value = name;
-    datalist.appendChild(option);
-  });
+  renderRecentEntryOptions();
   list.replaceChildren();
   if(!staffNames.length){
     const empty = document.createElement('p');
@@ -1212,37 +1238,85 @@ async function saveAccountBalance(){
 }
 
 async function loadAccountCategories(){
+  categoriesNeedMigration = false;
+  budgetNeedsMigration = false;
   try{
     const res = await storageGet(categoryKey(currentYear));
     const saved = JSON.parse(res.value);
-    if(Array.isArray(saved.income) && saved.income.every(group=>group && typeof group==='object' && Array.isArray(group.accounts))){
+    if(saved.schemaVersion===CATEGORY_SCHEMA_VERSION &&
+      Array.isArray(saved.income) && saved.income.every(group=>group && typeof group==='object' && Array.isArray(group.accounts))){
       accountCategories = {
         income: saved.income,
         expense: Array.isArray(saved.expense) ? saved.expense : []
       };
     } else {
       accountCategories = createDefaultAccountCategories();
-      ['income','expense'].forEach(type=>{
-        const legacyNames = Array.isArray(saved[type]) ? saved[type] : [];
-        const known = new Set(accountCategories[type].flatMap(group=>
-          group.accounts.flatMap(account=>account.items)
-        ));
-        const custom = legacyNames.filter(name=>!known.has(name));
-        if(custom.length){
-          const fallbackName = type==='income' ? '기타수입_관' : '기타지출_관';
-          let fallback = accountCategories[type].find(group=>group.name===fallbackName);
-          if(!fallback){
-            fallback = {name:fallbackName, accounts:[]};
-            accountCategories[type].push(fallback);
-          }
-          fallback.accounts.push({name:type==='income' ? '기타수입_항' : '기타지출_항', items:custom});
-        }
-      });
+      remapBudgetForCategoryReset();
+      categoriesNeedMigration = true;
     }
   }catch(e){
     if(e.code !== 'accounting/not-found') throw e;
     accountCategories = createDefaultAccountCategories();
+    remapBudgetForCategoryReset();
+    categoriesNeedMigration = true;
   }
+}
+
+function remapBudgetForCategoryReset(){
+  const before = JSON.stringify(budget);
+  const targets = new Map();
+  ['income','expense'].forEach(type=>{
+    accountCategories[type].forEach(group=>{
+      group.accounts.forEach(account=>{
+        account.items.forEach(mok=>{
+          const key = mokBudgetKey(type,normalizeCategoryName(group.name,'_관'),normalizeCategoryName(account.name,'_항'),mok);
+          const lookup = `${type}\u0000${mok}`;
+          if(!targets.has(lookup)) targets.set(lookup,[]);
+          targets.get(lookup).push(key);
+        });
+      });
+    });
+  });
+  const remapped = {};
+  Object.entries(budget).forEach(([key,amount])=>{
+    if(!key.startsWith('mok:')){
+      remapped[key] = amount;
+      return;
+    }
+    let parts;
+    try{ parts=JSON.parse(key.slice(4)); }catch(error){ remapped[key]=amount; return; }
+    if(parts.length!==4){ remapped[key]=amount; return; }
+    const [type,oldGwan,oldHang,mok] = parts;
+    if(mok==='대학노조회비') return;
+    const targetKeys = targets.get(`${type}\u0000${mok}`) || [];
+    if(!targetKeys.length){ remapped[key]=amount; return; }
+    const exact = mokBudgetKey(type,normalizeCategoryName(oldGwan,'_관'),normalizeCategoryName(oldHang,'_항'),mok);
+    const targetKey = targetKeys.includes(exact) ? exact : targetKeys.length===1 ? targetKeys[0] : null;
+    if(!targetKey){ remapped[key]=amount; return; }
+    remapped[targetKey] = (Number(remapped[targetKey])||0) + (Number(amount)||0);
+  });
+  budget = remapped;
+  budgetNeedsMigration = before!==JSON.stringify(budget);
+}
+
+function reconcileLedgerClassifications(){
+  let changed = false;
+  ledger.forEach(entry=>{
+    const type = entry.gubun==='수입' ? 'income' : 'expense';
+    const matches = accountCategories[type].flatMap(group=>
+      group.accounts.flatMap(account=>account.items.map(mok=>({group,account,mok})))
+    ).filter(candidate=>candidate.mok===entry.category);
+    if(matches.length!==1) return;
+    const [{group,account}] = matches;
+    const gwan = normalizeCategoryName(group.name,'_관');
+    const hang = normalizeCategoryName(account.name,'_항');
+    if(entry.gwan!==gwan || entry.hang!==hang){
+      entry.gwan=gwan;
+      entry.hang=hang;
+      changed=true;
+    }
+  });
+  return changed;
 }
 
 function mokBudgetKey(type, gwan, hang, mok){
@@ -1425,7 +1499,7 @@ async function persistBudget(){
 }
 
 async function persistAccountCategories(){
-  try{ await storageSet(categoryKey(currentYear), JSON.stringify(accountCategories)); return true; }
+  try{ await storageSet(categoryKey(currentYear), JSON.stringify({...accountCategories,schemaVersion:CATEGORY_SCHEMA_VERSION})); return true; }
   catch(e){ lastStorageError = e.message || String(e); return false; }
 }
 
@@ -1438,8 +1512,11 @@ function renderYearSelect(){
   document.getElementById('fy-range').textContent = `${currentYear}.01.01 ~ ${currentYear}.12.31`;
   document.getElementById('budget-year-label').textContent = `${currentYear}년`;
   document.getElementById('budget-year-column').textContent = currentYear;
-  const f = document.getElementById('f-date');
-  f.min = fyStart(currentYear); f.max = fyEnd(currentYear); f.value = '';
+  const datePicker = document.getElementById('f-date-picker');
+  datePicker.min = fyStart(currentYear);
+  datePicker.max = fyEnd(currentYear);
+  document.getElementById('f-date').value = '';
+  datePicker.value = '';
 }
 
 async function loadYearData(){
@@ -1449,6 +1526,7 @@ async function loadYearData(){
   await loadStaffNames();
   await loadStaffBankDetails();
   await loadAccountCategories();
+  const ledgerCategoriesChanged = reconcileLedgerClassifications();
   if(migrateBudgetToMok() && !await persistBudget()){
     throw new Error(`목별 예산을 Firestore로 이전하지 못했습니다: ${lastStorageError}`);
   }
@@ -1457,13 +1535,15 @@ async function loadYearData(){
   }
   const normalized = normalizeHierarchySuffixes();
   const saves = await Promise.all([
-    normalized.categoriesChanged ? persistAccountCategories() : true,
-    normalized.budgetChanged ? persistBudget() : true,
-    normalized.ledgerChanged ? persist() : true
+    categoriesNeedMigration || normalized.categoriesChanged ? persistAccountCategories() : true,
+    budgetNeedsMigration || normalized.budgetChanged ? persistBudget() : true,
+    ledgerCategoriesChanged || normalized.ledgerChanged ? persist() : true
   ]);
   if(saves.some(saved=>!saved)){
     throw new Error(`관·항 명칭 정리 저장 실패: ${lastStorageError}`);
   }
+  categoriesNeedMigration = false;
+  budgetNeedsMigration = false;
 }
 
 function renderAll(){
@@ -1593,7 +1673,7 @@ const hangColors = ['#112D4E','#3F72AF','#DBE2EF'];
 function destroy(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } }
 
 function renderReport(){
-  const approved = ledger.filter(t => t.status === 'paid' || t.status === 'confirmed');
+  const approved = ledger.filter(t => t.status === 'approved' || t.status === 'paid' || t.status === 'confirmed');
   const ag = aggregates(approved);
 
   document.getElementById('r-income').textContent = fmt(ag.totalIncome);
@@ -1917,7 +1997,7 @@ function renderTxTable(mode){
   const body = document.getElementById(bodyId);
   body.innerHTML = '';
 
-  const source = isReport ? ledger.filter(t=>t.status==='paid' || t.status==='confirmed') : ledger;
+  const source = isReport ? ledger.filter(t=>t.status==='approved' || t.status==='paid' || t.status==='confirmed') : ledger;
 
   const filtered = source
     .filter(t => monthSel==='전체' || t.month===monthSel)
@@ -1945,7 +2025,8 @@ function renderTxTable(mode){
         <td style="color:${t.gubun==='수입'?'#3F72AF':'#112D4E'}">${escapeHTML(t.gubun||'')}</td>
         <td>${escapeHTML(t.desc||'')}</td>
         <td>${escapeHTML(t.category||'-')}</td>
-        <td>${escapeHTML(t.payee||t.spender||'-')}</td>
+        <td>${escapeHTML(t.payee||'-')}</td>
+        <td>${escapeHTML(t.spender||'-')}</td>
         <td class="num">${fmtShort(t.amount)}</td>
         <td><span class="status-badge status-${t.status}">${STATUS_LABEL[t.status]||t.status}</span>${t.managementNo?`<span class="management-number">관리번호 ${escapeHTML(String(t.managementNo))}</span>`:''}</td>
         <td>${rowActions(t)}</td>
@@ -1970,9 +2051,8 @@ function renderTxTable(mode){
 }
 
 function rowActions(t){
-  if(t.locked || t.status==='paid' || t.status==='confirmed'){
-    const statusText = t.status==='confirmed' ? '확인완료' : '지급완료';
-    return `<span class="locked-note">${t.locked?'가져온 내역':statusText}</span>`;
+  if(t.locked || t.status==='approved' || t.status==='paid' || t.status==='confirmed'){
+    return `<span class="locked-note">${t.locked?'가져온 내역':'승인'}</span>`;
   }
   const parts = [];
   if(t.status==='rejected') parts.push(`<button class="btn-revert" data-act="input-complete" data-id="${escapeHTML(t.id)}">입력완료로 복원</button>`);
@@ -2034,7 +2114,8 @@ function renderPendingBox(){
       <div class="workflow-actions">
         <button class="btn-primary" type="button" data-workflow-action="preview-input">선택 내역 보고서 열람</button>
         <button class="btn-primary" type="button" data-workflow-action="submit">선택 내역 제출완료</button>
-        <button class="btn-reject" type="button" data-workflow-action="reject-input">선택 내역 반려</button>
+        <button class="btn-revert" type="button" data-workflow-action="edit-input">선택 내용 수정</button>
+        <button class="btn-reject" type="button" data-workflow-action="delete-input">선택 내역 삭제</button>
       </div>
     </div>
     <div class="workflow-stage">
@@ -2052,7 +2133,8 @@ function renderPendingBox(){
     button.addEventListener('click',()=>{
       const action = button.dataset.workflowAction;
       if(action==='submit') updateSelectedWorkflow('input-complete','submitted');
-      else if(action==='reject-input') updateSelectedWorkflow('input-complete','rejected');
+      else if(action==='edit-input') editSelectedInputEntry();
+      else if(action==='delete-input') deleteSelectedInputEntries();
       else if(action==='reject-submitted') updateSelectedWorkflow('submitted','rejected');
       else if(action==='preview-input') openPaymentReport('input-complete');
       else if(action==='preview') openPaymentReport('submitted');
@@ -2065,6 +2147,55 @@ function selectedWorkflowEntries(status){
   const ids = [...document.querySelectorAll(`[data-workflow-id][data-workflow-status="${status}"]:checked`)]
     .map(input=>input.dataset.workflowId);
   return ids.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
+}
+
+function editSelectedInputEntry(){
+  const entries = selectedWorkflowEntries('input-complete');
+  if(entries.length!==1){
+    setStatus(entries.length ? '수정할 내역은 한 건만 선택해 주세요.' : '수정할 내역을 체크해 주세요.');
+    return;
+  }
+  const entry = entries[0];
+  currentGubun = entry.gubun==='수입' ? '수입' : '지출';
+  setGubun(currentGubun);
+  const classification = JSON.stringify({gwan:entry.gwan||'',hang:entry.hang||'',mok:entry.category||''});
+  const mokSelect = document.getElementById('f-mok');
+  if(![...mokSelect.options].some(option=>option.value===classification)){
+    setStatus('기존 세부 계정과목을 찾을 수 없어 수정 모드로 전환하지 못했습니다. 예산 관리에서 분류를 확인해 주세요.');
+    return;
+  }
+  editingEntryId = entry.id;
+  document.getElementById('f-date').value = entry.date || '';
+  document.getElementById('f-date-picker').value = entry.date || '';
+  document.getElementById('f-desc').value = entry.desc || '';
+  document.getElementById('f-payee').value = entry.payee || '';
+  document.getElementById('f-spender').value = entry.spender || '';
+  document.getElementById('f-amount').value = entry.amount ?? '';
+  mokSelect.value = classification;
+  document.getElementById('btn-add').textContent = '수정 저장';
+  document.getElementById('btn-cancel-entry-edit').classList.remove('hidden');
+  setStatus('선택한 내역을 수정한 뒤 수정 저장을 눌러주세요.');
+  document.querySelector('#view-entry .form-grid').scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+async function deleteSelectedInputEntries(){
+  const entries = selectedWorkflowEntries('input-complete');
+  if(!entries.length){
+    setStatus('삭제할 내역을 체크해 주세요.');
+    return;
+  }
+  if(!window.confirm(`입력완료 내역 ${entries.length}건을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) return;
+  const previousLedger = ledger;
+  const ids = new Set(entries.map(entry=>entry.id));
+  ledger = ledger.filter(entry=>!ids.has(entry.id));
+  if(!await persist()){
+    ledger = previousLedger;
+    setStatus(`내역 삭제에 실패했습니다: ${lastStorageError || '저장소 오류'}`);
+  }else{
+    setStatus(`${entries.length}건을 삭제했습니다.`);
+  }
+  renderReport();
+  renderEntryView();
 }
 
 function requireSingleSpender(entries){
@@ -2194,7 +2325,7 @@ function openPaymentReport(status){
     const approveButton = document.getElementById('btn-approve-payment-report');
     approveButton.classList.toggle('hidden',status!=='submitted');
     if(status!=='submitted'){
-      document.getElementById('payment-report-status').textContent = '지급완료 승인은 제출완료 처리 후 가능합니다.';
+      document.getElementById('payment-report-status').textContent = '승인은 제출완료 처리 후 가능합니다.';
     }
     document.getElementById('payment-report-dialog').showModal();
   }catch(error){
@@ -2258,7 +2389,7 @@ function renderPaymentReport(entries,spender,approval=null,managementNoOverride=
     </div>
     ${approval
       ? `<p class="payment-report-note">승인자: ${escapeHTML(approval.approver)} · ${escapeHTML(approval.date)} · 지급 승인 도장이 포함된 보고서입니다.</p>`
-      : '<p class="payment-report-note">지급완료 승인 시 승인 도장이 포함된 PDF를 공유 드라이브에 저장합니다.</p>'}`;
+      : '<p class="payment-report-note">승인 시 승인 도장이 포함된 PDF를 공유 드라이브에 저장합니다.</p>'}`;
 }
 
 async function getDriveAccessToken(){
@@ -2336,9 +2467,7 @@ async function approvePaymentReport(){
     const managementNo = await allocatePaymentManagementNumber(approvalTime);
     const approvalDate = `${approvalTime.getFullYear()}-${String(approvalTime.getMonth()+1).padStart(2,'0')}-${String(approvalTime.getDate()).padStart(2,'0')}`;
     const approver = currentUser.displayName || currentUser.email || '로그인 사용자';
-    const approvalAction = entries.every(entry=>entry.gubun==='수입')
-      ? '수입 확인 완료'
-      : entries.some(entry=>entry.gubun==='수입') ? '지출 지급 승인 · 수입 확인 완료' : '지급 승인 완료';
+    const approvalAction = '승인 완료';
     const approvalLabel = `${formatEntryDate(approvalDate)} ${approvalTime.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}`;
     renderPaymentReport(entries,spender,{date:approvalLabel,approver,label:approvalAction},managementNo);
     if(document.fonts?.ready) await document.fonts.ready;
@@ -2356,7 +2485,9 @@ async function approvePaymentReport(){
     uploadedFile = await uploadPaymentReport(token,blob,fileName);
 
     entries.forEach(entry=>{
-      entry.status = entry.gubun==='수입' ? 'confirmed' : 'paid';
+      entry.status = 'approved';
+      entry.approvedAt = approvalTime.toISOString();
+      entry.approvedBy = currentUser.email || currentUser.displayName || '';
       if(entry.gubun==='수입'){
         entry.confirmedAt = approvalTime.toISOString();
         entry.confirmedBy = currentUser.email || currentUser.displayName || '';
@@ -2402,13 +2533,15 @@ function renderEntryView(){
   renderPendingBox();
   renderStatusFilters();
   renderMonthFilters('month-filters-entry', ledger, currentMonthEntry, m=>{ currentMonthEntry=m; renderTxTable('entry'); });
+  renderRecentEntryOptions();
+  refreshMokOptions();
   renderTxTable('entry');
 }
 
 function renderStatusFilters(){
   const el = document.getElementById('status-filters-entry');
   el.innerHTML = '';
-  const options = ['전체','input-complete','submitted','paid','confirmed','rejected'];
+  const options = ['전체','input-complete','submitted','approved','rejected'];
   options.forEach(s=>{
     const btn = document.createElement('button');
     btn.className = 'filter-btn' + (s===currentStatusEntry ? ' active' : '');
@@ -2429,7 +2562,70 @@ function setupDatalists(){
   const dlDesc = document.getElementById('dl-desc');
 const descSet = new Set(BASE_LEDGER.map(t=>t.desc).filter(Boolean));  
 Array.from(descSet).slice(0,200).forEach(d=>{ const o=document.createElement('option'); o.value=d; dlDesc.appendChild(o); });
+  renderRecentEntryOptions();
   refreshMokOptions();
+}
+
+function recentEntryDate(entry){
+  const timestamp = Date.parse(entry.createdAt || entry.enteredAt || '');
+  if(Number.isFinite(timestamp)) return timestamp;
+  const date = /^(\d{4}-\d{2}-\d{2})$/.exec(entry.date||'');
+  return date ? Date.parse(`${date[1]}T12:00:00`) : NaN;
+}
+
+function recentEntryValues(property){
+  const now = Date.now();
+  const cutoff = now - 30*24*60*60*1000;
+  const seen = new Set();
+  return ledger
+    .map(entry=>({value:String(entry[property]||'').trim(),timestamp:recentEntryDate(entry)}))
+    .filter(item=>item.value && Number.isFinite(item.timestamp) && item.timestamp>=cutoff && item.timestamp<=now)
+    .sort((a,b)=>b.timestamp-a.timestamp)
+    .filter(item=>{
+      const normalized = item.value.toLocaleLowerCase('ko-KR');
+      if(seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    })
+    .slice(0,5)
+    .map(item=>item.value);
+}
+
+function renderRecentEntryOptions(){
+  const spenderList = document.getElementById('staff-name-options');
+  const payeeList = document.getElementById('recent-payee-options');
+  if(spenderList){
+    spenderList.replaceChildren();
+    [...recentEntryValues('spender'),...staffNames].filter((name,index,all)=>name && all.indexOf(name)===index)
+      .forEach(name=>{
+        const option=document.createElement('option');
+        option.value=name;
+        spenderList.appendChild(option);
+      });
+  }
+  if(payeeList){
+    payeeList.replaceChildren();
+    recentEntryValues('payee').forEach(value=>{
+      const option=document.createElement('option');
+      option.value=value;
+      payeeList.appendChild(option);
+    });
+  }
+}
+
+function parseEntryDate(value){
+  const raw = String(value||'').trim();
+  const normalized = /^\d{8}$/.test(raw)
+    ? `${raw.slice(0,4)}-${raw.slice(4,6)}-${raw.slice(6,8)}`
+    : raw.replace(/[./]/g,'-');
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized);
+  if(!match) return '';
+  const [,year,month,day] = match;
+  const parsed = new Date(Date.UTC(Number(year),Number(month)-1,Number(day)));
+  if(parsed.getUTCFullYear()!==Number(year) || parsed.getUTCMonth()!==Number(month)-1 || parsed.getUTCDate()!==Number(day)){
+    return '';
+  }
+  return normalized;
 }
 
 function refreshMokOptions(){
@@ -2439,6 +2635,34 @@ function refreshMokOptions(){
   const previousValue = select.value;
   select.innerHTML = '';
   let matchedPrevious = false;
+  const recentClassificationKeys = new Set();
+  const recentClassifications = ledger
+    .filter(entry=>(entry.gubun==='수입'?'income':'expense')===type)
+    .map(entry=>({entry,timestamp:recentEntryDate(entry)}))
+    .filter(item=>Number.isFinite(item.timestamp) && item.timestamp>=Date.now()-30*24*60*60*1000 && item.timestamp<=Date.now())
+    .sort((a,b)=>b.timestamp-a.timestamp)
+    .map(({entry})=>{
+      const group = accountCategories[type].find(item=>normalizeCategoryName(item.name,'_관')===normalizeCategoryName(entry.gwan,'_관'));
+      const account = group?.accounts.find(item=>normalizeCategoryName(item.name,'_항')===normalizeCategoryName(entry.hang,'_항'));
+      const mok = account?.items.find(item=>item===entry.category);
+      return group && account && mok && mok!=='대학노조회비'
+        ? {group,account,mok,value:JSON.stringify({gwan:group.name,hang:account.name,mok})}
+        : null;
+    })
+    .filter(item=>item && !recentClassificationKeys.has(item.value) && recentClassificationKeys.add(item.value))
+    .slice(0,5);
+  if(recentClassifications.length){
+    const optgroup=document.createElement('optgroup');
+    optgroup.label='최근 1개월 선택';
+    recentClassifications.forEach(item=>{
+      const option=document.createElement('option');
+      option.value=item.value;
+      option.textContent=`${item.mok} · ${normalizeCategoryName(item.group.name,'_관')} / ${normalizeCategoryName(item.account.name,'_항')}`;
+      if(option.value===previousValue) matchedPrevious=true;
+      optgroup.appendChild(option);
+    });
+    select.appendChild(optgroup);
+  }
   [...accountCategories[type]]
     .sort((a,b)=>a.name.replace(/_관$/,'').localeCompare(b.name.replace(/_관$/,''),'ko'))
     .forEach(gwan=>{
@@ -2453,6 +2677,7 @@ function refreshMokOptions(){
         const option = document.createElement('option');
         option.value = JSON.stringify({gwan:gwan.name,hang:hang.name,mok});
         option.textContent = mok;
+        if(recentClassificationKeys.has(option.value)) return;
         if(option.value===previousValue) matchedPrevious = true;
         optgroup.appendChild(option);
       });
@@ -2484,7 +2709,7 @@ function setGubun(g){
 }
 
 async function addEntry(){
-  const date = document.getElementById('f-date').value;
+  const date = parseEntryDate(document.getElementById('f-date').value);
   const amountRaw = document.getElementById('f-amount').value;
   const desc = document.getElementById('f-desc').value.trim();
   const payee = document.getElementById('f-payee').value.trim();
@@ -2492,8 +2717,12 @@ async function addEntry(){
   try{ classification = JSON.parse(document.getElementById('f-mok').value); }catch(e){ classification = null; }
   const spender = document.getElementById('f-spender').value.trim();
 
-  if(!date || !amountRaw || !desc){
-    setStatus('날짜, 금액, 내용은 필수입니다.');
+  if(!date){
+    setStatus('결제일을 YYYY-MM-DD 또는 YYYYMMDD 형식으로 입력하거나 달력에서 선택해주세요.');
+    return;
+  }
+  if(!amountRaw || !desc){
+    setStatus('금액과 내용은 필수입니다.');
     return;
   }
   if(date < fyStart(currentYear) || date > fyEnd(currentYear)){
@@ -2511,31 +2740,62 @@ async function addEntry(){
   }
   const month = (parseInt(date.split('-')[1],10)) + '월';
 
-  const entry = {
-    id: 'usr_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
-    date, month,
-    gubun: currentGubun,
-    desc, payee, spender,
-    amount,
-    gwan: classification.gwan,
-    hang: classification.hang,
-    category: classification.mok,
-    locked: false,
-    status: 'input-complete'
+  const values = {
+    date, month, gubun:currentGubun, desc, payee, spender, amount,
+    gwan:classification.gwan, hang:classification.hang, category:classification.mok
   };
+  if(editingEntryId){
+    const entry = ledger.find(item=>item.id===editingEntryId);
+    if(!entry || entry.status!=='input-complete' || entry.locked){
+      setStatus('선택한 내역은 더 이상 수정할 수 없습니다. 목록을 새로 확인해 주세요.');
+      cancelEntryEdit();
+      return;
+    }
+    const previous = {...entry};
+    Object.assign(entry,values);
+    if(!await persist()){
+      Object.assign(entry,previous);
+      setStatus(`수정한 내역을 저장하지 못했습니다: ${lastStorageError || '저장소 오류'}`);
+      return;
+    }
+    cancelEntryEdit();
+    setStatus('내역을 수정했습니다.');
+  }else{
+    const entry = {
+      id: 'usr_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+      ...values,
+      createdAt:new Date().toISOString(),
+      locked:false,
+      status:'input-complete'
+    };
+    ledger.push(entry);
+    if(!await persist()){
+      ledger.pop();
+      setStatus(`내역 저장에 실패했습니다: ${lastStorageError || '저장소 오류'}`);
+      renderEntryView();
+      return;
+    }
+    clearEntryForm();
+    setStatus('내역이 입력완료로 등록되었습니다.');
+  }
+  renderReport();
+  renderEntryView();
+}
 
-  ledger.push(entry);
-  const ok = await persist();
-  setStatus(ok ? '내역이 입력완료로 등록되었습니다.' : '입력은 반영됐지만 저장에 실패했습니다. 새로고침 전에 다시 시도해주세요.');
-
+function clearEntryForm(){
   document.getElementById('f-date').value = '';
+  document.getElementById('f-date-picker').value = '';
   document.getElementById('f-amount').value = '';
   document.getElementById('f-desc').value = '';
   document.getElementById('f-payee').value = '';
   document.getElementById('f-spender').value = '';
+}
 
-  renderReport();
-  renderEntryView();
+function cancelEntryEdit(clearForm=true){
+  editingEntryId = '';
+  if(clearForm) clearEntryForm();
+  document.getElementById('btn-add').textContent = '내역 추가';
+  document.getElementById('btn-cancel-entry-edit').classList.add('hidden');
 }
 
 // ---------- tabs ----------
@@ -2560,6 +2820,28 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 document.getElementById('btn-gubun-income').addEventListener('click', ()=>setGubun('수입'));
 document.getElementById('btn-gubun-expense').addEventListener('click', ()=>setGubun('지출'));
 document.getElementById('btn-add').addEventListener('click', addEntry);
+document.getElementById('btn-cancel-entry-edit').addEventListener('click',()=>{
+  cancelEntryEdit();
+  setStatus('수정을 취소했습니다.');
+});
+document.getElementById('f-date-picker').addEventListener('change',event=>{
+  document.getElementById('f-date').value=event.target.value;
+});
+document.getElementById('f-date').addEventListener('blur',event=>{
+  const date=parseEntryDate(event.target.value);
+  if(date){
+    event.target.value=date;
+    document.getElementById('f-date-picker').value=date;
+  }
+});
+document.getElementById('btn-open-date-picker').addEventListener('click',()=>{
+  const picker=document.getElementById('f-date-picker');
+  if(picker.showPicker) picker.showPicker();
+  else{
+    picker.focus();
+    picker.click();
+  }
+});
 document.getElementById('year-select').addEventListener('change',event=>setYear(event.target.value));
 document.getElementById('account-balance-input').addEventListener('input',event=>formatBudgetInput(event.target));
 document.getElementById('btn-save-account-balance').addEventListener('click',saveAccountBalance);
@@ -2742,6 +3024,7 @@ document.getElementById('btn-import-previous-budget').addEventListener('click', 
       importedAmounts.push({input,amount});
     });
     importedAmounts.forEach(({input,amount})=>{ input.value = formatBudgetAmount(amount); });
+    updateHierarchyBudgetTotals();
     const imported = importedAmounts.length;
     status.textContent = imported
       ? `${previousYear}년 예산 ${imported}개 목을 입력란에 불러왔습니다. 확인·수정한 뒤 '분류 및 예산 저장'을 눌러 저장하세요.`
