@@ -268,6 +268,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .workflow-stage h3{font-size:16px;margin:0 0 12px;}
   .workflow-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
   .workflow-select{text-align:center!important;width:44px;}
+  #save-status.status-error{display:inline-block;margin:8px 0 0;padding:8px 12px;background:#b42318;border:1px solid #7a271a;border-left:5px solid #7a271a;color:#fff;font-weight:700;}
   dialog.payment-report-dialog{width:min(900px,calc(100% - 32px));max-height:90vh;padding:0;border:1px solid var(--line);color:var(--ink);}
   dialog.payment-report-dialog::backdrop{background:rgba(17,45,78,.55);}
   .payment-dialog-header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:var(--navy);color:var(--paper-2);}
@@ -275,49 +276,43 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .payment-dialog-body{padding:24px;overflow:auto;max-height:65vh;}
   .payment-dialog-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;padding:14px 20px;border-top:1px solid var(--line);}
   .payment-report-sheet{box-sizing:border-box;width:100%;max-width:794px;margin:0 auto;padding:30px;background:#fff;color:#182b40;font-family:'Pretendard',sans-serif;font-size:12px;}
-  .payment-report-header{display:grid;grid-template-columns:minmax(0,1fr) 180px;gap:18px;align-items:start;margin-bottom:20px;page-break-inside:avoid;break-inside:avoid;}
-  .payment-report-sheet h1{font-size:25px;line-height:1.35;margin:4px 0;}
+  .payment-report-document{width:100%;table-layout:fixed;border-collapse:collapse;border:1px solid #26394d;font-size:12px;}
+  .payment-report-document th,.payment-report-document td{border:1px solid #26394d;padding:7px 6px;vertical-align:middle;font-size:12px;line-height:1.5;}
+  .payment-report-document th{background:#f2f5f8;color:#26394d;font-weight:700;text-align:center;white-space:nowrap;}
+  .payment-report-management-cell{padding:0!important;background:#f2f5f8;}
+  .payment-report-management{display:flex;justify-content:space-between;gap:12px;padding:8px 12px;font-size:12px;}
+  .payment-report-management strong{white-space:nowrap;}
+  .payment-report-header{display:grid;grid-template-columns:minmax(0,1fr) 180px;gap:14px;align-items:center;page-break-inside:avoid;break-inside:avoid;}
+  .payment-report-sheet h1{font-size:22px;line-height:1.35;margin:4px 0;text-align:center;}
   .payment-approval-grid{display:grid;grid-template-columns:1fr 1fr;border:1px solid #26394d;min-height:76px;}
   .payment-approval-cell{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:7px 4px;border-left:1px solid #26394d;text-align:center;}
   .payment-approval-cell:first-child{border-left:0;}
-  .payment-approval-cell span{font-size:10px;}
+  .payment-approval-cell span{font-size:12px;}
   .payment-approval-signature{width:100%;height:42px;}
   .payment-approval-stamp{position:absolute;top:24px;left:50%;width:max-content;max-width:140px;transform:translateX(-50%) rotate(-9deg);border:3px double #b42318;color:#b42318;padding:5px 8px;font-weight:800;font-size:12px;line-height:1.4;text-align:center;background:rgba(255,255,255,.82);}
-  .payment-approval-stamp small{font-size:8px;}
-  .payment-report-parties{table-layout:fixed;margin-bottom:10px;}
-  .payment-report-parties th,.payment-report-parties td{border:1px solid #26394d;padding:8px 7px;text-align:center;vertical-align:middle;}
-  .payment-report-parties th{background:#f2f5f8;color:#26394d;font-size:10px;white-space:nowrap;}
-  .payment-report-management{display:flex;justify-content:space-between;gap:12px;padding:9px 12px;margin:12px 0 0;border:1px solid #26394d;background:#f2f5f8;}
-  .payment-report-management strong{white-space:nowrap;}
-  .payment-report-request{display:grid;grid-template-columns:1fr 1fr 1fr;border:1px solid #26394d;margin:12px 0 16px;page-break-inside:avoid;break-inside:avoid;}
-  .payment-report-request div{padding:9px 8px;text-align:center;border-left:1px solid #26394d;}
-  .payment-report-request div:first-child{border-left:0;}
-  .payment-report-request strong{margin-right:8px;color:#26394d;}
-  .payment-report-sheet h2{font-size:13px;text-align:center;letter-spacing:.22em;margin:0 0 7px;}
-  .payment-report-items{table-layout:fixed;border:1px solid #26394d;}
-  .payment-report-items th,.payment-report-items td{border:1px solid #26394d;padding:6px 5px;vertical-align:middle;}
-  .payment-report-items th{background:#e9eef4;color:#182b40;border-bottom:1px solid #26394d;font-size:10px;text-align:center;}
-  .payment-report-items td{text-align:center;overflow-wrap:anywhere;}
-  .payment-report-items .report-seq{width:7%;}
-  .payment-report-items .report-date{width:16%;white-space:nowrap;}
-  .payment-report-items .report-description{width:30%;}
-  .payment-report-items .report-payee{width:20%;}
-  .payment-report-items .report-amount{width:14%;white-space:nowrap;}
-  .payment-report-items .report-note{width:13%;}
-  .payment-report-items td.report-amount{text-align:right;font-variant-numeric:tabular-nums;}
-  .payment-report-items tfoot td{font-weight:700;background:#faf8f2;}
-  .payment-report-items tfoot td:last-child{text-align:right;font-size:15px;white-space:nowrap;}
-  .payment-report-receipts{margin-top:16px;page-break-inside:avoid;break-inside:avoid;}
+  .payment-approval-stamp small{font-size:10px;}
+  .payment-report-title-cell{padding:10px 12px!important;}
+  .payment-report-section-title{text-align:center;font-weight:700;letter-spacing:.18em;background:#e9eef4;}
+  .payment-report-document .report-seq{width:7%;}
+  .payment-report-document .report-date{width:16%;white-space:nowrap;}
+  .payment-report-document .report-description{width:30%;}
+  .payment-report-document .report-payee{width:20%;}
+  .payment-report-document .report-amount{width:14%;white-space:nowrap;}
+  .payment-report-document .report-note{width:13%;}
+  .payment-report-document .report-row td{text-align:center;overflow-wrap:anywhere;}
+  .payment-report-document .report-row td.report-amount,.payment-report-document .report-total-amount{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .payment-report-document tfoot td{font-weight:700;background:#faf8f2;}
+  .payment-report-document .report-total-label{text-align:center!important;}
+  .payment-report-receipts{margin-top:12px;page-break-inside:avoid;break-inside:avoid;}
   .payment-report-receipts strong{display:block;margin-bottom:6px;}
   .payment-report-receipt-box{height:125px;border:1px solid #26394d;}
-  .payment-report-note{margin:9px 0 0;color:#64748b;font-size:10px;}
+  .payment-report-note{margin:9px 0 0;color:#64748b;font-size:12px;line-height:1.5;}
   .payment-report-sheet .report-row{page-break-inside:avoid;break-inside:avoid;}
   @media(max-width:650px){
     .payment-report-sheet{padding:16px;}
-    .payment-report-header{grid-template-columns:1fr 150px;gap:8px;}
-    .payment-report-sheet h1{font-size:20px;}
-    .payment-report-parties th,.payment-report-parties td{padding:6px 3px;font-size:10px;overflow-wrap:anywhere;}
-    .payment-report-request{font-size:10px;}
+    .payment-report-header{grid-template-columns:minmax(0,1fr) 150px;gap:8px;}
+    .payment-report-sheet h1{font-size:18px;}
+    .payment-report-document th,.payment-report-document td{padding:5px 3px;font-size:11px;overflow-wrap:anywhere;}
   }
 
   #save-status{font-size:14px;color:var(--ink-soft);margin-left:14px;}
@@ -621,6 +616,7 @@ let currentGubun = '지출';
 let budgetMigrationMessage = '';
 let categoriesNeedMigration = false;
 let budgetNeedsMigration = false;
+let statusMessageTimer = null;
 
 const STATUS_LABEL = {
   'input-complete':'입력완료',
@@ -2272,7 +2268,9 @@ async function deleteSelectedInputEntries(){
 function requireSingleSpender(entries){
   const spenders = [...new Set(entries.map(entry=>(entry.spender||'').trim()))];
   if(spenders.length!==1 || !spenders[0]){
-    throw new Error('한 번에 처리할 선택 내역은 담당자가 한 사람으로 동일해야 합니다. 담당자를 입력한 뒤 다시 선택해 주세요.');
+    const error = new Error('한 번에 처리할 선택 내역은 담당자가 한 사람으로 동일해야 합니다. 담당자를 입력한 뒤 다시 선택해 주세요.');
+    error.code = 'accounting/spender-mismatch';
+    throw error;
   }
   return spenders[0];
 }
@@ -2377,7 +2375,7 @@ async function updateSelectedWorkflow(fromStatus,toStatus){
     renderReport();
     renderEntryView();
   }catch(error){
-    setStatus(error.message || String(error));
+    setStatus(error.message || String(error),error.code==='accounting/spender-mismatch');
   }
 }
 
@@ -2400,7 +2398,7 @@ function openPaymentReport(status){
     }
     document.getElementById('payment-report-dialog').showModal();
   }catch(error){
-    setStatus(error.message || String(error));
+    setStatus(error.message || String(error),error.code==='accounting/spender-mismatch');
   }
 }
 
@@ -2419,8 +2417,8 @@ function renderPaymentReport(entries,spender,approval=null,managementNoOverride=
     <tr class="report-row">
       <td>${index+1}</td>
       <td>${escapeHTML(formatEntryDate(entry.date))}</td>
-      <td>${escapeHTML(entry.desc||'')}</td>
-      <td>${escapeHTML(entry.payee||'-')}</td>
+      <td colspan="2">${escapeHTML(entry.desc||'')}</td>
+      <td colspan="2">${escapeHTML(entry.payee||'-')}</td>
       <td class="report-amount">${fmtShort(entry.amount)}</td>
       <td>${escapeHTML(entry.category||'-')}</td>
     </tr>`).join('');
@@ -2429,30 +2427,28 @@ function renderPaymentReport(entries,spender,approval=null,managementNoOverride=
     : '<span class="payment-report-note">승인 시 날인</span>';
   const paymentDate = approval ? escapeHTML(approval.date.split(' ')[0]) : '승인 후 기재';
   sheet.innerHTML = `
-    <div class="payment-report-header">
-      <h1>${entries.every(entry=>entry.gubun==='지출')?'지출내역보고 / 지급신청서':'거래내역 보고서'}</h1>
-      <div class="payment-approval-grid" aria-label="결재란">
-        <div class="payment-approval-cell"><span>검토</span><div class="payment-approval-signature"></div></div>
-        <div class="payment-approval-cell"><span>지급 승인</span><div class="payment-approval-signature"></div>${approvalStamp}</div>
-      </div>
-    </div>
-    <table class="payment-report-parties">
+    <table class="payment-report-document">
+      <colgroup>
+        <col class="report-seq"><col class="report-date"><col style="width:15%"><col style="width:15%">
+        <col style="width:10%"><col style="width:10%"><col class="report-amount"><col class="report-note">
+      </colgroup>
       <tbody>
-        <tr><th>성명</th><td colspan="2">${escapeHTML(spender)}</td><th>은행명</th><td>${escapeHTML(bankDetails.bank||'미등록')}</td><th>예금주</th><td>${escapeHTML(spender)}</td></tr>
-        <tr><th>계좌번호</th><td colspan="3">${escapeHTML(bankDetails.accountNumber||'미등록')}</td><th>지급일</th><td colspan="2">${paymentDate}</td></tr>
+        <tr><td class="payment-report-management-cell" colspan="8"><div class="payment-report-management"><strong>관리번호</strong><span>${escapeHTML(String(managementNo))}</span></div></td></tr>
+        <tr><td class="payment-report-title-cell" colspan="8"><div class="payment-report-header">
+          <h1>${entries.every(entry=>entry.gubun==='지출')?'지출내역보고 / 지급신청서':'거래내역 보고서'}</h1>
+          <div class="payment-approval-grid" aria-label="결재란">
+            <div class="payment-approval-cell"><span>검토</span><div class="payment-approval-signature"></div></div>
+            <div class="payment-approval-cell"><span>지급 승인</span><div class="payment-approval-signature"></div>${approvalStamp}</div>
+          </div>
+        </div></td></tr>
+        <tr><th>성명</th><td colspan="2">${escapeHTML(spender)}</td><th>은행명</th><td>${escapeHTML(bankDetails.bank||'미등록')}</td><th>예금주</th><td colspan="2">${escapeHTML(spender)}</td></tr>
+        <tr><th>계좌번호</th><td colspan="3">${escapeHTML(bankDetails.accountNumber||'미등록')}</td><th>지급일</th><td colspan="3">${paymentDate}</td></tr>
+        <tr><th>신청일</th><td>${escapeHTML(formatEntryDate(requestDate))}</td><th>신청자</th><td colspan="2">${escapeHTML(spender)}</td><th>서명</th><td colspan="2">________________</td></tr>
+        <tr><td class="payment-report-section-title" colspan="8">지 출 목 록</td></tr>
+        <tr><th class="report-seq">순번</th><th class="report-date">결제일</th><th colspan="2">내역</th><th colspan="2">지급처</th><th class="report-amount">금액</th><th class="report-note">비고</th></tr>
+        ${rows}
       </tbody>
-    </table>
-    <div class="payment-report-request">
-      <div><strong>신청일</strong>${escapeHTML(formatEntryDate(requestDate))}</div>
-      <div><strong>신청자</strong>${escapeHTML(spender)}</div>
-      <div><strong>서명</strong>________________</div>
-    </div>
-    <div class="payment-report-management"><strong>관리번호</strong><span>${escapeHTML(String(managementNo))}</span></div>
-    <h2>지 출 목 록</h2>
-    <table class="payment-report-items">
-      <thead><tr><th class="report-seq">순번</th><th class="report-date">결제일</th><th class="report-description">내역</th><th class="report-payee">지급처</th><th class="report-amount">금액</th><th class="report-note">비고</th></tr></thead>
-      <tbody>${rows}</tbody>
-      <tfoot><tr><td colspan="4">합계 · ${entries.length}건</td><td colspan="2">${fmt(total)}</td></tr></tfoot>
+      <tfoot><tr><td class="report-total-label" colspan="6">합계 · ${entries.length}건</td><td class="report-total-amount">${fmt(total)}</td><td></td></tr></tfoot>
     </table>
     <div class="payment-report-receipts">
       <strong>영수증 첨부</strong>
@@ -2622,10 +2618,17 @@ function renderStatusFilters(){
   });
 }
 
-function setStatus(msg){
+function setStatus(msg,isError=false){
   const el = document.getElementById('save-status');
   el.textContent = msg;
-  setTimeout(()=>{ if(el.textContent===msg) el.textContent=''; }, 4000);
+  el.classList.toggle('status-error',isError);
+  if(statusMessageTimer) clearTimeout(statusMessageTimer);
+  statusMessageTimer = setTimeout(()=>{
+    if(el.textContent===msg){
+      el.textContent='';
+      el.classList.remove('status-error');
+    }
+  },4000);
 }
 
 // ---------- form ----------
