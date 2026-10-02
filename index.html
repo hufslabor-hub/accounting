@@ -661,11 +661,15 @@ function renderBudgetSection(approvedList){
   });
 }
 
-function renderBudgetForm(){
+function renderBudgetForm(rows=null){
   const body = document.getElementById('budget-form-body');
   body.innerHTML = '';
-  const names = Object.keys(budget).sort();
-  names.forEach(name=>{
+  const entries = rows || Object.keys(budget).sort().map(name=>({
+    name,
+    amount: budget[name] || 0,
+    originalName: name
+  }));
+  entries.forEach(({name, amount, originalName})=>{
     const tr = document.createElement('tr');
     tr.className = 'budget-row';
     const nameCell = document.createElement('td');
@@ -673,7 +677,7 @@ function renderBudgetForm(){
     nameInput.type = 'text';
     nameInput.className = 'budget-name';
     nameInput.value = name;
-    nameInput.dataset.originalName = name;
+    nameInput.dataset.originalName = originalName;
     nameCell.appendChild(nameInput);
 
     const amountCell = document.createElement('td');
@@ -681,7 +685,7 @@ function renderBudgetForm(){
     const amountInput = document.createElement('input');
     amountInput.type = 'number';
     amountInput.className = 'budget-input';
-    amountInput.value = budget[name] || 0;
+    amountInput.value = amount;
     amountInput.style.cssText = 'width:140px;text-align:right;';
     amountCell.appendChild(amountInput);
 
@@ -690,8 +694,8 @@ function renderBudgetForm(){
     deleteButton.className = 'del-btn';
     deleteButton.textContent = '삭제';
     deleteButton.addEventListener('click', ()=>{
-      delete budget[name];
-      renderBudgetForm();
+      delete budget[originalName];
+      renderBudgetForm(captureBudgetRows().filter(row=>row.originalName!==originalName));
     });
     actionCell.appendChild(deleteButton);
     tr.append(nameCell, amountCell, actionCell);
@@ -700,11 +704,21 @@ function renderBudgetForm(){
   refreshManagedDatalists();
 }
 
-function renderCategoryForm(){
+function captureBudgetRows(){
+  return [...document.querySelectorAll('.budget-row')].map(row=>({
+    name: row.querySelector('.budget-name').value,
+    amount: row.querySelector('.budget-input').value,
+    originalName: row.querySelector('.budget-name').dataset.originalName
+  }));
+}
+
+function renderCategoryForm(rows=null){
   const body = document.getElementById('category-form-body');
   body.innerHTML = '';
-  ['expense','income'].forEach(type=>{
-    accountCategories[type].forEach(name=>{
+  const entries = rows || ['expense','income'].flatMap(type=>
+    accountCategories[type].map(name=>({type, name, originalName:name}))
+  );
+  entries.forEach(({type, name, originalName})=>{
       const tr = document.createElement('tr');
       tr.className = 'category-row';
       tr.dataset.categoryType = type;
@@ -716,6 +730,7 @@ function renderCategoryForm(){
       nameInput.type = 'text';
       nameInput.className = 'category-name';
       nameInput.value = name;
+      nameInput.dataset.originalName = originalName;
       nameCell.appendChild(nameInput);
 
       const actionCell = document.createElement('td');
@@ -723,15 +738,24 @@ function renderCategoryForm(){
       deleteButton.className = 'del-btn';
       deleteButton.textContent = '삭제';
       deleteButton.addEventListener('click', ()=>{
-        accountCategories[type] = accountCategories[type].filter(category=>category!==name);
-        renderCategoryForm();
+        accountCategories[type] = accountCategories[type].filter(category=>category!==originalName);
+        renderCategoryForm(captureCategoryRows().filter(row=>
+          row.type !== type || row.originalName !== originalName
+        ));
       });
       actionCell.appendChild(deleteButton);
       tr.append(typeCell, nameCell, actionCell);
       body.appendChild(tr);
-    });
   });
   refreshManagedDatalists();
+}
+
+function captureCategoryRows(){
+  return [...document.querySelectorAll('.category-row')].map(row=>({
+    type: row.dataset.categoryType,
+    name: row.querySelector('.category-name').value,
+    originalName: row.querySelector('.category-name').dataset.originalName
+  }));
 }
 
 function renderMonthFilters(containerId, sourceList, current, onClick){
@@ -900,7 +924,12 @@ function refreshManagedDatalists(){
   if(!dlHang || !dlCategory) return;
 
   dlHang.innerHTML = '';
-  Object.keys(budget).sort().forEach(name=>{
+  const formInputs = [...document.querySelectorAll('.budget-name')];
+  const formNames = formInputs
+    .map(input=>input.value.trim())
+    .filter(Boolean);
+  const hangNames = formInputs.length ? formNames : Object.keys(budget);
+  [...new Set(hangNames)].sort().forEach(name=>{
     const option = document.createElement('option');
     option.value = name;
     dlHang.appendChild(option);
@@ -1004,10 +1033,15 @@ document.getElementById('btn-add-budget-row').addEventListener('click', ()=>{
   const name = nameEl.value.trim();
   const amt = Number(amtEl.value) || 0;
   if(!name){ return; }
+  const rows = captureBudgetRows();
+  if(rows.some(row=>row.name.trim()===name)){
+    document.getElementById('budget-save-status').textContent = '이미 등록된 항목(대분류)명입니다.';
+    return;
+  }
   budget[name] = amt;
   nameEl.value = '';
   amtEl.value = '';
-  renderBudgetForm();
+  renderBudgetForm([...rows, {name, amount:amt, originalName:name}]);
 });
 
 document.getElementById('btn-add-category').addEventListener('click', ()=>{
@@ -1023,10 +1057,11 @@ document.getElementById('btn-add-category').addEventListener('click', ()=>{
     status.textContent = '같은 구분에 이미 등록된 계정과목입니다.';
     return;
   }
+  const rows = captureCategoryRows();
   accountCategories[type].push(name);
   nameEl.value = '';
   status.textContent = '계정과목이 추가되었습니다. 변경사항 저장을 눌러 반영해주세요.';
-  renderCategoryForm();
+  renderCategoryForm([...rows, {type, name, originalName:name}]);
 });
 
 document.getElementById('btn-save-budget').addEventListener('click', async ()=>{
