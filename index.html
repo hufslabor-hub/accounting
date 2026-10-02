@@ -103,7 +103,10 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .table-scroll thead th{position:sticky;top:0;z-index:2;box-shadow:0 2px 5px rgba(17,45,78,.14);}
   .transaction-table-scroll{overflow-x:auto;}
   .entry-table-container{position:relative;}
-  .entry-table-container thead th{position:sticky;top:48px;z-index:10;box-shadow:0 2px 5px rgba(17,45,78,.14);}
+  .entry-table-container thead th{
+    position:sticky;top:48px;z-index:10;background:#112D4E!important;
+    box-shadow:0 -3px 0 2px #112D4E,0 2px 5px rgba(17,45,78,.14);
+  }
   .transaction-table{width:100%;min-width:0;table-layout:fixed;}
   .transaction-table th,.transaction-table td{overflow-wrap:anywhere;vertical-align:middle;}
   .transaction-table th{white-space:normal;word-break:keep-all;}
@@ -131,6 +134,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .hierarchy-total-message{text-align:center;font-weight:700;}
   .hierarchy-total-mismatch td{background:#f8e1df;color:var(--expense);font-weight:700;}
   .status-approved,.status-confirmed{background:var(--income-row);color:var(--navy);}
+  .report-transaction-table{min-width:720px;}
   .report-transaction-table .col-date{width:16%;}
   .report-transaction-table .col-description{width:19%;}
   .report-transaction-table .col-mok{width:12%;}
@@ -2120,11 +2124,11 @@ function renderTxTable(mode){
 }
 
 function rowActions(t){
-  if(t.locked){
-    return '<span class="locked-note">가져온 내역</span>';
-  }
   if(t.status==='approved' || t.status==='paid' || t.status==='confirmed'){
     return `<button class="btn-revert" data-act="unapprove" data-id="${escapeHTML(t.id)}">승인 취소</button>`;
+  }
+  if(t.locked){
+    return '<span class="locked-note">가져온 내역</span>';
   }
   const parts = [];
   if(t.status==='rejected') parts.push(`<button class="btn-revert" data-act="input-complete" data-id="${escapeHTML(t.id)}">입력완료로 복원</button>`);
@@ -2146,6 +2150,7 @@ function bindRowActions(container){
         if(entry && act==='input-complete') entry.status = 'input-complete';
         if(entry && act==='unapprove' && ['approved','paid','confirmed'].includes(entry.status)){
           entry.status='submitted';
+          entry.locked=false;
           entry.approvalCancelledAt=new Date().toISOString();
           entry.approvalCancelledBy=currentUser?.email || currentUser?.displayName || '';
           ['approvedAt','approvedBy','paidAt','paidBy','confirmedAt','confirmedBy','managementNo','submissionSequence']
@@ -2312,28 +2317,24 @@ async function persistSubmissionBatch(entries,submittedAt,submittedBy){
   const sequenceRef = db.collection('accountingData').doc(SUBMISSION_SEQUENCE_KEY);
   const ledgerRef = db.collection('accountingData').doc(ledgerKey(currentYear));
   const selectedIds = new Set(entries.map(entry=>entry.id));
+  const latestSelected = ledger.filter(entry=>selectedIds.has(entry.id));
+  if(latestSelected.length!==selectedIds.size || latestSelected.some(entry=>entry.status!=='input-complete' || entry.locked)){
+    throw new Error('선택한 내역의 상태가 바뀌었거나 공유 저장소에서 찾을 수 없습니다. 목록을 새로고침한 뒤 다시 선택해 주세요.');
+  }
+  requireSingleSpender(latestSelected);
+  const initialSequence = highestSubmissionSequence(ledger);
   let assignedSequence = 0;
   let submittedLedger = null;
   await db.runTransaction(async transaction=>{
-    const [sequenceSnapshot,ledgerSnapshot] = await Promise.all([
-      transaction.get(sequenceRef),
-      transaction.get(ledgerRef)
-    ]);
-    let latestLedger = ledgerSnapshot.exists ? JSON.parse(ledgerSnapshot.data().value) : ledger.map(entry=>({...entry}));
-    if(!Array.isArray(latestLedger)) throw new Error('공유 저장소의 내역 형식이 올바르지 않습니다. 새로고침 후 다시 시도해 주세요.');
-    const latestSelected = latestLedger.filter(entry=>selectedIds.has(entry.id));
-    if(latestSelected.length!==selectedIds.size || latestSelected.some(entry=>entry.status!=='input-complete' || entry.locked)){
-      throw new Error('선택한 내역의 상태가 바뀌었거나 공유 저장소에서 찾을 수 없습니다. 목록을 새로고침한 뒤 다시 선택해 주세요.');
-    }
-    requireSingleSpender(latestSelected);
+    const sequenceSnapshot = await transaction.get(sequenceRef);
     const storedSequence = sequenceSnapshot.exists
       ? Number(sequenceSnapshot.data().value)
-      : highestSubmissionSequence(latestLedger);
+      : initialSequence;
     if(!Number.isSafeInteger(storedSequence) || storedSequence<0 || storedSequence>=Number.MAX_SAFE_INTEGER){
       throw new Error('저장된 관리번호 일련번호가 올바르지 않습니다.');
     }
     assignedSequence = storedSequence+1;
-    submittedLedger = latestLedger.map(entry=>{
+    submittedLedger = ledger.map(entry=>{
       if(!selectedIds.has(entry.id)) return entry;
       return {
         ...entry,
@@ -2423,7 +2424,10 @@ async function updateSelectedWorkflow(fromStatus,toStatus){
     renderReport();
     renderEntryView();
   }catch(error){
-    setStatus(error.message || String(error),toStatus==='submitted' || error.code==='accounting/spender-mismatch');
+    const message = toStatus==='submitted' && error.code==='permission-denied'
+      ? '공유 저장소 권한이 제출을 거부했습니다. 승인된 계정으로 로그인했는지, Firestore 규칙이 관리번호 발급과 장부 저장을 허용하는지 확인해 주세요.'
+      : error.message || String(error);
+    setStatus(message,toStatus==='submitted' || error.code==='accounting/spender-mismatch');
   }
 }
 
