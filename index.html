@@ -113,12 +113,13 @@ body { background-color:#F8FAFC; color:var(--ink); }
   .hierarchy-gwan-head{padding-bottom:14px;border-bottom:1px solid var(--line);}
   .hierarchy-level{font-size:12px;font-weight:700;color:var(--ink-soft);min-width:34px;}
   .hierarchy-gwan-name{flex:1;font-weight:700;}
-  .hierarchy-budget{width:180px;text-align:right;}
+  .hierarchy-item-budget{width:180px;text-align:right;}
   .hierarchy-account{margin:14px 0 0 18px;padding:12px;border-left:3px solid var(--gold-soft);background:#fbfcfd;}
   .hierarchy-account-head{margin-bottom:8px;}
   .hierarchy-account-name{font-weight:700;flex:1;}
   .hierarchy-item-list{display:grid;gap:6px;margin-left:16px;}
   .hierarchy-item-row input,.hierarchy-add-row input{flex:1;}
+  .hierarchy-item-row .hierarchy-item-budget{flex:0 0 180px;}
   .hierarchy-add-row{margin:10px 0 0 16px;}
   .hierarchy-account > .hierarchy-add-row{margin-left:16px;}
   .hierarchy-gwan > .hierarchy-add-row{margin-left:18px;}
@@ -160,6 +161,7 @@ body { background-color:#F8FAFC; color:var(--ink); }
   #save-status{font-size:13px;color:var(--ink-soft);margin-left:14px;}
 
   footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-soft);display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  @media (max-width:600px){.hierarchy-item-row .hierarchy-item-budget{flex-basis:120px;}}
 </style>
 </head>
 <body>
@@ -244,13 +246,13 @@ body { background-color:#F8FAFC; color:var(--ink); }
 
     <section>
       <div class="sec-head"><span class="sec-num">05</span><h2>관별 예산 대비 집행 현황</h2></div>
-      <p class="sec-desc">관별로 설정한 예산과 현재까지 승인된 지출을 비교합니다. 예산은 <b>예산 관리</b> 탭에서 입력·수정할 수 있습니다.</p>
+      <p class="sec-desc">목별 예산을 입력하고, 항·관 예산은 소속 목 예산 합계로 표시합니다. 승인된 지출과 예산을 관·항·목별로 비교합니다.</p>
       <div class="card">
         <div class="chart-box tall"><canvas id="chartBudget"></canvas></div>
       </div>
       <div class="card" style="margin-top:14px;">
         <table>
-          <thead><tr><th>관</th><th class="num">예산</th><th class="num">집행액</th><th class="num">집행률</th><th class="num">잔여</th></tr></thead>
+          <thead><tr><th>관·항·목</th><th class="num">예산</th><th class="num">집행액</th><th class="num">집행률</th><th class="num">잔여</th></tr></thead>
           <tbody id="tbl-budget"></tbody>
         </table>
         <p class="count-note" id="budget-note"></p>
@@ -261,7 +263,7 @@ body { background-color:#F8FAFC; color:var(--ink); }
   <!-- ============ BUDGET VIEW ============ -->
   <div class="view" id="view-budget">
     <div class="notice" id="storage-notice" style="margin-top:28px;">
-      관·항·목 분류를 관리합니다. 결산 관리에서는 <b>목</b>만 선택하며, 선택한 목의 관과 항은 거래 내역에 자동으로 연결됩니다. 지출 관별 연간 예산은 보고서의 <b>예산 대비 집행 현황</b>에 반영됩니다.
+      관·항·목 분류를 관리합니다. 결산 관리에서는 <b>목</b>만 선택하며, 선택한 목의 관과 항은 거래 내역에 자동으로 연결됩니다. 예산은 회계연도별로 <b>목마다 입력·수정</b>하고, 항·관 예산은 소속 목 예산을 합산해 보고서에 표시합니다.
     </div>
     <section style="margin-top:0;">
       <div class="sec-head"><span class="sec-num">＋</span><h2>관 추가</h2></div>
@@ -269,13 +271,14 @@ body { background-color:#F8FAFC; color:var(--ink); }
         <div class="form-grid">
           <div class="field"><label for="ng-type">구분</label><select id="ng-type"><option value="expense">지출</option><option value="income">수입</option></select></div>
           <div class="field"><label for="ng-name">관 이름</label><input type="text" id="ng-name" placeholder="예: 행사비_관"></div>
-          <div class="field"><label for="ng-amount">연간 예산(원, 지출)</label><input type="number" id="ng-amount" placeholder="예: 13000000"></div>
         </div>
         <button class="btn-primary" id="btn-add-gwan">관 추가</button>
       </div>
     </section>
     <section>
       <div class="sec-head"><span class="sec-num">☰</span><h2>관·항·목 분류</h2></div>
+      <p class="sec-desc">각 지출 목 옆에서 <b id="budget-year-label"></b> 예산을 입력하거나 수정하세요. 저장하면 해당 회계연도 예산으로 반영됩니다.</p>
+      <div class="notice hidden" id="budget-migration-notice"></div>
       <div id="hierarchy-form-body"></div>
       <button class="btn-primary" id="btn-save-hierarchy" style="margin-top:16px;">분류 및 예산 저장</button>
       <span id="budget-save-status"></span>
@@ -364,6 +367,7 @@ let currentMonthReport = '전체';
 let currentMonthEntry = '전체';
 let currentStatusEntry = '전체';
 let currentGubun = '지출';
+let budgetMigrationMessage = '';
 
 const STATUS_LABEL = {approved:'승인됨', pending:'승인대기', rejected:'반려됨'};
 
@@ -723,10 +727,14 @@ async function loadAccountCategories(){
   }
 }
 
-function migrateBudgetToGwan(){
-  const gwanNames = new Set(accountCategories.expense.map(group=>group.name));
-  if(Object.keys(budget).every(name=>gwanNames.has(name))) return false;
+function mokBudgetKey(gwan, hang, mok){
+  return 'mok:' + JSON.stringify([gwan,hang,mok]);
+}
 
+function migrateBudgetToMok(){
+  budgetMigrationMessage = '';
+  const keys = Object.keys(budget);
+  if(keys.every(key=>key.startsWith('mok:'))) return false;
   const legacyGwan = {
     '교육사업비':'활동비_관',
     '교통유류비':'차기이월금_관',
@@ -743,12 +751,32 @@ function migrateBudgetToGwan(){
     '퇴직조합원환송회비':'차기이월금_관',
     '후생복지사업비':'조합비환불비_관'
   };
-  const migrated = {};
-  Object.entries(budget).forEach(([name, amount])=>{
-    const destination = gwanNames.has(name) ? name : (legacyGwan[name] || name);
-    migrated[destination] = (migrated[destination] || 0) + (Number(amount) || 0);
+  const migrated = Object.fromEntries(
+    Object.entries(budget).filter(([key])=>key.startsWith('mok:'))
+  );
+  const legacyAmounts = {};
+  Object.entries(budget).filter(([key])=>!key.startsWith('mok:')).forEach(([name, amount])=>{
+    const gwan = legacyGwan[name] || name;
+    legacyAmounts[gwan] = (legacyAmounts[gwan] || 0) + (Number(amount) || 0);
+  });
+  accountCategories.expense.forEach(gwan=>{
+    const amount = legacyAmounts[gwan.name];
+    if(amount === undefined) return;
+    const leaves = gwan.accounts.flatMap(hang=>
+      hang.items.map(mok=>mokBudgetKey(gwan.name,hang.name,mok))
+    );
+    if(!leaves.length) return;
+    const share = Math.floor(amount / leaves.length);
+    let remainder = amount - share * leaves.length;
+    leaves.forEach(key=>{
+      const current = migrated[key] || 0;
+      const extra = remainder > 0 ? 1 : 0;
+      remainder -= extra;
+      migrated[key] = current + share + extra;
+    });
   });
   budget = migrated;
+  budgetMigrationMessage = '기존 관별 예산을 소속 목에 균등 배분했습니다. 각 목의 금액을 검토하고 필요하면 수정한 뒤 저장하세요.';
   return true;
 }
 
@@ -769,6 +797,7 @@ function renderYearSelect(){
     + '<option value="__add__">＋ 연도 추가…</option>';
   document.getElementById('title-year').textContent = currentYear + ' 회계연도';
   document.getElementById('fy-range').textContent = `${currentYear}.01.01 ~ ${currentYear}.12.31`;
+  document.getElementById('budget-year-label').textContent = `${currentYear}년`;
   const f = document.getElementById('f-date');
   f.min = fyStart(currentYear); f.max = fyEnd(currentYear); f.value = '';
 }
@@ -777,8 +806,8 @@ async function loadYearData(){
   await loadLedger();
   await loadBudget();
   await loadAccountCategories();
-  if(migrateBudgetToGwan() && !await persistBudget()){
-    throw new Error(`예산 분류를 Firestore로 이전하지 못했습니다: ${lastStorageError}`);
+  if(migrateBudgetToMok() && !await persistBudget()){
+    throw new Error(`목별 예산을 Firestore로 이전하지 못했습니다: ${lastStorageError}`);
   }
   if(migrateLedgerClassifications() && !await persist()){
     throw new Error(`관·항·목 분류 이전 실패: ${lastStorageError}`);
@@ -957,15 +986,41 @@ function renderReport(){
 }
 
 function renderBudgetSection(approvedList){
+  const budgetByGwan = {};
   const spentByGwan = {};
-  approvedList.filter(t=>t.gubun==='지출').forEach(t=>{
-    const g = t.gwan || '미분류';
-    spentByGwan[g] = (spentByGwan[g]||0) + t.amount;
+  const budgetByHang = {};
+  const spentByHang = {};
+  const budgetByMok = {};
+  const spentByMok = {};
+  accountCategories.expense.forEach(gwan=>{
+    gwan.accounts.forEach(hang=>{
+      hang.items.forEach(mok=>{
+        const key = mokBudgetKey(gwan.name,hang.name,mok);
+        budgetByMok[key] = Number(budget[key]) || 0;
+        budgetByHang[JSON.stringify([gwan.name,hang.name])] =
+          (budgetByHang[JSON.stringify([gwan.name,hang.name])] || 0) + budgetByMok[key];
+        budgetByGwan[gwan.name] = (budgetByGwan[gwan.name] || 0) + budgetByMok[key];
+      });
+      const hangKey = JSON.stringify([gwan.name,hang.name]);
+      if(budgetByHang[hangKey] === undefined) budgetByHang[hangKey] = 0;
+    });
+    if(budgetByGwan[gwan.name] === undefined) budgetByGwan[gwan.name] = 0;
   });
 
-  const allGwans = Array.from(new Set([...Object.keys(budget), ...Object.keys(spentByGwan)]))
-    .filter(g => (budget[g]||0) > 0 || (spentByGwan[g]||0) > 0)
-    .sort((a,b) => (budget[b]||0) - (budget[a]||0));
+  approvedList.filter(t=>t.gubun==='지출').forEach(t=>{
+    const gwan = t.gwan || '미분류';
+    const hang = t.hang || '미분류';
+    const mok = t.category || '미분류';
+    const mokKey = mokBudgetKey(gwan,hang,mok);
+    const hangKey = JSON.stringify([gwan,hang]);
+    spentByMok[mokKey] = (spentByMok[mokKey] || 0) + t.amount;
+    spentByHang[hangKey] = (spentByHang[hangKey] || 0) + t.amount;
+    spentByGwan[gwan] = (spentByGwan[gwan] || 0) + t.amount;
+  });
+
+  const allGwans = Array.from(new Set([...Object.keys(budgetByGwan), ...Object.keys(spentByGwan)]))
+    .filter(gwan=>(budgetByGwan[gwan]||0)>0 || (spentByGwan[gwan]||0)>0)
+    .sort((a,b) => (budgetByGwan[b]||0) - (budgetByGwan[a]||0));
 
   destroy('budget');
   if(allGwans.length === 0){
@@ -976,7 +1031,7 @@ function renderBudgetSection(approvedList){
       data:{
         labels: allGwans,
         datasets:[
-          {label:'예산', data: allGwans.map(g=>budget[g]||0), backgroundColor:'#c4cbd3'},
+          {label:'예산', data: allGwans.map(g=>budgetByGwan[g]||0), backgroundColor:'#c4cbd3'},
           {label:'집행액', data: allGwans.map(g=>spentByGwan[g]||0), backgroundColor:'#b6482f'}
         ]
       },
@@ -992,25 +1047,40 @@ function renderBudgetSection(approvedList){
   const tbody = document.getElementById('tbl-budget');
   tbody.innerHTML = '';
   if(allGwans.length === 0){
-    document.getElementById('budget-note').textContent = '아직 등록된 예산이 없습니다. 예산 관리 탭에서 지출 관별 예산을 입력해주세요.';
+    document.getElementById('budget-note').textContent = '아직 등록된 지출 관이 없습니다.';
   } else {
     document.getElementById('budget-note').textContent = '';
   }
-  allGwans.forEach(g=>{
-    const b = budget[g]||0;
-    const s = spentByGwan[g]||0;
+
+  const appendBudgetRow = (label, level, b, s)=>{
     const pct = b > 0 ? (s/b*100) : (s>0 ? Infinity : 0);
     const remain = b - s;
     const pctText = b > 0 ? pct.toFixed(1) + '%' : (s>0 ? '예산 없음' : '-');
     const tr = document.createElement('tr');
+    tr.className = `budget-report-row level-${level}`;
     tr.innerHTML = `
-      <td>${escapeHTML(g)}</td>
+      <td>${escapeHTML(label)}</td>
       <td class="num">${b ? fmtShort(b) : '-'}</td>
       <td class="num">${fmtShort(s)}</td>
       <td class="num" style="color:${b>0 && pct>=100 ? 'var(--expense)' : 'inherit'}">${pctText}</td>
       <td class="num" style="color:${remain<0 ? 'var(--expense)' : 'var(--ink-soft)'}">${b ? fmtShort(remain) : '-'}</td>
     `;
     tbody.appendChild(tr);
+  };
+  allGwans.forEach(gwanName=>{
+    const gwan = accountCategories.expense.find(item=>item.name===gwanName);
+    appendBudgetRow(gwanName,0,budgetByGwan[gwanName]||0,spentByGwan[gwanName]||0);
+    if(!gwan) return;
+    gwan.accounts.forEach(hang=>{
+      const hangKey = JSON.stringify([gwanName,hang.name]);
+      appendBudgetRow(hang.name,1,budgetByHang[hangKey]||0,spentByHang[hangKey]||0);
+      hang.items.forEach(mok=>{
+        const mokKey = mokBudgetKey(gwanName,hang.name,mok);
+        const b = budgetByMok[mokKey] || 0;
+        const s = spentByMok[mokKey] || 0;
+        if(b || s) appendBudgetRow(mok,2,b,s);
+      });
+    });
   });
 }
 
@@ -1049,18 +1119,8 @@ function renderHierarchyForm(){
       gwanInput.className = 'hierarchy-gwan-name';
       gwanInput.setAttribute('aria-label','관 이름');
       gwanInput.value = gwan.name;
-      gwanInput.dataset.originalName = gwan.name;
       header.append(gwanLabel,gwanInput);
 
-      if(type==='expense'){
-        const budgetInput = document.createElement('input');
-        budgetInput.type = 'number';
-        budgetInput.className = 'hierarchy-budget';
-        budgetInput.setAttribute('aria-label','관별 연간 예산');
-        budgetInput.placeholder = '연간 예산(원)';
-        budgetInput.value = budget[gwan.name] || 0;
-        header.appendChild(budgetInput);
-      }
       header.appendChild(makeHierarchyButton('관 삭제','delete-gwan',gwanIndex));
       card.appendChild(header);
 
@@ -1094,7 +1154,19 @@ function renderHierarchyForm(){
           itemInput.className = 'hierarchy-item-name';
           itemInput.setAttribute('aria-label','목 이름');
           itemInput.value = item;
-          itemRow.append(itemInput,makeHierarchyButton('목 삭제','delete-item',gwanIndex,accountIndex,itemIndex));
+          itemRow.appendChild(itemInput);
+          if(type==='expense'){
+            const budgetInput = document.createElement('input');
+            budgetInput.type = 'number';
+            budgetInput.className = 'hierarchy-item-budget';
+            budgetInput.min = '0';
+            budgetInput.step = '1';
+            budgetInput.setAttribute('aria-label',`${currentYear}년 ${item} 예산`);
+            budgetInput.placeholder = `${currentYear}년 예산(원)`;
+            budgetInput.value = budget[mokBudgetKey(gwan.name,hang.name,item)] || 0;
+            itemRow.appendChild(budgetInput);
+          }
+          itemRow.appendChild(makeHierarchyButton('목 삭제','delete-item',gwanIndex,accountIndex,itemIndex));
           itemList.appendChild(itemRow);
         });
         accountCard.appendChild(itemList);
@@ -1121,36 +1193,36 @@ function renderHierarchyForm(){
       body.appendChild(card);
     });
   });
+  const migrationNotice = document.getElementById('budget-migration-notice');
+  migrationNotice.textContent = budgetMigrationMessage;
+  migrationNotice.classList.toggle('hidden',!budgetMigrationMessage);
   refreshMokOptions();
 }
 
 function captureHierarchyForm(){
   const tree = {income:[],expense:[]};
-  const nextBudget = {...budget};
-  const originalBudgetNames = new Set();
+  const nextBudget = {};
   document.querySelectorAll('.hierarchy-gwan').forEach(card=>{
     const type = card.dataset.categoryType;
     const nameInput = card.querySelector('.hierarchy-gwan-name');
-    const name = nameInput.value;
+    const name = nameInput.value.trim();
     const group = {name,accounts:[]};
-    const budgetInput = card.querySelector('.hierarchy-budget');
-    if(type==='expense' && budgetInput){
-      originalBudgetNames.add(nameInput.dataset.originalName);
-      nextBudget[name] = Number(budgetInput.value)||0;
-    }
     card.querySelectorAll('.hierarchy-account').forEach(accountCard=>{
+      const accountName = accountCard.querySelector('.hierarchy-account-name').value.trim();
+      const items = [...accountCard.querySelectorAll('.hierarchy-item-row')].map(row=>{
+        const mok = row.querySelector('.hierarchy-item-name').value.trim();
+        if(type==='expense'){
+          const amount = Number(row.querySelector('.hierarchy-item-budget').value)||0;
+          nextBudget[mokBudgetKey(name,accountName,mok)] = amount;
+        }
+        return mok;
+      });
       group.accounts.push({
-        name:accountCard.querySelector('.hierarchy-account-name').value,
-        items:[...accountCard.querySelectorAll('.hierarchy-item-name')].map(input=>input.value)
+        name:accountName,
+        items
       });
     });
     tree[type].push(group);
-  });
-  originalBudgetNames.forEach(name=>delete nextBudget[name]);
-  document.querySelectorAll('.hierarchy-gwan[data-category-type="expense"]').forEach(card=>{
-    const input = card.querySelector('.hierarchy-gwan-name');
-    const amount = card.querySelector('.hierarchy-budget');
-    nextBudget[input.value] = Number(amount.value)||0;
   });
   return {tree,budget:nextBudget};
 }
@@ -1165,7 +1237,6 @@ function updateHierarchyForm(actionButton){
   switch(actionButton.dataset.hierarchyAction){
     case 'delete-gwan':
       tree[type].splice(gwanIndex,1);
-      delete nextBudget[group.name];
       break;
     case 'add-account': {
       const input = actionButton.parentElement.querySelector('.new-hierarchy-account');
@@ -1188,6 +1259,12 @@ function updateHierarchyForm(actionButton){
       group.accounts[accountIndex].items.splice(itemIndex,1);
       break;
   }
+  const activeBudgetKeys = new Set(tree.expense.flatMap(gwan=>
+    gwan.accounts.flatMap(hang=>hang.items.map(mok=>mokBudgetKey(gwan.name,hang.name,mok)))
+  ));
+  Object.keys(nextBudget).forEach(key=>{
+    if(!activeBudgetKeys.has(key)) delete nextBudget[key];
+  });
   accountCategories = tree;
   budget = nextBudget;
   renderHierarchyForm();
@@ -1503,11 +1580,9 @@ document.getElementById('btn-add-gwan').addEventListener('click', ()=>{
     return;
   }
   draft.tree[type].push({name,accounts:[]});
-  if(type==='expense') draft.budget[name] = Number(document.getElementById('ng-amount').value)||0;
   accountCategories = draft.tree;
   budget = draft.budget;
   nameEl.value = '';
-  document.getElementById('ng-amount').value = '';
   renderHierarchyForm();
 });
 
@@ -1554,6 +1629,14 @@ document.getElementById('btn-save-hierarchy').addEventListener('click', async ()
           return;
         }
       }
+    }
+  }
+
+  for(const row of document.querySelectorAll('.hierarchy-item-budget')){
+    const amount = Number(row.value);
+    if(!Number.isFinite(amount) || amount<0 || !Number.isInteger(amount)){
+      status.textContent = '목별 예산은 0 이상의 정수로 입력해주세요.';
+      return;
     }
   }
 
