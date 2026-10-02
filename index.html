@@ -277,7 +277,7 @@ body { background-color:#F8FAFC; color:var(--ink); }
     </section>
     <section>
       <div class="sec-head"><span class="sec-num">☰</span><h2>관·항·목 분류</h2></div>
-      <p class="sec-desc">각 지출 목 옆에서 <b id="budget-year-label"></b> 예산을 입력하거나 수정하세요. 저장하면 해당 회계연도 예산으로 반영됩니다.</p>
+      <p class="sec-desc">각 수입·지출 목 옆에서 <b id="budget-year-label"></b> 예산을 입력하거나 수정하세요. 보고서의 예산 대비 집행 현황은 지출 예산을 기준으로 표시됩니다.</p>
       <div class="notice hidden" id="budget-migration-notice"></div>
       <div id="hierarchy-form-body"></div>
       <button class="btn-primary" id="btn-save-hierarchy" style="margin-top:16px;">분류 및 예산 저장</button>
@@ -727,14 +727,30 @@ async function loadAccountCategories(){
   }
 }
 
-function mokBudgetKey(gwan, hang, mok){
-  return 'mok:' + JSON.stringify([gwan,hang,mok]);
+function mokBudgetKey(type, gwan, hang, mok){
+  return 'mok:' + JSON.stringify([type,gwan,hang,mok]);
 }
 
 function migrateBudgetToMok(){
   budgetMigrationMessage = '';
   const keys = Object.keys(budget);
-  if(keys.every(key=>key.startsWith('mok:'))) return false;
+  const hasLegacyAmounts = keys.some(key=>!key.startsWith('mok:'));
+  const migrated = {};
+  let needsMigration = false;
+  Object.entries(budget).forEach(([key, amount])=>{
+    if(!key.startsWith('mok:')){
+      needsMigration = true;
+      return;
+    }
+    const parts = JSON.parse(key.slice(4));
+    if(parts.length === 3){
+      needsMigration = true;
+      migrated[mokBudgetKey('expense',...parts)] = amount;
+    } else {
+      migrated[key] = amount;
+    }
+  });
+  if(!needsMigration) return false;
   const legacyGwan = {
     '교육사업비':'활동비_관',
     '교통유류비':'차기이월금_관',
@@ -751,9 +767,6 @@ function migrateBudgetToMok(){
     '퇴직조합원환송회비':'차기이월금_관',
     '후생복지사업비':'조합비환불비_관'
   };
-  const migrated = Object.fromEntries(
-    Object.entries(budget).filter(([key])=>key.startsWith('mok:'))
-  );
   const legacyAmounts = {};
   Object.entries(budget).filter(([key])=>!key.startsWith('mok:')).forEach(([name, amount])=>{
     const gwan = legacyGwan[name] || name;
@@ -763,7 +776,7 @@ function migrateBudgetToMok(){
     const amount = legacyAmounts[gwan.name];
     if(amount === undefined) return;
     const leaves = gwan.accounts.flatMap(hang=>
-      hang.items.map(mok=>mokBudgetKey(gwan.name,hang.name,mok))
+      hang.items.map(mok=>mokBudgetKey('expense',gwan.name,hang.name,mok))
     );
     if(!leaves.length) return;
     const share = Math.floor(amount / leaves.length);
@@ -776,7 +789,9 @@ function migrateBudgetToMok(){
     });
   });
   budget = migrated;
-  budgetMigrationMessage = '기존 관별 예산을 소속 목에 균등 배분했습니다. 각 목의 금액을 검토하고 필요하면 수정한 뒤 저장하세요.';
+  if(hasLegacyAmounts){
+    budgetMigrationMessage = '기존 관별 예산을 소속 목에 균등 배분했습니다. 각 목의 금액을 검토하고 필요하면 수정한 뒤 저장하세요.';
+  }
   return true;
 }
 
@@ -995,7 +1010,7 @@ function renderBudgetSection(approvedList){
   accountCategories.expense.forEach(gwan=>{
     gwan.accounts.forEach(hang=>{
       hang.items.forEach(mok=>{
-        const key = mokBudgetKey(gwan.name,hang.name,mok);
+        const key = mokBudgetKey('expense',gwan.name,hang.name,mok);
         budgetByMok[key] = Number(budget[key]) || 0;
         budgetByHang[JSON.stringify([gwan.name,hang.name])] =
           (budgetByHang[JSON.stringify([gwan.name,hang.name])] || 0) + budgetByMok[key];
@@ -1011,7 +1026,7 @@ function renderBudgetSection(approvedList){
     const gwan = t.gwan || '미분류';
     const hang = t.hang || '미분류';
     const mok = t.category || '미분류';
-    const mokKey = mokBudgetKey(gwan,hang,mok);
+    const mokKey = mokBudgetKey('expense',gwan,hang,mok);
     const hangKey = JSON.stringify([gwan,hang]);
     spentByMok[mokKey] = (spentByMok[mokKey] || 0) + t.amount;
     spentByHang[hangKey] = (spentByHang[hangKey] || 0) + t.amount;
@@ -1075,7 +1090,7 @@ function renderBudgetSection(approvedList){
       const hangKey = JSON.stringify([gwanName,hang.name]);
       appendBudgetRow(hang.name,1,budgetByHang[hangKey]||0,spentByHang[hangKey]||0);
       hang.items.forEach(mok=>{
-        const mokKey = mokBudgetKey(gwanName,hang.name,mok);
+        const mokKey = mokBudgetKey('expense',gwanName,hang.name,mok);
         const b = budgetByMok[mokKey] || 0;
         const s = spentByMok[mokKey] || 0;
         if(b || s) appendBudgetRow(mok,2,b,s);
@@ -1155,17 +1170,15 @@ function renderHierarchyForm(){
           itemInput.setAttribute('aria-label','목 이름');
           itemInput.value = item;
           itemRow.appendChild(itemInput);
-          if(type==='expense'){
-            const budgetInput = document.createElement('input');
-            budgetInput.type = 'number';
-            budgetInput.className = 'hierarchy-item-budget';
-            budgetInput.min = '0';
-            budgetInput.step = '1';
-            budgetInput.setAttribute('aria-label',`${currentYear}년 ${item} 예산`);
-            budgetInput.placeholder = `${currentYear}년 예산(원)`;
-            budgetInput.value = budget[mokBudgetKey(gwan.name,hang.name,item)] || 0;
-            itemRow.appendChild(budgetInput);
-          }
+          const budgetInput = document.createElement('input');
+          budgetInput.type = 'number';
+          budgetInput.className = 'hierarchy-item-budget';
+          budgetInput.min = '0';
+          budgetInput.step = '1';
+          budgetInput.setAttribute('aria-label',`${currentYear}년 ${item} 예산`);
+          budgetInput.placeholder = `${currentYear}년 예산(원)`;
+          budgetInput.value = budget[mokBudgetKey(type,gwan.name,hang.name,item)] || 0;
+          itemRow.appendChild(budgetInput);
           itemRow.appendChild(makeHierarchyButton('목 삭제','delete-item',gwanIndex,accountIndex,itemIndex));
           itemList.appendChild(itemRow);
         });
@@ -1211,10 +1224,8 @@ function captureHierarchyForm(){
       const accountName = accountCard.querySelector('.hierarchy-account-name').value.trim();
       const items = [...accountCard.querySelectorAll('.hierarchy-item-row')].map(row=>{
         const mok = row.querySelector('.hierarchy-item-name').value.trim();
-        if(type==='expense'){
-          const amount = Number(row.querySelector('.hierarchy-item-budget').value)||0;
-          nextBudget[mokBudgetKey(name,accountName,mok)] = amount;
-        }
+        const amount = Number(row.querySelector('.hierarchy-item-budget').value)||0;
+        nextBudget[mokBudgetKey(type,name,accountName,mok)] = amount;
         return mok;
       });
       group.accounts.push({
@@ -1259,8 +1270,10 @@ function updateHierarchyForm(actionButton){
       group.accounts[accountIndex].items.splice(itemIndex,1);
       break;
   }
-  const activeBudgetKeys = new Set(tree.expense.flatMap(gwan=>
-    gwan.accounts.flatMap(hang=>hang.items.map(mok=>mokBudgetKey(gwan.name,hang.name,mok)))
+  const activeBudgetKeys = new Set(['income','expense'].flatMap(type=>
+    tree[type].flatMap(gwan=>
+      gwan.accounts.flatMap(hang=>hang.items.map(mok=>mokBudgetKey(type,gwan.name,hang.name,mok)))
+    )
   ));
   Object.keys(nextBudget).forEach(key=>{
     if(!activeBudgetKeys.has(key)) delete nextBudget[key];
