@@ -22,6 +22,7 @@ body { background-color:#F8FAFC; color:var(--ink); }
   .wrap{max-width:1040px;margin:0 auto;padding:0 24px 80px;}
 
   header.masthead{
+    max-width:1200px;width:calc(100% - 32px);margin:0 auto;
     background:linear-gradient(180deg, var(--navy) 0%, var(--navy-2) 100%);
     color:#f4f1e8; padding:44px 24px 28px; position:relative; overflow:hidden;
   }
@@ -33,7 +34,14 @@ body { background-color:#F8FAFC; color:var(--ink); }
   .org{font-size:14px;letter-spacing:.02em;color:var(--gold-soft);font-weight:500;margin:0 0 10px;}
   h1.title{font-family:'Pretendard',sans-serif;font-weight:800;font-size:clamp(24px,4vw,36px);line-height:1.25;margin:0 0 20px;max-width:none;}
 
-  nav.tabs{display:flex;gap:2px;margin-top:8px;}
+  .tabs-sticky{
+    position:sticky;top:0;z-index:30;
+    max-width:1200px;width:calc(100% - 32px);margin:0 auto;
+    background:var(--navy);border-bottom:4px solid var(--gold);
+    box-shadow:0 4px 12px rgba(22,35,63,.12);
+  }
+  .tabs-inner{max-width:1040px;margin:0 auto;padding:0 24px;}
+  nav.tabs{display:flex;gap:2px;margin:0;}
   .tab-btn{
     background:rgba(255,255,255,.06); border:none; color:#cdd4e0;
     font-family:'Pretendard',sans-serif; font-size:14.5px; font-weight:500;
@@ -165,26 +173,31 @@ body { background-color:#F8FAFC; color:var(--ink); }
 <header class="masthead">
   <div class="masthead-inner">
     <p class="org">한국외국어대학교 노동조합</p>
-<h1 class="title">조합비 수입·지출 결산 <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
-<div class="auth-bar">
-  <span id="auth-status">Firebase 연결 확인 중...</span>
-  <button class="btn-auth" id="btn-sign-in" type="button">Google 로그인</button>
-  <button class="btn-auth hidden" id="btn-sign-out" type="button">로그아웃</button>
-</div>
-<div id="app-controls" class="hidden">
-<div class="year-bar">
-  <label for="year-select">회계연도</label>
-  <select id="year-select"></select>
-  <span id="fy-range"></span>
-</div>
+    <h1 class="title">조합비 수입·지출 결산 <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
+    <div class="auth-bar">
+      <span id="auth-status">Firebase 연결 확인 중...</span>
+      <button class="btn-auth" id="btn-sign-in" type="button">Google 로그인</button>
+      <button class="btn-auth hidden" id="btn-sign-out" type="button">로그아웃</button>
+    </div>
+    <div id="app-controls" class="hidden">
+      <div class="year-bar">
+        <label for="year-select">회계연도</label>
+        <select id="year-select"></select>
+        <span id="fy-range"></span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div id="app-tabs" class="tabs-sticky hidden">
+  <div class="tabs-inner">
     <nav class="tabs">
       <button class="tab-btn active" data-view="report">보고서</button>
       <button class="tab-btn" data-view="entry">결산 관리</button>
       <button class="tab-btn" data-view="budget">예산 관리</button>
     </nav>
   </div>
-  </div>
-</header>
+</div>
 
 <div class="auth-gate" id="auth-gate">
   <h2 id="auth-gate-title">로그인이 필요합니다</h2>
@@ -471,6 +484,7 @@ function showAuthGate(title, message, uid=''){
   userId.innerHTML = uid ? `Google 계정 UID: <code>${escapeHTML(uid)}</code>` : '';
   document.getElementById('auth-gate').classList.remove('hidden');
   document.getElementById('app-controls').classList.add('hidden');
+  document.getElementById('app-tabs').classList.add('hidden');
   document.getElementById('app-content').classList.add('hidden');
 }
 
@@ -558,6 +572,7 @@ async function handleAuthState(user){
     }
     document.getElementById('auth-gate').classList.add('hidden');
     document.getElementById('app-controls').classList.remove('hidden');
+    document.getElementById('app-tabs').classList.remove('hidden');
     document.getElementById('app-content').classList.remove('hidden');
     document.getElementById('auth-status').textContent = user.email || '로그인됨';
     await initializeApplicationData();
