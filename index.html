@@ -93,19 +93,20 @@ body { background-color:var(--paper-2); color:var(--ink); }
     border-top:1px solid var(--navy-2);border-bottom:3px solid var(--navy-2);
   }
   .table-scroll thead th{position:sticky;top:0;z-index:2;box-shadow:0 2px 5px rgba(17,45,78,.14);}
-  .transaction-table-scroll{overflow-x:hidden;}
+  .transaction-table-scroll{overflow-x:auto;}
   .transaction-table{width:100%;min-width:0;table-layout:fixed;}
   .transaction-table th,.transaction-table td{overflow-wrap:anywhere;vertical-align:middle;}
   .transaction-table th{white-space:normal;word-break:keep-all;}
   .transaction-table td:first-child{white-space:nowrap;}
+  .entry-table{min-width:920px;}
   .income-row{background:var(--income-row);}
   .expense-row{background:var(--paper-2);}
-  .transaction-table .col-date{width:11%;}
+  .transaction-table .col-date{width:15%;}
   .transaction-table .col-type{width:6%;}
-  .transaction-table .col-description{width:15%;}
-  .transaction-table .col-mok{width:11%;}
-  .transaction-table .col-payee{width:10%;}
-  .transaction-table .col-spender{width:10%;}
+  .transaction-table .col-description{width:13%;}
+  .transaction-table .col-mok{width:10%;}
+  .transaction-table .col-payee{width:9%;}
+  .transaction-table .col-spender{width:9%;}
   .transaction-table .col-amount{width:11%;}
   .transaction-table .col-status{width:14%;}
   .transaction-table .col-actions{width:12%;}
@@ -114,8 +115,11 @@ body { background-color:var(--paper-2); color:var(--ink); }
   tfoot tr{background:#e9eef4;font-weight:700;}
   tfoot th,tfoot td{border-top:2px solid var(--navy-2);vertical-align:middle;}
   .report-total-row{background:#e9eef4;font-weight:700;}
-  .hierarchy-total-label{text-align:right;font-weight:700;}
+  .hierarchy-total-row{font-weight:700;background:#e9eef4;}
+  .hierarchy-total-label{text-align:center;font-weight:700;}
   .hierarchy-total-value{text-align:right;font-weight:700;white-space:nowrap;}
+  .hierarchy-total-message{text-align:center;font-weight:700;}
+  .hierarchy-total-mismatch td{background:#f8e1df;color:var(--expense);font-weight:700;}
   .status-approved,.status-confirmed{background:var(--income-row);color:var(--navy);}
   .report-transaction-table .col-date{width:10%;}
   .report-transaction-table .col-description{width:20%;}
@@ -125,18 +129,17 @@ body { background-color:var(--paper-2); color:var(--ink); }
   @media (max-width:600px){
     .transaction-table th,.transaction-table td{padding:6px 3px;font-size:12px;}
     .transaction-table td.num{font-size:11px;white-space:normal;}
-    .entry-table .col-date{width:13%;}
-    .entry-table .col-date{width:11%;}
+    .entry-table .col-date{width:15%;}
     .entry-table .col-type{width:6%;}
-    .entry-table .col-description{width:14%;}
-    .entry-table .col-mok{width:11%;}
-    .entry-table .col-payee{width:10%;}
-    .entry-table .col-spender{width:10%;}
+    .entry-table .col-description{width:13%;}
+    .entry-table .col-mok{width:10%;}
+    .entry-table .col-payee{width:9%;}
+    .entry-table .col-spender{width:9%;}
     .entry-table .col-amount{width:11%;}
     .entry-table .col-status{width:15%;}
     .entry-table .col-actions{width:12%;}
   }
-  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th,td{text-align:center;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
   th+th,td+td{border-left:1px solid var(--line);}
   thead th+th{border-left-color:rgba(219,226,239,.42);}
   th{color:var(--ink-soft);font-weight:500;font-size:14px;text-align:center;}
@@ -195,6 +198,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .hierarchy-table .del-btn{font-size:14px;}
   .hierarchy-table tbody tr:hover{background:var(--paper);}
   .hierarchy-table select,.hierarchy-table input{box-sizing:border-box;width:100%;min-width:0;}
+  .hierarchy-table tbody td:not(:nth-child(5)) input,.hierarchy-table tbody td:not(:nth-child(5)) select{text-align:center;}
   .hierarchy-table .hierarchy-item-budget{text-align:right;}
   .budget-report-table{min-width:900px;}
   .hierarchy-table .hierarchy-row-delete{white-space:nowrap;}
@@ -446,9 +450,8 @@ body { background-color:var(--paper-2); color:var(--ink); }
           <thead><tr><th>구분</th><th>관</th><th>항</th><th>목</th><th class="num"><span id="budget-year-column"></span> 예산(원)</th><th></th></tr></thead>
           <tbody id="hierarchy-form-body"></tbody>
           <tfoot>
-            <tr><td class="hierarchy-total-label" colspan="4">수입 예산 합계</td><td class="hierarchy-total-value" id="hierarchy-income-total">0원</td><td></td></tr>
-            <tr><td class="hierarchy-total-label" colspan="4">지출 예산 합계</td><td class="hierarchy-total-value" id="hierarchy-expense-total">0원</td><td></td></tr>
-            <tr><td class="hierarchy-total-label" colspan="4">전체 예산 합계</td><td class="hierarchy-total-value" id="hierarchy-grand-total">0원</td><td></td></tr>
+            <tr class="hierarchy-total-row"><td class="hierarchy-total-label" colspan="4">지출 예산 합계</td><td class="hierarchy-total-value" id="hierarchy-expense-total">0원</td><td></td></tr>
+            <tr class="hierarchy-total-row" id="hierarchy-grand-total-row"><td class="hierarchy-total-label" colspan="4">전체 예산 차액 (수입 − 지출)</td><td class="hierarchy-total-value" id="hierarchy-grand-total">0원</td><td class="hierarchy-total-message" id="hierarchy-total-message">수입·지출 예산 동일</td></tr>
           </tfoot>
         </table>
       </div>
@@ -1928,6 +1931,12 @@ function renderHierarchyForm(){
         });
       });
     });
+    if(type==='income'){
+      const totalRow = document.createElement('tr');
+      totalRow.className = 'hierarchy-total-row';
+      totalRow.innerHTML = '<td class="hierarchy-total-label" colspan="4">수입 예산 합계</td><td class="hierarchy-total-value" id="hierarchy-income-total">0원</td><td></td>';
+      body.appendChild(totalRow);
+    }
   });
   const migrationNotice = document.getElementById('budget-migration-notice');
   migrationNotice.textContent = budgetMigrationMessage;
@@ -1947,7 +1956,21 @@ function updateHierarchyBudgetTotals(){
   });
   document.getElementById('hierarchy-income-total').textContent = fmt(income);
   document.getElementById('hierarchy-expense-total').textContent = fmt(expense);
-  document.getElementById('hierarchy-grand-total').textContent = fmt(income+expense);
+  const difference = income-expense;
+  const totalRow = document.getElementById('hierarchy-grand-total-row');
+  const totalMessage = document.getElementById('hierarchy-total-message');
+  document.getElementById('hierarchy-grand-total').textContent = fmt(difference);
+  totalRow.classList.toggle('hierarchy-total-mismatch',difference!==0);
+  totalMessage.textContent = difference===0 ? '수입·지출 예산 동일' : '예산 불일치';
+}
+function repositionHierarchyRows(){
+  const body = document.getElementById('hierarchy-form-body');
+  const incomeTotalRow = body.querySelector('#hierarchy-income-total').closest('tr');
+  const incomeRows = [...body.querySelectorAll('.hierarchy-item-row')]
+    .filter(row=>row.querySelector('.hierarchy-category-type').value==='income');
+  const expenseRows = [...body.querySelectorAll('.hierarchy-item-row')]
+    .filter(row=>row.querySelector('.hierarchy-category-type').value==='expense');
+  [...incomeRows,incomeTotalRow,...expenseRows].forEach(row=>body.appendChild(row));
 }
 function captureHierarchyForm(){
   const tree = {income:[],expense:[]};
@@ -2905,6 +2928,7 @@ document.getElementById('hierarchy-form-body').addEventListener('change', event=
   if(!typeSelect) return;
   typeSelect.closest('.hierarchy-item-row').classList.toggle('income-row',typeSelect.value==='income');
   typeSelect.closest('.hierarchy-item-row').classList.toggle('expense-row',typeSelect.value==='expense');
+  repositionHierarchyRows();
   updateHierarchyBudgetTotals();
 });
 document.getElementById('hierarchy-form-body').addEventListener('input', event=>{
