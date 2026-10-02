@@ -72,10 +72,36 @@ body { background-color:var(--paper-2); color:var(--ink); }
   @media (max-width:760px){ .two-col{grid-template-columns:1fr;} .stats{grid-template-columns:1fr;} .form-grid{grid-template-columns:1fr !important;} }
 
   table{width:100%;border-collapse:collapse;font-size:14px;}
-  .table-scroll{max-height:440px;overflow-y:auto;overflow-x:auto;position:relative;}
+  .table-scroll{max-height:880px;overflow-y:auto;overflow-x:auto;position:relative;}
   .table-scroll thead th{position:sticky;top:0;z-index:2;background:var(--paper-2);box-shadow:inset 0 -1px 0 var(--line);}
-  .entry-table{min-width:980px;}
-  .entry-table th,.entry-table td{white-space:nowrap;vertical-align:middle;}
+  .transaction-table-scroll{overflow-x:hidden;}
+  .transaction-table{width:100%;min-width:0;table-layout:fixed;}
+  .transaction-table th,.transaction-table td{overflow-wrap:anywhere;vertical-align:middle;}
+  .transaction-table th{white-space:normal;word-break:keep-all;}
+  .transaction-table .col-date{width:13%;}
+  .transaction-table .col-type{width:7%;}
+  .transaction-table .col-description{width:18%;}
+  .transaction-table .col-mok{width:14%;}
+  .transaction-table .col-payee{width:14%;}
+  .transaction-table .col-amount{width:12%;}
+  .transaction-table .col-status{width:8%;}
+  .transaction-table .col-actions{width:14%;}
+  .transaction-table td.num{white-space:nowrap;}
+  .report-transaction-table .col-date{width:10%;}
+  .report-transaction-table .col-description{width:20%;}
+  .report-transaction-table .col-mok{width:13%;}
+  .report-transaction-table .col-payee{width:25%;}
+  .report-transaction-table .col-amount{width:16%;}
+  @media (max-width:600px){
+    .transaction-table th,.transaction-table td{padding:6px 3px;font-size:12px;}
+    .transaction-table td.num{font-size:11px;white-space:normal;}
+    .entry-table .col-date{width:13%;}
+    .entry-table .col-description{width:18%;}
+    .entry-table .col-mok{width:13%;}
+    .entry-table .col-payee{width:13%;}
+    .entry-table .col-amount{width:14%;}
+    .entry-table .col-actions{width:14%;}
+  }
   th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
   th{color:var(--ink-soft);font-weight:500;font-size:14px;text-align:center;}
   .field label{font-size:14px;color:var(--ink-soft);}
@@ -224,49 +250,9 @@ body { background-color:var(--paper-2); color:var(--ink); }
     </div>
 
     <section>
-      <div class="sec-head"><span class="sec-num">01</span><h2>월별 수입·지출 추이</h2></div>
-      <p class="sec-desc">입력된 모든 내역을 월별로 합산한 그래프입니다.</p>
-      <div class="card"><div class="chart-box"><canvas id="chartMonthly"></canvas></div></div>
-    </section>
-
-    <section>
-      <div class="sec-head"><span class="sec-num">02</span><h2>지출 관 구성</h2></div>
-      <p class="sec-desc">관별 지출 비중과 관·항·목별 지출 상위 내역입니다.</p>
-      <div class="two-col">
-        <div class="card"><div class="chart-box tall"><canvas id="chartExpenseHang"></canvas></div></div>
-        <div class="card">
-          <table><thead><tr><th>관·항·목</th><th class="num">지출액</th></tr></thead><tbody id="tbl-top-mok"></tbody></table>
-        </div>
-      </div>
-    </section>
-
-    <section>
-      <div class="sec-head"><span class="sec-num">03</span><h2>수입 구성</h2></div>
-      <p class="sec-desc">조합비 및 기타 수입원 구성입니다.</p>
-      <div class="card"><div class="chart-box"><canvas id="chartIncome"></canvas></div></div>
-    </section>
-
-    <section>
-      <div class="sec-head"><span class="sec-num">04</span><h2>세부 거래 내역</h2></div>
-      <div class="card">
-        <div class="filter-row" id="month-filters-report"></div>
-        <div class="table-scroll">
-          <table>
-            <thead><tr><th>일자</th><th>내용</th><th>지급처</th><th class="num">수입</th><th class="num">지출</th></tr></thead>
-            <tbody id="tx-body-report"></tbody>
-          </table>
-        </div>
-        <p class="count-note" id="tx-count-report"></p>
-      </div>
-    </section>
-
-    <section>
-      <div class="sec-head"><span class="sec-num">05</span><h2>관·항·목 예산 대비 실적</h2></div>
+      <div class="sec-head"><span class="sec-num">01</span><h2>관·항·목 예산 대비 실적</h2></div>
       <p class="sec-desc">예산 관리에 등록된 수입·지출 관·항·목 순서대로 예산과 승인된 실적을 비교합니다.</p>
       <div class="card">
-        <div class="chart-box tall"><canvas id="chartBudget"></canvas></div>
-      </div>
-      <div class="card" style="margin-top:14px;">
         <div class="table-scroll">
           <table class="budget-report-table">
             <thead><tr><th>구분</th><th>관</th><th>항</th><th>목</th><th class="num">예산</th><th class="num">집행액</th><th class="num">집행률</th><th class="num">잔여</th></tr></thead>
@@ -275,6 +261,38 @@ body { background-color:var(--paper-2); color:var(--ink); }
         </div>
         <p class="count-note" id="budget-note"></p>
       </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="sec-num">02</span><h2>세부 거래 내역</h2></div>
+      <div class="card">
+        <div class="filter-row" id="month-filters-report"></div>
+        <div class="table-scroll transaction-table-scroll">
+          <table class="transaction-table report-transaction-table">
+            <colgroup>
+              <col class="col-date"><col class="col-description"><col class="col-mok">
+              <col class="col-payee"><col class="col-amount"><col class="col-amount">
+            </colgroup>
+            <thead><tr><th>일자</th><th>내용</th><th>목</th><th>지급처</th><th class="num">수입</th><th class="num">지출</th></tr></thead>
+            <tbody id="tx-body-report"></tbody>
+          </table>
+        </div>
+        <p class="count-note" id="tx-count-report"></p>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="sec-num">03</span><h2>그래프 분석</h2></div>
+      <p class="sec-desc">월별 수입·지출 추이와 수입·지출 구성, 예산 집행 현황을 그래프로 확인합니다.</p>
+      <div class="card"><div class="chart-box"><canvas id="chartMonthly"></canvas></div></div>
+      <div class="two-col" style="margin-top:20px;">
+        <div class="card"><div class="chart-box tall"><canvas id="chartExpenseHang"></canvas></div></div>
+        <div class="card">
+          <table><thead><tr><th>관·항·목</th><th class="num">지출액</th></tr></thead><tbody id="tbl-top-mok"></tbody></table>
+        </div>
+      </div>
+      <div class="card" style="margin-top:20px;"><div class="chart-box"><canvas id="chartIncome"></canvas></div></div>
+      <div class="card" style="margin-top:20px;"><div class="chart-box tall"><canvas id="chartBudget"></canvas></div></div>
     </section>
   </div>
 
@@ -344,9 +362,13 @@ body { background-color:var(--paper-2); color:var(--ink); }
       <div class="card">
         <div class="filter-row" id="status-filters-entry"></div>
         <div class="filter-row" id="month-filters-entry"></div>
-        <div class="table-scroll">
-          <table class="entry-table">
-            <thead><tr><th>일자</th><th>구분</th><th>내용</th><th>지급처</th><th class="num">금액</th><th>상태</th><th></th></tr></thead>
+        <div class="table-scroll transaction-table-scroll">
+          <table class="transaction-table entry-table">
+            <colgroup>
+              <col class="col-date"><col class="col-type"><col class="col-description"><col class="col-mok">
+              <col class="col-payee"><col class="col-amount"><col class="col-status"><col class="col-actions">
+            </colgroup>
+            <thead><tr><th>일자</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th class="num">금액</th><th>상태</th><th></th></tr></thead>
             <tbody id="tx-body-entry"></tbody>
           </table>
         </div>
@@ -1386,24 +1408,26 @@ function renderTxTable(mode){
     .slice()
     .sort((a,b) => (b.date||'').localeCompare(a.date||''));
 
-  const shown = isReport ? filtered.slice(0,150) : filtered;
+  const shown = filtered;
 
   shown.forEach(t=>{
     const tr = document.createElement('tr');
     if(isReport){
       tr.innerHTML = `
-        <td>${t.date||'-'}</td>
-        <td>${t.desc||''}${t.category||t.hang?`<br><span class="tag">${escapeHTML(classificationPath(t))}</span>`:''}</td>
-        <td>${t.payee||t.spender||'-'}</td>
+        <td>${escapeHTML(t.date||'-')}</td>
+        <td>${escapeHTML(t.desc||'')}</td>
+        <td>${escapeHTML(t.category||'-')}</td>
+        <td>${escapeHTML(t.payee||t.spender||'-')}</td>
         <td class="num" style="color:#3F72AF">${t.gubun==='수입'?fmtShort(t.amount):''}</td>
         <td class="num" style="color:#112D4E">${t.gubun==='지출'?fmtShort(t.amount):''}</td>
       `;
     } else {
       tr.innerHTML = `
-        <td>${t.date||'-'}</td>
-        <td style="color:${t.gubun==='수입'?'#3F72AF':'#112D4E'}">${t.gubun}</td>
-        <td>${t.desc||''} <span class="tag">${escapeHTML(classificationPath(t))}</span></td>
-        <td>${t.payee||t.spender||'-'}</td>
+        <td>${escapeHTML(t.date||'-')}</td>
+        <td style="color:${t.gubun==='수입'?'#3F72AF':'#112D4E'}">${escapeHTML(t.gubun||'')}</td>
+        <td>${escapeHTML(t.desc||'')}</td>
+        <td>${escapeHTML(t.category||'-')}</td>
+        <td>${escapeHTML(t.payee||t.spender||'-')}</td>
         <td class="num">${fmtShort(t.amount)}</td>
         <td><span class="status-badge status-${t.status}">${STATUS_LABEL[t.status]||t.status}</span></td>
         <td>${rowActions(t)}</td>
