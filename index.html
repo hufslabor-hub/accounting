@@ -297,6 +297,14 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .payment-approval-signature{width:100%;height:42px;}
   .payment-approval-stamp{position:absolute;top:24px;left:50%;width:max-content;max-width:140px;transform:translateX(-50%) rotate(-9deg);border:3px double #b42318;color:#b42318;padding:5px 8px;font-weight:800;font-size:12px;line-height:1.4;text-align:center;background:rgba(255,255,255,.82);}
   .payment-approval-stamp small{font-size:10px;}
+  .approved-status {
+    color: #2E7D32;
+    font-weight: bold;
+  }
+  .approved-status {
+    color: #2E7D32;
+    font-weight: bold;
+  }
   .payment-report-title-cell{padding:10px 12px!important;}
   .payment-report-section-title{text-align:center;font-weight:700;letter-spacing:.18em;background:#e9eef4;}
   .payment-report-document .report-seq{width:7%;}
@@ -627,9 +635,9 @@ let statusMessageTimer = null;
 const STATUS_LABEL = {
   'input-complete':'입력완료',
   submitted:'제출완료',
-  approved:'승인',
-  paid:'승인',
-  confirmed:'승인',
+  approved:'<span class="approved-status">승인</span>',
+  paid:'<span class="approved-status">승인</span>',
+  confirmed:'<span class="approved-status">승인</span>',
   rejected:'반려됨'
 };
 const DRIVE_FOLDER_ID = '1gMzC9jbjYONOXv9ZCqJpB8kH8NYmb2it';
