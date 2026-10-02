@@ -17,8 +17,8 @@
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
-body, button, input, select, textarea { font-family: 'Nanum Gothic', sans-serif; }
-body { background-color: #F8FAFC; }  
+body, button, input, select, textarea, table { font-family:'Nanum Gothic',sans-serif; }
+body { background-color:#F8FAFC; color:var(--ink); }
   .wrap{max-width:1040px;margin:0 auto;padding:0 24px 80px;}
 
   header.masthead{
@@ -31,12 +31,12 @@ body { background-color: #F8FAFC; }
   }
   .masthead-inner{max-width:1040px;margin:0 auto;}
   .org{font-size:14px;letter-spacing:.02em;color:var(--gold-soft);font-weight:500;margin:0 0 10px;}
-  h1.title{font-family:'Noto Serif KR',serif;font-weight:900;font-size:clamp(24px,4vw,36px);line-height:1.25;margin:0 0 20px;max-width:20ch;}
+  h1.title{font-family:'Nanum Gothic',sans-serif;font-weight:800;font-size:clamp(24px,4vw,36px);line-height:1.25;margin:0 0 20px;max-width:none;}
 
   nav.tabs{display:flex;gap:2px;margin-top:8px;}
   .tab-btn{
     background:rgba(255,255,255,.06); border:none; color:#cdd4e0;
-    font-family:'Noto Sans KR',sans-serif; font-size:14.5px; font-weight:500;
+    font-family:'Nanum Gothic',sans-serif; font-size:14.5px; font-weight:500;
     padding:12px 22px; cursor:pointer; border-radius:6px 6px 0 0;
   }
   .tab-btn.active{background:var(--paper); color:var(--navy); font-weight:700;}
@@ -47,14 +47,14 @@ body { background-color: #F8FAFC; }
   .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-top:32px;}
   .stat{background:var(--paper-2);padding:22px 20px;}
   .stat .label{font-size:13px;color:var(--ink-soft);margin:0 0 8px;}
-  .stat .value{font-family:'Noto Serif KR',serif;font-weight:700;font-size:clamp(19px,2.4vw,25px);margin:0;}
+  .stat .value{font-family:'Nanum Gothic',sans-serif;font-weight:700;font-size:clamp(19px,2.4vw,25px);margin:0;}
   .stat .value.income{color:var(--income);} .stat .value.expense{color:var(--expense);}
   .stat .sub{font-size:12px;color:var(--ink-soft);margin-top:6px;}
 
   section{margin-top:56px;}
   .sec-head{display:flex;align-items:baseline;gap:12px;border-bottom:2px solid var(--navy);padding-bottom:10px;margin-bottom:22px;}
-  .sec-num{font-family:'Noto Serif KR',serif;font-weight:700;color:var(--gold);font-size:15px;}
-  h2{font-family:'Noto Serif KR',serif;font-weight:700;font-size:21px;margin:0;}
+  .sec-num{font-family:'Nanum Gothic',sans-serif;font-weight:700;color:var(--gold);font-size:15px;}
+  h2{font-family:'Nanum Gothic',sans-serif;font-weight:700;font-size:21px;margin:0;}
   p.sec-desc{color:var(--ink-soft);font-size:14.5px;margin:0 0 20px;max-width:64ch;}
 
   .card{background:var(--paper-2);border:1px solid var(--line);padding:24px;}
@@ -72,7 +72,7 @@ body { background-color: #F8FAFC; }
   .bar-fill{height:100%;background:var(--expense);}
 
   .filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
-  .filter-btn{border:1px solid var(--line);background:var(--paper-2);padding:7px 14px;font-size:13px;font-family:'Noto Sans KR',sans-serif;color:var(--ink-soft);cursor:pointer;}
+  .filter-btn{border:1px solid var(--line);background:var(--paper-2);padding:7px 14px;font-size:13px;font-family:'Nanum Gothic',sans-serif;color:var(--ink-soft);cursor:pointer;}
   .filter-btn.active{background:var(--navy);border-color:var(--navy);color:#f4f1e8;}
   .tag{display:inline-block;font-size:11px;padding:2px 7px;background:#f0ece0;color:var(--gold);border:1px solid var(--gold-soft);margin-top:3px;}
   .count-note{font-size:13px;color:var(--ink-soft);margin-top:10px;}
@@ -82,6 +82,11 @@ body { background-color: #F8FAFC; }
     font-size:13.5px; padding:12px 16px; margin-bottom:20px;
   }
 
+.year-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 4px;}
+.year-bar label{color:var(--gold-soft);font-size:13px;}
+#year-select{padding:7px 12px;font-size:14px;font-weight:700;background:#fff;color:var(--navy);border:none;border-radius:6px;cursor:pointer;}
+#fy-range{font-size:12.5px;color:#cdd4e0;}
+
   /* form */
   .form-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:18px;}
   .field{display:flex;flex-direction:column;gap:5px;}
@@ -90,20 +95,20 @@ body { background-color: #F8FAFC; }
   label{font-size:12.5px;color:var(--ink-soft);}
   input[type=text], input[type=date], input[type=number]{
     border:1px solid var(--line); padding:9px 10px; font-size:14px;
-    font-family:'Noto Sans KR',sans-serif; background:#fcfcfb;
+    font-family:'Nanum Gothic',sans-serif; background:#fcfcfb;
   }
   input:focus{outline:2px solid var(--navy); outline-offset:-1px;}
   .gubun-toggle{display:flex; border:1px solid var(--line); overflow:hidden;}
   .gubun-toggle button{
     flex:1; border:none; padding:9px 10px; background:#fcfcfb; cursor:pointer;
-    font-family:'Noto Sans KR',sans-serif; font-size:14px; color:var(--ink-soft);
+    font-family:'Nanum Gothic',sans-serif; font-size:14px; color:var(--ink-soft);
   }
   .gubun-toggle button.on-income.selected{background:var(--income); color:#fff;}
   .gubun-toggle button.on-expense.selected{background:var(--expense); color:#fff;}
 
   .btn-primary{
     background:var(--navy); color:#f4f1e8; border:none; padding:11px 22px;
-    font-family:'Noto Sans KR',sans-serif; font-size:14.5px; font-weight:700; cursor:pointer;
+    font-family:'Nanum Gothic',sans-serif; font-size:14.5px; font-weight:700; cursor:pointer;
   }
   .btn-primary:hover{background:var(--navy-2);}
   .btn-text{background:none;border:none;color:var(--ink-soft);text-decoration:underline;cursor:pointer;font-size:13px;padding:0;}
@@ -123,7 +128,7 @@ body { background-color: #F8FAFC; }
 
   .pending-box{border:1px solid var(--gold-soft); background:#fffdf7; margin-bottom:22px;}
   .pending-box .ph{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--gold-soft);}
-  .pending-box .ph h3{font-family:'Noto Serif KR',serif;font-size:16px;margin:0;}
+  .pending-box .ph h3{font-family:'Nanum Gothic',sans-serif;font-size:16px;margin:0;}
   .pending-count{background:var(--gold);color:#fff;border-radius:10px;font-size:12px;padding:1px 9px;margin-left:8px;}
   .pending-empty{padding:18px;color:var(--ink-soft);font-size:13.5px;}
 
@@ -137,9 +142,12 @@ body { background-color: #F8FAFC; }
 <header class="masthead">
   <div class="masthead-inner">
     <p class="org">대학노동조합 한국외국어대학교지부</p>
-    <h1 class="title">조합비 수입·지출 결산</h1>
-<select id="year-select" onchange="setYear(this.value)" title="회계연도: 1월 1일 ~ 12월 31일"
- class="px-2.5 py-1.5 rounded-lg text-sm font-bold bg-white text-hufs-navy focus:outline-none focus:ring-2 focus:ring-hufs-gold"></select>
+<h1 class="title">조합비 수입·지출 결산 <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
+<div class="year-bar">
+  <label for="year-select">회계연도</label>
+  <select id="year-select" onchange="setYear(this.value)"></select>
+  <span id="fy-range"></span>
+</div>
     <nav class="tabs">
       <button class="tab-btn active" data-view="report">보고서</button>
       <button class="tab-btn" data-view="entry">내역 입력·관리</button>
@@ -306,7 +314,6 @@ body { background-color: #F8FAFC; }
 <script>
 const BASE_LEDGER = JSON.parse(document.getElementById('base-ledger').textContent);
 const SUGGESTIONS = JSON.parse(document.getElementById('suggestions').textContent);
-const STORAGE_KEY = 'ledger:2026';
 
 let ledger = [];
 let budget = {};
@@ -317,30 +324,69 @@ let currentStatusEntry = '전체';
 let currentGubun = '지출';
 
 const STATUS_LABEL = {approved:'승인됨', pending:'승인대기', rejected:'반려됨'};
-const BUDGET_KEY = 'budget:2026';
 
 const fmt = n => Math.round(n).toLocaleString('ko-KR') + '원';
 const fmtShort = n => Math.round(n).toLocaleString('ko-KR');
 const monthList = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
 
 // ---------- storage ----------
-async function loadLedger(){
+const YEARS_KEY = 'years:list';
+const ledgerKey = y => 'ledger:' + y;
+const budgetKey = y => 'budget:' + y;
+const fyStart = y => `${y}-01-01`;
+const fyEnd = y => `${y}-12-31`;
+// 원본 엑셀의 날짜 오타 보정 (이미 저장된 데이터에도 적용됨)
+const DATE_FIXES = { 2026: { imp_1:'2026-01-01', imp_80:'2026-01-29' } };
+
+let currentYear = new Date().getFullYear();
+let years = [];
+let yearToken = 0;
+
+async function persistYears(){
+  try{ await window.storage.set(YEARS_KEY, JSON.stringify(years), true); }catch(e){}
+}
+async function loadYears(){
   try{
-    const res = await window.storage.get(STORAGE_KEY, true);
-    ledger = JSON.parse(res.value);
-    // 이전 버전(승인 기능 도입 전) 데이터 마이그레이션: status 없으면 잠긴 항목은 승인, 아니면 승인대기로 처리
-    let migrated = false;
-    ledger.forEach(t=>{
-      if(!t.status){ t.status = t.locked ? 'approved' : 'pending'; migrated = true; }
-    });
-    if(migrated) await persist();
-    document.getElementById('footer-sync').textContent = '공유 저장소에서 불러옴 · ' + ledger.length + '건';
+    const res = await window.storage.get(YEARS_KEY, true);
+    years = JSON.parse(res.value);
   }catch(e){
-    // not found yet -> seed with base data
-    ledger = BASE_LEDGER.slice();
+    years = [2025, 2026, 2027];
+    await persistYears();
+  }
+  if(!years.includes(currentYear)){
+    years.push(currentYear); years.sort((a,b)=>a-b); await persistYears();
+  }
+}
+
+function applyFixes(list){
+  const fixes = DATE_FIXES[currentYear] || {};
+  let changed = false;
+  list.forEach(t=>{
+    if(!t.status){ t.status = t.locked ? 'approved' : 'pending'; changed = true; }
+    if(fixes[t.id] && t.date !== fixes[t.id]){ t.date = fixes[t.id]; changed = true; }
+  });
+  return changed;
+}
+
+function setFooter(msg){
+  const out = ledger.filter(t => !(t.date||'').startsWith(currentYear + '-')).length;
+  document.getElementById('footer-sync').textContent =
+    `${currentYear}년 · ${msg} · ${ledger.length}건` + (out ? ` · ⚠ 회계연도 밖 날짜 ${out}건` : '');
+}
+
+async function loadLedger(){
+  const key = ledgerKey(currentYear);
+  try{
+    const res = await window.storage.get(key, true);
+    ledger = JSON.parse(res.value);
+    if(applyFixes(ledger)) await persist();
+    setFooter('공유 저장소에서 불러옴');
+  }catch(e){
+    ledger = currentYear === 2026 ? BASE_LEDGER.slice() : [];
+    applyFixes(ledger);
     try{
-      await window.storage.set(STORAGE_KEY, JSON.stringify(ledger), true);
-      document.getElementById('footer-sync').textContent = '초기 데이터로 시작 · ' + ledger.length + '건';
+      await window.storage.set(key, JSON.stringify(ledger), true);
+      setFooter('초기 데이터로 시작');
     }catch(e2){
       document.getElementById('footer-sync').textContent = '저장소 연결 실패 (임시 상태로만 동작 중)';
     }
@@ -348,33 +394,63 @@ async function loadLedger(){
 }
 
 async function persist(){
-  try{
-    await window.storage.set(STORAGE_KEY, JSON.stringify(ledger), true);
-    return true;
-  }catch(e){
-    return false;
-  }
+  try{ await window.storage.set(ledgerKey(currentYear), JSON.stringify(ledger), true); return true; }
+  catch(e){ return false; }
 }
 
 async function loadBudget(){
   try{
-    const res = await window.storage.get(BUDGET_KEY, true);
+    const res = await window.storage.get(budgetKey(currentYear), true);
     budget = JSON.parse(res.value);
   }catch(e){
-    // default seed: 0 budget for every hang seen in the base data
     budget = {};
     SUGGESTIONS.hangsExp.forEach(h => { budget[h] = 0; });
-    try{ await window.storage.set(BUDGET_KEY, JSON.stringify(budget), true); }catch(e2){}
+    try{ await window.storage.set(budgetKey(currentYear), JSON.stringify(budget), true); }catch(e2){}
   }
 }
 
 async function persistBudget(){
-  try{
-    await window.storage.set(BUDGET_KEY, JSON.stringify(budget), true);
-    return true;
-  }catch(e){
-    return false;
+  try{ await window.storage.set(budgetKey(currentYear), JSON.stringify(budget), true); return true; }
+  catch(e){ return false; }
+}
+
+// ---------- 회계연도 선택 ----------
+function renderYearSelect(){
+  const sel = document.getElementById('year-select');
+  sel.innerHTML = years.map(y => `<option value="${y}"${y===currentYear?' selected':''}>${y}년</option>`).join('')
+    + '<option value="__add__">＋ 연도 추가…</option>';
+  document.getElementById('title-year').textContent = currentYear + ' 회계연도';
+  document.getElementById('fy-range').textContent = `${currentYear}.01.01 ~ ${currentYear}.12.31`;
+  const f = document.getElementById('f-date');
+  f.min = fyStart(currentYear); f.max = fyEnd(currentYear); f.value = '';
+}
+
+async function loadYearData(){
+  await loadLedger();
+  await loadBudget();
+}
+
+function renderAll(){
+  renderYearSelect();
+  renderReport();
+  renderEntryView();
+  renderBudgetForm();
+}
+
+async function setYear(v){
+  const token = ++yearToken;
+  if(v === '__add__'){
+    const y = parseInt(prompt('추가할 회계연도를 입력하세요 (예: 2028)'), 10);
+    if(!(y >= 2000 && y <= 2100)){ renderYearSelect(); return; }
+    if(!years.includes(y)){ years.push(y); years.sort((a,b)=>a-b); await persistYears(); }
+    currentYear = y;
+  } else {
+    currentYear = parseInt(v, 10);
   }
+  currentMonthReport = currentMonthEntry = currentStatusEntry = '전체';
+  await loadYearData();
+  if(token !== yearToken) return;
+  renderAll();
 }
 
 // ---------- derived aggregates ----------
@@ -414,7 +490,7 @@ function aggregates(list){
 }
 
 // ---------- charts ----------
-Chart.defaults.font.family = "'Noto Sans KR', sans-serif";
+Chart.defaults.font.family = "'Nanum Gothic', sans-serif";
 Chart.defaults.color = '#4d5a72';
 const hangColors = ['#16233f','#b6822c','#2f6f5e','#b6482f','#5c7291','#8a6d3b','#3d5a80','#a35d47','#728c81','#c19a49','#4a5f7a','#9c6b4e','#6f8b93','#7a5a3f'];
 
@@ -723,8 +799,7 @@ function setupDatalists(){
   window._refreshCategoryList = refreshCategoryList;
 
   const dlDesc = document.getElementById('dl-desc');
-  const descSet = new Set(ledger.map(t=>t.desc).filter(Boolean));
-  Array.from(descSet).slice(0,200).forEach(d=>{ const o=document.createElement('option'); o.value=d; dlDesc.appendChild(o); });
+const descSet = new Set(BASE_LEDGER.map(t=>t.desc).filter(Boolean));  Array.from(descSet).slice(0,200).forEach(d=>{ const o=document.createElement('option'); o.value=d; dlDesc.appendChild(o); });
 }
 
 function setGubun(g){
@@ -748,6 +823,9 @@ async function addEntry(){
     setStatus('날짜, 금액, 내용은 필수입니다.');
     return;
   }
+  if(date < fyStart(currentYear) || date > fyEnd(currentYear)){
+  setStatus(`${currentYear} 회계연도(1/1~12/31) 날짜만 입력할 수 있습니다.`);
+  return;
   const amount = Number(amountRaw);
   if(!amount || amount <= 0){
     setStatus('금액을 올바르게 입력해주세요.');
@@ -823,13 +901,11 @@ document.getElementById('btn-save-budget').addEventListener('click', async ()=>{
 
 // ---------- init ----------
 (async function init(){
-  await loadLedger();
-  await loadBudget();
+  await loadYears();
+  await loadYearData();
   setupDatalists();
   setGubun('지출');
-  renderReport();
-  renderEntryView();
-  renderBudgetForm();
+  renderAll();
 })();
 </script>
 
