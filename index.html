@@ -62,7 +62,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .balance-check .field{min-width:0;}
   .balance-check-result{grid-column:1/-1;padding:14px 16px;background:var(--paper);color:var(--ink);font-size:14px;font-weight:700;}
   .balance-check-result.match{background:var(--paper);color:var(--income);}
-  .balance-check-result.mismatch{background:var(--paper);color:var(--navy);}
+  .balance-check-result.mismatch{background:#b42318;border:1px solid #7a271a;border-left:6px solid #7a271a;color:#fff;}
   .balance-check-result.unset{background:var(--paper-2);color:var(--ink-soft);}
   .staff-name-list{display:flex;flex-direction:column;gap:8px;}
   .staff-name-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background:var(--paper-2);border:1px solid var(--line);font-size:14px;}
@@ -82,7 +82,11 @@ body { background-color:var(--paper-2); color:var(--ink); }
 
   table{width:100%;border-collapse:collapse;font-size:14px;}
   .table-scroll{max-height:880px;overflow-y:auto;overflow-x:auto;position:relative;}
-  .table-scroll thead th{position:sticky;top:0;z-index:2;background:var(--paper-2);box-shadow:inset 0 -1px 0 var(--line);}
+  thead th,.table-scroll thead th,.hierarchy-table th{
+    background:var(--navy);color:var(--paper-2);font-weight:700;text-align:center;
+    border-top:1px solid var(--navy-2);border-bottom:3px solid var(--navy-2);
+  }
+  .table-scroll thead th{position:sticky;top:0;z-index:2;box-shadow:0 2px 5px rgba(17,45,78,.14);}
   .transaction-table-scroll{overflow-x:hidden;}
   .transaction-table{width:100%;min-width:0;table-layout:fixed;}
   .transaction-table th,.transaction-table td{overflow-wrap:anywhere;vertical-align:middle;}
@@ -162,7 +166,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .hierarchy-toolbar{display:flex;justify-content:flex-end;margin:0 0 10px;}
   .hierarchy-table-scroll{max-height:65vh;overflow:auto;border:1px solid var(--line);background:var(--paper-2);}
   .hierarchy-table{width:100%;min-width:760px;border-collapse:collapse;}
-  .hierarchy-table th{position:sticky;top:0;z-index:1;background:var(--paper);padding:10px;text-align:center;font-size:14px;}
+  .hierarchy-table th{position:sticky;top:0;z-index:1;background:var(--navy);padding:10px;text-align:center;font-size:14px;}
   .hierarchy-table td{padding:6px 8px;vertical-align:middle;}
   .hierarchy-table .del-btn{font-size:14px;}
   .hierarchy-table tbody tr:hover{background:var(--paper);}
