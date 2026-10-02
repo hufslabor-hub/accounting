@@ -58,6 +58,15 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .stat .value{font-family:'Pretendard',sans-serif;font-weight:700;font-size:clamp(19px,2.4vw,25px);margin:0;}
   .stat .value.income{color:var(--income);} .stat .value.expense{color:var(--expense);}
   .stat .sub{font-size:12px;color:var(--ink-soft);margin-top:6px;}
+  .balance-check{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:end;}
+  .balance-check .field{min-width:0;}
+  .balance-check-result{grid-column:1/-1;padding:14px 16px;background:var(--paper);color:var(--ink);font-size:14px;font-weight:700;}
+  .balance-check-result.match{background:var(--paper);color:var(--income);}
+  .balance-check-result.mismatch{background:var(--paper);color:var(--navy);}
+  .balance-check-result.unset{background:var(--paper-2);color:var(--ink-soft);}
+  .staff-name-list{display:flex;flex-direction:column;gap:8px;}
+  .staff-name-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background:var(--paper-2);border:1px solid var(--line);font-size:14px;}
+  @media (max-width:760px){.balance-check{grid-template-columns:1fr;}}
 
   section{margin-top:56px;}
   .sec-head{display:flex;align-items:baseline;gap:12px;border-bottom:2px solid var(--navy);padding-bottom:10px;margin-bottom:22px;}
@@ -153,7 +162,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .hierarchy-toolbar{display:flex;justify-content:flex-end;margin:0 0 10px;}
   .hierarchy-table-scroll{max-height:65vh;overflow:auto;border:1px solid var(--line);background:var(--paper-2);}
   .hierarchy-table{width:100%;min-width:760px;border-collapse:collapse;}
-  .hierarchy-table th{position:sticky;top:0;z-index:1;background:var(--paper);padding:10px;text-align:left;font-size:14px;}
+  .hierarchy-table th{position:sticky;top:0;z-index:1;background:var(--paper);padding:10px;text-align:center;font-size:14px;}
   .hierarchy-table td{padding:6px 8px;vertical-align:middle;}
   .hierarchy-table .del-btn{font-size:14px;}
   .hierarchy-table tbody tr:hover{background:var(--paper);}
@@ -231,6 +240,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
       <button class="tab-btn active" data-view="report">보고서</button>
       <button class="tab-btn" data-view="entry">결산 관리</button>
       <button class="tab-btn" data-view="budget">예산 관리</button>
+      <button class="tab-btn" data-view="staff">사용자 관리</button>
     </nav>
   </div>
 </div>
@@ -251,6 +261,30 @@ body { background-color:var(--paper-2); color:var(--ink); }
       <div class="stat"><p class="label">총 지출</p><p class="value expense" id="r-expense">-</p><p class="sub" id="r-count">-</p></div>
       <div class="stat"><p class="label">현재 잔액(계산)</p><p class="value" id="r-balance">-</p><p class="sub">총 수입 − 총 지출</p></div>
     </div>
+
+    <section>
+      <div class="sec-head"><span class="sec-num">00</span><h2>활동비 계좌 잔액 대조</h2></div>
+      <p class="sec-desc">실제 활동비 계좌 잔액을 입력하면 승인된 내역의 총 수입 − 총 지출과 비교합니다.</p>
+      <div class="card">
+        <div class="balance-check">
+          <div class="field">
+            <label for="account-balance-input">실제 활동비 계좌 잔액(원)</label>
+            <input type="text" id="account-balance-input" inputmode="numeric" pattern="[0-9,]*" placeholder="예: 1,000,000">
+          </div>
+          <div class="field">
+            <label>계산된 잔액(총 수입 − 총 지출)</label>
+            <strong id="account-balance-calculated">-</strong>
+          </div>
+          <div class="field">
+            <label>차액(실제 − 계산)</label>
+            <strong id="account-balance-difference">-</strong>
+          </div>
+          <button class="btn-primary" id="btn-save-account-balance" type="button">잔액 저장</button>
+          <span id="account-balance-save-status" role="status"></span>
+          <div id="account-balance-result" class="balance-check-result unset" role="status">실제 계좌 잔액을 입력해 주세요.</div>
+        </div>
+      </div>
+    </section>
 
     <section>
       <div class="sec-head"><span class="sec-num">01</span><h2>관·항·목 예산 대비 실적</h2></div>
@@ -322,6 +356,23 @@ body { background-color:var(--paper-2); color:var(--ink); }
       <span id="budget-save-status"></span>
     </section>
   </div>
+  <div class="view" id="view-staff">
+    <section>
+      <div class="sec-head"><span class="sec-num">☰</span><h2>담당자 이름 관리</h2></div>
+      <p class="sec-desc">여기에 등록한 이름은 결산 관리의 담당자 입력란에서 선택할 수 있습니다. 목록에 없는 이름도 입력란에 직접 입력할 수 있습니다.</p>
+      <div class="card">
+        <div class="form-grid" style="grid-template-columns:1fr auto;align-items:end;">
+          <div class="field">
+            <label for="staff-name-input">담당자 이름</label>
+            <input type="text" id="staff-name-input" placeholder="이름 입력">
+          </div>
+          <button class="btn-primary" id="btn-add-staff-name" type="button">이름 추가</button>
+        </div>
+        <div id="staff-name-list" class="staff-name-list"></div>
+        <p id="staff-name-status" role="status"></p>
+      </div>
+    </section>
+  </div>
   <div class="view" id="view-entry">
     <div class="notice" style="margin-top:28px;">
       이 화면에 입력한 내역은 <b>이 페이지를 함께 보는 재정담당자 전원에게 공유</b>됩니다. 새로 입력한 내역은 <b>승인 대기</b> 상태로 등록되며, <b>승인된 건만 보고서 탭 집계에 반영</b>됩니다. 기존 엑셀에서 가져온 내역(8월 24일 이전)은 원본 보존을 위해 삭제할 수 없습니다.
@@ -351,7 +402,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
           <div class="field"><label>지급처</label><input type="text" id="f-payee" placeholder="예: 배달의민족"></div>
 
           <div class="field"><label for="f-mok">세부 계정과목</label><select id="f-mok"></select></div>
-          <div class="field"><label>담당자</label><input type="text" id="f-spender" placeholder="입력자 이름"></div>
+          <div class="field"><label>담당자</label><input type="text" id="f-spender" placeholder="입력자 이름" list="staff-name-options"><datalist id="staff-name-options"></datalist></div>
         </div>
         <datalist id="dl-desc"></datalist>
 
@@ -403,6 +454,8 @@ let currentUser = null;
 let dataUnsubscribers = [];
 let ledger = [];
 let budget = {};
+let accountBalance = null;
+let staffNames = [];
 let accountCategories = createDefaultAccountCategories();
 let charts = {};
 let currentMonthReport = '전체';
@@ -463,6 +516,8 @@ function createDefaultAccountCategories(){
 const YEARS_KEY = 'years:list';
 const ledgerKey = y => 'ledger:' + y;
 const budgetKey = y => 'budget:' + y;
+const accountBalanceKey = y => 'account-balance:' + y;
+const STAFF_NAMES_KEY = 'staff-names:list';
 const categoryKey = y => 'categories:' + y;
 const fyStart = y => `${y}-01-01`;
 const fyEnd = y => `${y}-12-31`;
@@ -526,7 +581,7 @@ function stopSharedDataWatchers(){
 
 function watchSharedData(){
   stopSharedDataWatchers();
-  const watchedKeys = [YEARS_KEY,ledgerKey(currentYear),budgetKey(currentYear),categoryKey(currentYear)];
+  const watchedKeys = [YEARS_KEY,ledgerKey(currentYear),budgetKey(currentYear),accountBalanceKey(currentYear),STAFF_NAMES_KEY,categoryKey(currentYear)];
   watchedKeys.forEach(key=>{
     const unsubscribe = db.collection('accountingData').doc(key).onSnapshot(snapshot=>{
       if(!snapshot.exists) return;
@@ -551,6 +606,16 @@ function watchSharedData(){
             renderHierarchyForm();
             renderReport();
           }
+        } else if(key===accountBalanceKey(currentYear)){
+          if(!Number.isSafeInteger(data) || data<0) throw new Error('저장된 활동비 계좌 잔액이 올바른 숫자가 아닙니다.');
+          accountBalance = data;
+          renderReport();
+        } else if(key===STAFF_NAMES_KEY){
+          if(!Array.isArray(data) || !data.every(name=>typeof name==='string')){
+            throw new Error('저장된 담당자 이름 목록이 올바르지 않습니다.');
+          }
+          staffNames = normalizeStaffNames(data);
+          renderStaffNames();
         } else if(key===categoryKey(currentYear)){
           if(JSON.stringify(accountCategories)!==JSON.stringify(data)){
             accountCategories = data;
@@ -733,6 +798,166 @@ async function loadBudget(){
   }catch(e){
     if(e.code !== 'accounting/not-found') throw e;
     budget = {};
+  }
+}
+
+async function loadAccountBalance(){
+  try{
+    const res = await storageGet(accountBalanceKey(currentYear));
+    const amount = JSON.parse(res.value);
+    if(!Number.isSafeInteger(amount) || amount<0){
+      throw new Error('저장된 활동비 계좌 잔액이 올바른 숫자가 아닙니다.');
+    }
+    accountBalance = amount;
+  }catch(e){
+    if(e.code !== 'accounting/not-found') throw e;
+    accountBalance = null;
+  }
+}
+
+function normalizeStaffNames(names){
+  return [...new Set(names.map(name=>name.trim()).filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b,'ko'));
+}
+
+async function loadStaffNames(){
+  try{
+    const res = await storageGet(STAFF_NAMES_KEY);
+    const names = JSON.parse(res.value);
+    if(!Array.isArray(names) || !names.every(name=>typeof name==='string')){
+      throw new Error('저장된 담당자 이름 목록이 올바르지 않습니다.');
+    }
+    staffNames = normalizeStaffNames(names);
+  }catch(e){
+    if(e.code !== 'accounting/not-found') throw e;
+    staffNames = normalizeStaffNames([...BASE_LEDGER,...ledger].map(entry=>entry.spender || ''));
+  }
+}
+
+function renderStaffNames(){
+  const datalist = document.getElementById('staff-name-options');
+  const list = document.getElementById('staff-name-list');
+  if(!datalist || !list) return;
+  datalist.replaceChildren();
+  staffNames.forEach(name=>{
+    const option = document.createElement('option');
+    option.value = name;
+    datalist.appendChild(option);
+  });
+  list.replaceChildren();
+  if(!staffNames.length){
+    const empty = document.createElement('p');
+    empty.className = 'pending-empty';
+    empty.textContent = '등록된 담당자가 없습니다.';
+    list.appendChild(empty);
+    return;
+  }
+  staffNames.forEach(name=>{
+    const item = document.createElement('div');
+    item.className = 'staff-name-item';
+    const label = document.createElement('span');
+    label.textContent = name;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'del-btn';
+    remove.dataset.staffName = name;
+    remove.textContent = '삭제';
+    item.append(label,remove);
+    list.appendChild(item);
+  });
+}
+
+async function saveStaffNames(){
+  await storageSet(STAFF_NAMES_KEY,JSON.stringify(staffNames));
+}
+
+async function addStaffName(){
+  const input = document.getElementById('staff-name-input');
+  const status = document.getElementById('staff-name-status');
+  const name = input.value.trim();
+  if(!name){
+    status.textContent = '담당자 이름을 입력해 주세요.';
+    return;
+  }
+  if(staffNames.includes(name)){
+    status.textContent = '이미 등록된 이름입니다.';
+    return;
+  }
+  const previousNames = staffNames;
+  staffNames = normalizeStaffNames([...staffNames,name]);
+  try{
+    await saveStaffNames();
+    input.value = '';
+    status.textContent = `${name} 담당자를 추가했습니다.`;
+    renderStaffNames();
+  }catch(e){
+    staffNames = previousNames;
+    renderStaffNames();
+    status.textContent = `담당자 저장 실패: ${e.message || String(e)}`;
+  }
+}
+
+async function removeStaffName(name){
+  const status = document.getElementById('staff-name-status');
+  const previousNames = staffNames;
+  staffNames = staffNames.filter(item=>item!==name);
+  try{
+    await saveStaffNames();
+    status.textContent = `${name} 담당자를 목록에서 삭제했습니다. 기존 거래 내역은 변경되지 않습니다.`;
+    renderStaffNames();
+  }catch(e){
+    staffNames = previousNames;
+    renderStaffNames();
+    status.textContent = `담당자 저장 실패: ${e.message || String(e)}`;
+  }
+}
+
+function renderAccountBalanceCheck(calculatedBalance){
+  const input = document.getElementById('account-balance-input');
+  const calculated = document.getElementById('account-balance-calculated');
+  const difference = document.getElementById('account-balance-difference');
+  const result = document.getElementById('account-balance-result');
+  if(document.activeElement!==input){
+    input.value = accountBalance===null ? '' : formatBudgetAmount(accountBalance);
+  }
+  calculated.textContent = fmt(calculatedBalance);
+  result.classList.remove('match','mismatch','unset');
+  if(accountBalance===null){
+    difference.textContent = '-';
+    result.classList.add('unset');
+    result.textContent = '실제 활동비 계좌 잔액을 입력하고 저장해 주세요.';
+    return;
+  }
+  const delta = accountBalance - calculatedBalance;
+  difference.textContent = `${delta>0?'+':''}${fmt(delta)}`;
+  if(delta===0){
+    result.classList.add('match');
+    result.textContent = '일치합니다. 실제 계좌 잔액과 계산된 잔액이 같습니다.';
+  } else {
+    result.classList.add('mismatch');
+    result.textContent = `불일치합니다. 실제 계좌 잔액이 계산된 잔액보다 ${fmt(Math.abs(delta))} ${delta>0?'많습니다.':'적습니다.'}`;
+  }
+}
+
+async function saveAccountBalance(){
+  const input = document.getElementById('account-balance-input');
+  const status = document.getElementById('account-balance-save-status');
+  if(!input.value.trim()){
+    status.textContent = '실제 활동비 계좌 잔액을 입력해 주세요.';
+    return;
+  }
+  const amount = parseBudgetAmount(input.value);
+  if(!Number.isSafeInteger(amount) || amount<0){
+    status.textContent = '0 이상의 원 단위 정수로 입력해 주세요.';
+    return;
+  }
+  try{
+    await storageSet(accountBalanceKey(currentYear),JSON.stringify(amount));
+    accountBalance = amount;
+    renderReport();
+    status.textContent = '활동비 계좌 잔액을 저장했습니다.';
+  }catch(e){
+    status.textContent = `잔액 저장 실패: ${e.message || String(e)}`;
   }
 }
 
@@ -970,6 +1195,8 @@ function renderYearSelect(){
 async function loadYearData(){
   await loadLedger();
   await loadBudget();
+  await loadAccountBalance();
+  await loadStaffNames();
   await loadAccountCategories();
   if(migrateBudgetToMok() && !await persistBudget()){
     throw new Error(`목별 예산을 Firestore로 이전하지 못했습니다: ${lastStorageError}`);
@@ -993,6 +1220,7 @@ function renderAll(){
   renderReport();
   renderEntryView();
   renderHierarchyForm();
+  renderStaffNames();
 }
 
 async function setYear(v){
@@ -1110,6 +1338,7 @@ function renderReport(){
   document.getElementById('r-expense').textContent = fmt(ag.totalExpense);
   document.getElementById('r-count').textContent = `총 ${ledger.length.toLocaleString('ko-KR')}건 거래`;
   document.getElementById('r-balance').textContent = fmt(ag.totalIncome - ag.totalExpense);
+  renderAccountBalanceCheck(ag.totalIncome - ag.totalExpense);
 
   destroy('monthly');
   charts.monthly = new Chart(document.getElementById('chartMonthly'), {
@@ -1675,6 +1904,19 @@ document.getElementById('btn-gubun-income').addEventListener('click', ()=>setGub
 document.getElementById('btn-gubun-expense').addEventListener('click', ()=>setGubun('지출'));
 document.getElementById('btn-add').addEventListener('click', addEntry);
 document.getElementById('year-select').addEventListener('change',event=>setYear(event.target.value));
+document.getElementById('account-balance-input').addEventListener('input',event=>formatBudgetInput(event.target));
+document.getElementById('btn-save-account-balance').addEventListener('click',saveAccountBalance);
+document.getElementById('btn-add-staff-name').addEventListener('click',addStaffName);
+document.getElementById('staff-name-input').addEventListener('keydown',event=>{
+  if(event.key==='Enter'){
+    event.preventDefault();
+    addStaffName();
+  }
+});
+document.getElementById('staff-name-list').addEventListener('click',event=>{
+  const button = event.target.closest('[data-staff-name]');
+  if(button) removeStaffName(button.dataset.staffName);
+});
 document.getElementById('btn-sign-in').addEventListener('click', signInWithGoogle);
 document.getElementById('gate-sign-in').addEventListener('click', signInWithGoogle);
 document.getElementById('btn-sign-out').addEventListener('click', signOut);
