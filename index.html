@@ -6,6 +6,7 @@
 <title>조합비 수입지출 결산 — 한국외국어대학교 노동조합</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root{
@@ -202,9 +203,10 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .locked-note{font-size:14px;color:var(--ink-soft);}
 
   .status-badge{display:inline-block;font-size:14px;padding:2px 8px;border-radius:2px;font-weight:700;}
-  .status-approved{background:var(--paper);color:var(--income);}
-  .status-pending{background:var(--paper-2);color:var(--navy-2);}
-  .status-rejected{background:var(--paper);color:var(--expense);}
+  .status-paid{background:var(--income-row);color:var(--navy);}
+  .status-input-complete{background:var(--paper-2);color:var(--navy-2);}
+  .status-submitted{background:var(--paper);color:var(--navy);}
+  .status-rejected{background:#f8e1df;color:var(--expense);}
 
   .action-row{display:flex;gap:6px;flex-wrap:wrap;}
   .btn-approve{background:var(--income);color:var(--paper-2);border:none;font-size:14px;padding:5px 10px;cursor:pointer;}
@@ -226,6 +228,60 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .pending-transaction-table .col-payee{width:14%;}
   .pending-transaction-table .col-amount{width:12%;}
   .pending-transaction-table .col-actions{width:20%;}
+  .workflow-stage{padding:16px;border-bottom:1px solid var(--line);}
+  .workflow-stage:last-child{border-bottom:0;}
+  .workflow-stage h3{font-size:16px;margin:0 0 12px;}
+  .workflow-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
+  .workflow-select{text-align:center!important;width:44px;}
+  dialog.payment-report-dialog{width:min(900px,calc(100% - 32px));max-height:90vh;padding:0;border:1px solid var(--line);color:var(--ink);}
+  dialog.payment-report-dialog::backdrop{background:rgba(17,45,78,.55);}
+  .payment-dialog-header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:var(--navy);color:var(--paper-2);}
+  .payment-dialog-header h2{font-size:18px;}
+  .payment-dialog-body{padding:24px;overflow:auto;max-height:65vh;}
+  .payment-dialog-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;padding:14px 20px;border-top:1px solid var(--line);}
+  .payment-report-sheet{box-sizing:border-box;width:100%;max-width:794px;margin:0 auto;padding:30px;background:#fff;color:#182b40;font-family:'Pretendard',sans-serif;font-size:12px;}
+  .payment-report-header{display:grid;grid-template-columns:minmax(0,1fr) 180px;gap:18px;align-items:start;margin-bottom:20px;page-break-inside:avoid;break-inside:avoid;}
+  .payment-report-sheet h1{font-size:25px;line-height:1.35;margin:4px 0;}
+  .payment-approval-grid{display:grid;grid-template-columns:1fr 1fr;border:1px solid #26394d;min-height:76px;}
+  .payment-approval-cell{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:7px 4px;border-left:1px solid #26394d;text-align:center;}
+  .payment-approval-cell:first-child{border-left:0;}
+  .payment-approval-cell span{font-size:10px;}
+  .payment-approval-signature{width:100%;height:42px;}
+  .payment-approval-stamp{position:absolute;top:24px;left:50%;width:max-content;max-width:140px;transform:translateX(-50%) rotate(-9deg);border:3px double #b42318;color:#b42318;padding:5px 8px;font-weight:800;font-size:12px;line-height:1.4;text-align:center;background:rgba(255,255,255,.82);}
+  .payment-approval-stamp small{font-size:8px;}
+  .payment-report-parties{table-layout:fixed;margin-bottom:10px;}
+  .payment-report-parties th,.payment-report-parties td{border:1px solid #26394d;padding:8px 7px;text-align:center;vertical-align:middle;}
+  .payment-report-parties th{background:#f2f5f8;color:#26394d;font-size:10px;white-space:nowrap;}
+  .payment-report-request{display:grid;grid-template-columns:1fr 1fr 1fr;border:1px solid #26394d;margin:12px 0 16px;page-break-inside:avoid;break-inside:avoid;}
+  .payment-report-request div{padding:9px 8px;text-align:center;border-left:1px solid #26394d;}
+  .payment-report-request div:first-child{border-left:0;}
+  .payment-report-request strong{margin-right:8px;color:#26394d;}
+  .payment-report-sheet h2{font-size:13px;text-align:center;letter-spacing:.22em;margin:0 0 7px;}
+  .payment-report-items{table-layout:fixed;border:1px solid #26394d;}
+  .payment-report-items th,.payment-report-items td{border:1px solid #26394d;padding:6px 5px;vertical-align:middle;}
+  .payment-report-items th{background:#e9eef4;color:#182b40;border-bottom:1px solid #26394d;font-size:10px;text-align:center;}
+  .payment-report-items td{text-align:center;overflow-wrap:anywhere;}
+  .payment-report-items .report-seq{width:7%;}
+  .payment-report-items .report-date{width:16%;white-space:nowrap;}
+  .payment-report-items .report-description{width:30%;}
+  .payment-report-items .report-payee{width:20%;}
+  .payment-report-items .report-amount{width:14%;white-space:nowrap;}
+  .payment-report-items .report-note{width:13%;}
+  .payment-report-items td.report-amount{text-align:right;font-variant-numeric:tabular-nums;}
+  .payment-report-items tfoot td{font-weight:700;background:#faf8f2;}
+  .payment-report-items tfoot td:last-child{text-align:right;font-size:15px;white-space:nowrap;}
+  .payment-report-receipts{margin-top:16px;page-break-inside:avoid;break-inside:avoid;}
+  .payment-report-receipts strong{display:block;margin-bottom:6px;}
+  .payment-report-receipt-box{height:125px;border:1px solid #26394d;}
+  .payment-report-note{margin:9px 0 0;color:#64748b;font-size:10px;}
+  .payment-report-sheet .report-row{page-break-inside:avoid;break-inside:avoid;}
+  @media(max-width:650px){
+    .payment-report-sheet{padding:16px;}
+    .payment-report-header{grid-template-columns:1fr 150px;gap:8px;}
+    .payment-report-sheet h1{font-size:20px;}
+    .payment-report-parties th,.payment-report-parties td{padding:6px 3px;font-size:10px;overflow-wrap:anywhere;}
+    .payment-report-request{font-size:10px;}
+  }
 
   #save-status{font-size:14px;color:var(--ink-soft);margin-left:14px;}
   #budget-save-status{font-size:14px;}
@@ -397,12 +453,12 @@ body { background-color:var(--paper-2); color:var(--ink); }
   </div>
   <div class="view" id="view-entry">
     <div class="notice" style="margin-top:28px;">
-      이 화면에 입력한 내역은 <b>이 페이지를 함께 보는 재정담당자 전원에게 공유</b>됩니다. 새로 입력한 내역은 <b>승인 대기</b> 상태로 등록되며, <b>승인된 건만 보고서 탭 집계에 반영</b>됩니다. 기존 엑셀에서 가져온 내역(8월 24일 이전)은 원본 보존을 위해 삭제할 수 없습니다.
+      이 화면에 입력한 내역은 <b>이 페이지를 함께 보는 재정담당자 전원에게 공유</b>됩니다. 새 내역은 <b>입력완료</b>로 등록되며, 같은 담당자의 내역을 선택해 제출·지급 처리할 수 있습니다. <b>지급완료된 건만 보고서 탭 집계에 반영</b>됩니다. 기존 엑셀에서 가져온 내역(8월 24일 이전)은 원본 보존을 위해 삭제할 수 없습니다.
       <b id="entry-storage-warning"></b>
     </div>
 
     <section class="pending-section" style="margin-top:28px;">
-      <div class="sec-head"><span class="sec-num">☰</span><h2>승인 대기 <span class="pending-count" id="pending-count">0</span></h2></div>
+      <div class="sec-head"><span class="sec-num">☰</span><h2>입력·지급 처리 <span class="pending-count" id="pending-count">0</span></h2></div>
       <div class="pending-box" id="pending-box"><div id="pending-list"></div></div>
     </section>
 
@@ -453,6 +509,20 @@ body { background-color:var(--paper-2); color:var(--ink); }
     </section>
   </div>
 
+  <dialog class="payment-report-dialog" id="payment-report-dialog" aria-labelledby="payment-report-dialog-title">
+    <div class="payment-dialog-header">
+      <h2 id="payment-report-dialog-title">지급 보고서</h2>
+      <button class="btn-auth" type="button" data-close-payment-report>닫기</button>
+    </div>
+    <div class="payment-dialog-body">
+      <div class="payment-report-sheet" id="payment-report-sheet"></div>
+      <p id="payment-report-status" role="status"></p>
+    </div>
+    <div class="payment-dialog-actions">
+      <button class="btn-primary" id="btn-approve-payment-report" type="button">선택 건 지급완료 승인 및 PDF 저장</button>
+    </div>
+  </dialog>
+
   <footer>
     <span> 한국외국어대학교 노동조합n>
     <span id="footer-sync">-</span>
@@ -479,6 +549,8 @@ let budget = {};
 let accountBalance = null;
 let staffNames = [];
 let staffBankDetails = [];
+let paymentReportEntryIds = [];
+let paymentReportSourceStatus = '';
 let accountCategories = createDefaultAccountCategories();
 let charts = {};
 let currentMonthReport = '전체';
@@ -487,7 +559,13 @@ let currentStatusEntry = '전체';
 let currentGubun = '지출';
 let budgetMigrationMessage = '';
 
-const STATUS_LABEL = {approved:'승인됨', pending:'승인대기', rejected:'반려됨'};
+const STATUS_LABEL = {
+  'input-complete':'입력완료',
+  submitted:'제출완료',
+  paid:'지급완료',
+  rejected:'반려됨'
+};
+const DRIVE_FOLDER_ID = '1gMzC9jbjYONOXv9ZCqJpB8kH8NYmb2it';
 
 const fmt = n => Math.round(n).toLocaleString('ko-KR') + '원';
 const fmtShort = n => Math.round(n).toLocaleString('ko-KR');
@@ -793,7 +871,9 @@ function applyFixes(list){
   const fixes = DATE_FIXES[currentYear] || {};
   let changed = false;
   list.forEach(t=>{
-    if(!t.status){ t.status = t.locked ? 'approved' : 'pending'; changed = true; }
+    if(!t.status){ t.status = t.locked ? 'paid' : 'input-complete'; changed = true; }
+    else if(t.status==='pending'){ t.status = 'input-complete'; changed = true; }
+    else if(t.status==='approved'){ t.status = 'paid'; changed = true; }
     if(fixes[t.id] && t.date !== fixes[t.id]){ t.date = fixes[t.id]; changed = true; }
   });
   return changed;
@@ -1494,7 +1574,7 @@ const hangColors = ['#112D4E','#3F72AF','#DBE2EF'];
 function destroy(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } }
 
 function renderReport(){
-  const approved = ledger.filter(t => t.status === 'approved');
+  const approved = ledger.filter(t => t.status === 'paid');
   const ag = aggregates(approved);
 
   document.getElementById('r-income').textContent = fmt(ag.totalIncome);
@@ -1795,7 +1875,7 @@ function renderTxTable(mode){
   const body = document.getElementById(bodyId);
   body.innerHTML = '';
 
-  const source = isReport ? ledger.filter(t=>t.status==='approved') : ledger;
+  const source = isReport ? ledger.filter(t=>t.status==='paid') : ledger;
 
   const filtered = source
     .filter(t => monthSel==='전체' || t.month===monthSel)
@@ -1842,16 +1922,9 @@ function renderTxTable(mode){
 }
 
 function rowActions(t){
-  if(t.locked) return '<span class="locked-note">가져온 내역</span>';
+  if(t.locked || t.status==='paid') return `<span class="locked-note">${t.locked?'가져온 내역':'지급완료'}</span>`;
   const parts = [];
-  if(t.status === 'pending'){
-    parts.push(`<button class="btn-approve" data-act="approve" data-id="${t.id}">승인</button>`);
-    parts.push(`<button class="btn-reject" data-act="reject" data-id="${t.id}">반려</button>`);
-  } else if(t.status === 'approved'){
-    parts.push(`<button class="btn-revert" data-act="pending" data-id="${t.id}">승인 취소</button>`);
-  } else if(t.status === 'rejected'){
-    parts.push(`<button class="btn-approve" data-act="approve" data-id="${t.id}">승인</button>`);
-  }
+  if(t.status==='rejected') parts.push(`<button class="btn-revert" data-act="input-complete" data-id="${escapeHTML(t.id)}">입력완료로 복원</button>`);
   parts.push(`<button class="del-btn" data-act="delete" data-id="${t.id}">삭제</button>`);
   return `<div class="action-row">${parts.join('')}</div>`;
 }
@@ -1865,7 +1938,7 @@ function bindRowActions(container){
         ledger = ledger.filter(t=>t.id!==id);
       } else {
         const entry = ledger.find(t=>t.id===id);
-        if(entry) entry.status = act === 'approve' ? 'approved' : (act === 'reject' ? 'rejected' : 'pending');
+        if(entry && act==='input-complete') entry.status = 'input-complete';
       }
       const ok = await persist();
       setStatus(ok
@@ -1877,41 +1950,316 @@ function bindRowActions(container){
   });
 }
 
-function renderPendingBox(){
-  const pending = ledger.filter(t=>t.status==='pending').slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  document.getElementById('pending-count').textContent = pending.length;
-  const list = document.getElementById('pending-list');
-  if(pending.length === 0){
-    list.innerHTML = '<p class="pending-empty">승인 대기 중인 내역이 없습니다.</p>';
-    return;
-  }
-  const table = document.createElement('table');
-  table.className = 'transaction-table pending-transaction-table';
-  table.innerHTML = `
-    <colgroup>
-      <col class="col-date"><col class="col-type"><col class="col-description">
-      <col class="col-mok"><col class="col-payee"><col class="col-amount"><col class="col-actions">
-    </colgroup>
-    <thead><tr><th>일자</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th class="num">금액</th><th></th></tr></thead>
-    <tbody></tbody>`;
-  const tbody = table.querySelector('tbody');
-  pending.forEach(t=>{
-    const tr = document.createElement('tr');
-    tr.className = t.gubun==='수입' ? 'income-row' : 'expense-row';
-    tr.innerHTML = `
+function workflowTable(entries,status){
+  if(!entries.length) return '<p class="pending-empty">해당 상태의 내역이 없습니다.</p>';
+  const rows = entries.map(t=>`
+    <tr class="${t.gubun==='수입'?'income-row':'expense-row'}">
+      <td class="workflow-select"><input type="checkbox" data-workflow-id="${escapeHTML(t.id)}" data-workflow-status="${status}" aria-label="${escapeHTML(t.desc||t.id)} 선택"></td>
       <td>${escapeHTML(formatEntryDate(t.date))}</td>
-      <td style="color:${t.gubun==='수입'?'#3F72AF':'#112D4E'}">${t.gubun}</td>
+      <td>${escapeHTML(t.gubun||'')}</td>
       <td>${escapeHTML(t.desc||'')}</td>
       <td>${escapeHTML(t.category||'-')}</td>
-      <td>${t.payee||t.spender||'-'}</td>
+      <td>${escapeHTML(t.payee||'-')}</td>
+      <td>${escapeHTML(t.spender||'미지정')}</td>
       <td class="num">${fmtShort(t.amount)}</td>
-      <td>${rowActions(t)}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-  list.innerHTML = '';
-  list.appendChild(table);
+    </tr>`).join('');
+  return `<div class="table-scroll transaction-table-scroll">
+    <table class="transaction-table pending-transaction-table">
+      <thead><tr><th>선택</th><th>일자</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th>담당자</th><th class="num">금액</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+function renderPendingBox(){
+  const inputComplete = ledger.filter(t=>t.status==='input-complete' && !t.locked).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const submitted = ledger.filter(t=>t.status==='submitted' && !t.locked).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  document.getElementById('pending-count').textContent = inputComplete.length + submitted.length;
+  const list = document.getElementById('pending-list');
+  list.innerHTML = `
+    <div class="workflow-stage">
+      <h3>입력완료 · 제출 대기 (${inputComplete.length}건)</h3>
+      ${workflowTable(inputComplete,'input-complete')}
+      <div class="workflow-actions">
+        <button class="btn-primary" type="button" data-workflow-action="preview-input">선택 내역 보고서 열람</button>
+        <button class="btn-primary" type="button" data-workflow-action="submit">선택 내역 제출완료</button>
+        <button class="btn-reject" type="button" data-workflow-action="reject-input">선택 내역 반려</button>
+      </div>
+    </div>
+    <div class="workflow-stage">
+      <h3>제출완료 · 지급 대기 (${submitted.length}건)</h3>
+      ${workflowTable(submitted,'submitted')}
+      <div class="workflow-actions">
+        <button class="btn-primary" type="button" data-workflow-action="preview">선택 내역 보고서 열람</button>
+        <button class="btn-primary" type="button" data-workflow-action="payment">선택 건 지급 승인 및 PDF 저장</button>
+        <button class="btn-reject" type="button" data-workflow-action="reject-submitted">선택 내역 반려</button>
+      </div>
+    </div>
+    <p class="count-note">한 번에 처리하는 선택 내역은 담당자가 모두 같아야 합니다.</p>`;
   bindRowActions(list);
+  list.querySelectorAll('[data-workflow-action]').forEach(button=>{
+    button.addEventListener('click',()=>{
+      const action = button.dataset.workflowAction;
+      if(action==='submit') updateSelectedWorkflow('input-complete','submitted');
+      else if(action==='reject-input') updateSelectedWorkflow('input-complete','rejected');
+      else if(action==='reject-submitted') updateSelectedWorkflow('submitted','rejected');
+      else if(action==='preview-input') openPaymentReport('input-complete');
+      else if(action==='preview') openPaymentReport('submitted');
+      else if(action==='payment') openPaymentReport('submitted');
+    });
+  });
+}
+
+function selectedWorkflowEntries(status){
+  const ids = [...document.querySelectorAll(`[data-workflow-id][data-workflow-status="${status}"]:checked`)]
+    .map(input=>input.dataset.workflowId);
+  return ids.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
+}
+
+function requireSingleSpender(entries){
+  const spenders = [...new Set(entries.map(entry=>(entry.spender||'').trim()))];
+  if(spenders.length!==1 || !spenders[0]){
+    throw new Error('한 번에 처리할 선택 내역은 담당자가 한 사람으로 동일해야 합니다. 담당자를 입력한 뒤 다시 선택해 주세요.');
+  }
+  return spenders[0];
+}
+
+async function updateSelectedWorkflow(fromStatus,toStatus){
+  const entries = selectedWorkflowEntries(fromStatus);
+  if(!entries.length){
+    setStatus('처리할 내역을 체크해 주세요.');
+    return;
+  }
+  try{
+    const spender = requireSingleSpender(entries);
+    const previous = entries.map(entry=>({...entry}));
+    const now = new Date().toISOString();
+    entries.forEach(entry=>{
+      entry.status = toStatus;
+      if(toStatus==='submitted'){
+        entry.submittedAt = now;
+        entry.submittedBy = currentUser?.email || currentUser?.displayName || '';
+      }else if(toStatus==='rejected'){
+        entry.rejectedAt = now;
+        entry.rejectedBy = currentUser?.email || currentUser?.displayName || '';
+      }
+    });
+    if(!await persist()){
+      entries.forEach((entry,index)=>Object.assign(entry,previous[index]));
+      throw new Error(lastStorageError || '공유 저장소에 저장하지 못했습니다.');
+    }
+    setStatus(toStatus==='submitted'
+      ? `${spender} 담당자의 ${entries.length}건을 제출완료로 처리했습니다.`
+      : `${spender} 담당자의 ${entries.length}건을 반려했습니다.`);
+    renderReport();
+    renderEntryView();
+  }catch(error){
+    setStatus(error.message || String(error));
+  }
+}
+
+function openPaymentReport(status){
+  const entries = selectedWorkflowEntries(status);
+  if(!entries.length){
+    setStatus('보고서로 처리할 내역을 체크해 주세요.');
+    return;
+  }
+  try{
+    const spender = requireSingleSpender(entries);
+    paymentReportEntryIds = entries.map(entry=>entry.id);
+    paymentReportSourceStatus = status;
+    renderPaymentReport(entries,spender);
+    document.getElementById('payment-report-status').textContent = '';
+    const approveButton = document.getElementById('btn-approve-payment-report');
+    approveButton.classList.toggle('hidden',status!=='submitted');
+    if(status!=='submitted'){
+      document.getElementById('payment-report-status').textContent = '지급완료 승인은 제출완료 처리 후 가능합니다.';
+    }
+    document.getElementById('payment-report-dialog').showModal();
+  }catch(error){
+    setStatus(error.message || String(error));
+  }
+}
+
+function renderPaymentReport(entries,spender,approval=null){
+  const total = entries.reduce((sum,entry)=>sum+Number(entry.amount||0),0);
+  const today = new Date();
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const requestDate = entries.map(entry=>entry.submittedAt).filter(Boolean).sort()[0]?.slice(0,10) || todayKey;
+  const bankDetails = staffBankDetails.find(detail=>detail.name===spender) || {bank:'',accountNumber:''};
+  const sheet = document.getElementById('payment-report-sheet');
+  const rows = entries.map((entry,index)=>`
+    <tr class="report-row">
+      <td>${index+1}</td>
+      <td>${escapeHTML(formatEntryDate(entry.date))}</td>
+      <td>${escapeHTML(entry.desc||'')}</td>
+      <td>${escapeHTML(entry.payee||'-')}</td>
+      <td class="report-amount">${fmtShort(entry.amount)}</td>
+      <td>${escapeHTML(entry.category||'-')}</td>
+    </tr>`).join('');
+  const approvalStamp = approval
+    ? `<div class="payment-approval-stamp">지급 승인 완료<br><small>${escapeHTML(approval.date)}<br>${escapeHTML(approval.approver)}</small></div>`
+    : '<span class="payment-report-note">승인 시 날인</span>';
+  const paymentDate = approval ? escapeHTML(approval.date.split(' ')[0]) : '승인 후 기재';
+  sheet.innerHTML = `
+    <div class="payment-report-header">
+      <h1>${entries.every(entry=>entry.gubun==='지출')?'지출내역보고 / 지급신청서':'거래내역 보고서'}</h1>
+      <div class="payment-approval-grid" aria-label="결재란">
+        <div class="payment-approval-cell"><span>검토</span><div class="payment-approval-signature"></div></div>
+        <div class="payment-approval-cell"><span>지급 승인</span><div class="payment-approval-signature"></div>${approvalStamp}</div>
+      </div>
+    </div>
+    <table class="payment-report-parties">
+      <tbody>
+        <tr><th>성명</th><td colspan="2">${escapeHTML(spender)}</td><th>은행명</th><td>${escapeHTML(bankDetails.bank||'미등록')}</td><th>예금주</th><td>${escapeHTML(spender)}</td></tr>
+        <tr><th>계좌번호</th><td colspan="3">${escapeHTML(bankDetails.accountNumber||'미등록')}</td><th>지급일</th><td colspan="2">${paymentDate}</td></tr>
+      </tbody>
+    </table>
+    <div class="payment-report-request">
+      <div><strong>신청일</strong>${escapeHTML(formatEntryDate(requestDate))}</div>
+      <div><strong>신청자</strong>${escapeHTML(spender)}</div>
+      <div><strong>서명</strong>________________</div>
+    </div>
+    <h2>지 출 목 록</h2>
+    <table class="payment-report-items">
+      <thead><tr><th class="report-seq">순번</th><th class="report-date">결재일</th><th class="report-description">내역</th><th class="report-payee">지급처</th><th class="report-amount">금액</th><th class="report-note">비고</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td colspan="4">합계 · ${entries.length}건</td><td colspan="2">${fmt(total)}</td></tr></tfoot>
+    </table>
+    <div class="payment-report-receipts">
+      <strong>영수증 첨부</strong>
+      <div class="payment-report-receipt-box"></div>
+    </div>
+    ${approval
+      ? `<p class="payment-report-note">승인자: ${escapeHTML(approval.approver)} · ${escapeHTML(approval.date)} · 지급 승인 도장이 포함된 보고서입니다.</p>`
+      : '<p class="payment-report-note">지급완료 승인 시 승인 도장이 포함된 PDF를 공유 드라이브에 저장합니다.</p>'}`;
+}
+
+async function getDriveAccessToken(){
+  if(!auth?.currentUser) throw new Error('Google 계정에 로그인한 뒤 다시 시도해 주세요.');
+  const provider = new firebase.auth.GoogleAuthProvider();
+  provider.addScope('https://www.googleapis.com/auth/drive.file');
+  const result = await auth.currentUser.reauthenticateWithPopup(provider);
+  const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
+  if(!credential?.accessToken) throw new Error('Google Drive 접근 권한을 받지 못했습니다.');
+  return credential.accessToken;
+}
+
+async function uploadPaymentReport(token,blob,fileName){
+  const boundary = `accounting-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const metadata = {
+    name:fileName,
+    mimeType:'application/pdf',
+    parents:[DRIVE_FOLDER_ID]
+  };
+  const body = new Blob([
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n`,
+    JSON.stringify(metadata),
+    `\r\n--${boundary}\r\nContent-Type: application/pdf\r\n\r\n`,
+    blob,
+    `\r\n--${boundary}--`
+  ],{type:`multipart/related; boundary=${boundary}`});
+  const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,webViewLink',{
+    method:'POST',
+    headers:{Authorization:`Bearer ${token}`},
+    body
+  });
+  const result = await response.json();
+  if(!response.ok) throw new Error(result.error?.message || `Google Drive 업로드에 실패했습니다 (${response.status}).`);
+  return result;
+}
+
+async function deletePaymentReport(token,fileId){
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?supportsAllDrives=true`,{
+    method:'DELETE',
+    headers:{Authorization:`Bearer ${token}`}
+  });
+  if(!response.ok && response.status!==404){
+    const result = await response.json().catch(()=>({}));
+    throw new Error(result.error?.message || `Google Drive 임시 파일 삭제 실패 (${response.status}).`);
+  }
+}
+
+async function approvePaymentReport(){
+  const button = document.getElementById('btn-approve-payment-report');
+  const status = document.getElementById('payment-report-status');
+  const entries = paymentReportEntryIds.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
+  if(paymentReportSourceStatus!=='submitted'){
+    status.textContent = '지급완료 승인과 PDF 저장은 제출완료된 내역만 가능합니다.';
+    return;
+  }
+  if(!entries.length || entries.length!==paymentReportEntryIds.length || entries.some(entry=>entry.status!=='submitted')){
+    status.textContent = '선택 내역 상태가 바뀌었습니다. 보고서를 닫고 목록을 새로 확인해 주세요.';
+    return;
+  }
+  let spender;
+  try{ spender = requireSingleSpender(entries); }
+  catch(error){ status.textContent = error.message; return; }
+  if(typeof window.html2pdf!=='function'){
+    status.textContent = 'PDF 생성 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침해 주세요.';
+    return;
+  }
+  button.disabled = true;
+  status.textContent = 'Google Drive 권한을 확인하고 PDF를 저장하는 중입니다…';
+  let token = '';
+  let uploadedFile = null;
+  const previousEntries = entries.map(entry=>({...entry}));
+  try{
+    token = await getDriveAccessToken();
+    const approvalTime = new Date();
+    const approvalDate = `${approvalTime.getFullYear()}-${String(approvalTime.getMonth()+1).padStart(2,'0')}-${String(approvalTime.getDate()).padStart(2,'0')}`;
+    const approver = currentUser.displayName || currentUser.email || '로그인 사용자';
+    const approvalLabel = `${formatEntryDate(approvalDate)} ${approvalTime.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}`;
+    renderPaymentReport(entries,spender,{date:approvalLabel,approver});
+    if(document.fonts?.ready) await document.fonts.ready;
+    const blob = await window.html2pdf().set({
+      margin:8,
+      image:{type:'jpeg',quality:0.98},
+      html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff'},
+      jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
+      pagebreak:{mode:['css','legacy']}
+    }).from(document.getElementById('payment-report-sheet')).outputPdf('blob');
+    const total = entries.reduce((sum,entry)=>sum+Number(entry.amount||0),0);
+    const dateKey = `${approvalTime.getFullYear()}${String(approvalTime.getMonth()+1).padStart(2,'0')}${String(approvalTime.getDate()).padStart(2,'0')}`;
+    const safeSpender = spender.replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').trim();
+    const fileName = `${dateKey}_${safeSpender}_${total}원.pdf`;
+    uploadedFile = await uploadPaymentReport(token,blob,fileName);
+
+    entries.forEach(entry=>{
+      entry.status = 'paid';
+      entry.paidAt = approvalTime.toISOString();
+      entry.paidBy = currentUser.email || currentUser.displayName || '';
+      entry.paymentReportFileId = uploadedFile.id;
+      entry.paymentReportUrl = uploadedFile.webViewLink || '';
+    });
+    if(!await persist()){
+      entries.forEach((entry,index)=>Object.assign(entry,previousEntries[index]));
+      try{
+        await deletePaymentReport(token,uploadedFile.id);
+        uploadedFile = null;
+        throw new Error(lastStorageError || '상태 저장에 실패하여 Drive PDF를 제거했습니다.');
+      }catch(cleanupError){
+        if(uploadedFile) throw new Error(`지급 상태 저장 실패 (${lastStorageError}) 및 Drive 임시 파일 정리 실패: ${cleanupError.message}`);
+        throw cleanupError;
+      }
+    }
+    status.textContent = `지급완료 처리 및 승인 PDF 저장을 마쳤습니다: ${fileName}`;
+    if(uploadedFile.webViewLink){
+      const link = document.createElement('a');
+      link.href = uploadedFile.webViewLink;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.textContent = 'Google Drive에서 PDF 열기';
+      status.append(' ',link);
+    }
+    renderReport();
+    renderEntryView();
+  }catch(error){
+    if(entries.every(entry=>entry.status==='submitted')) renderPaymentReport(entries,spender);
+    status.textContent = `지급완료 처리 실패: ${error.message || String(error)}`;
+  }finally{
+    button.disabled = false;
+  }
 }
 
 function renderEntryView(){
@@ -1924,7 +2272,7 @@ function renderEntryView(){
 function renderStatusFilters(){
   const el = document.getElementById('status-filters-entry');
   el.innerHTML = '';
-  const options = ['전체','pending','approved','rejected'];
+  const options = ['전체','input-complete','submitted','paid','rejected'];
   options.forEach(s=>{
     const btn = document.createElement('button');
     btn.className = 'filter-btn' + (s===currentStatusEntry ? ' active' : '');
@@ -2035,12 +2383,12 @@ async function addEntry(){
     hang: classification.hang,
     category: classification.mok,
     locked: false,
-    status: 'pending'
+    status: 'input-complete'
   };
 
   ledger.push(entry);
   const ok = await persist();
-  setStatus(ok ? '승인 대기 목록에 등록되었습니다.' : '입력은 반영됐지만 저장에 실패했습니다. 새로고침 전에 다시 시도해주세요.');
+  setStatus(ok ? '내역이 입력완료로 등록되었습니다.' : '입력은 반영됐지만 저장에 실패했습니다. 새로고침 전에 다시 시도해주세요.');
 
   document.getElementById('f-date').value = '';
   document.getElementById('f-amount').value = '';
@@ -2113,6 +2461,10 @@ document.addEventListener('keydown',event=>{
 document.getElementById('btn-sign-in').addEventListener('click', signInWithGoogle);
 document.getElementById('gate-sign-in').addEventListener('click', signInWithGoogle);
 document.getElementById('btn-sign-out').addEventListener('click', signOut);
+document.getElementById('btn-approve-payment-report').addEventListener('click',approvePaymentReport);
+document.querySelectorAll('[data-close-payment-report]').forEach(button=>
+  button.addEventListener('click',()=>document.getElementById('payment-report-dialog').close())
+);
 
 document.getElementById('btn-add-hierarchy-row').addEventListener('click', ()=>{
   const row = createHierarchyRow();
