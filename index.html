@@ -78,6 +78,9 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .transaction-table{width:100%;min-width:0;table-layout:fixed;}
   .transaction-table th,.transaction-table td{overflow-wrap:anywhere;vertical-align:middle;}
   .transaction-table th{white-space:normal;word-break:keep-all;}
+  .transaction-table td:first-child{white-space:nowrap;}
+  .income-row{background:var(--paper);}
+  .expense-row{background:var(--paper-2);}
   .transaction-table .col-date{width:13%;}
   .transaction-table .col-type{width:7%;}
   .transaction-table .col-description{width:18%;}
@@ -1276,7 +1279,7 @@ function createHierarchyInput(className, value, placeholder, ariaLabel){
 
 function createHierarchyRow({type='expense',gwan='',hang='',mok='',amount=0,emptyKind=''}={}){
   const row = document.createElement('tr');
-  row.className = 'hierarchy-item-row';
+  row.className = `hierarchy-item-row ${type==='income'?'income-row':'expense-row'}`;
   if(emptyKind) row.dataset.emptyKind = emptyKind;
   const typeCell = document.createElement('td');
   const typeSelect = document.createElement('select');
@@ -1412,6 +1415,7 @@ function renderTxTable(mode){
 
   shown.forEach(t=>{
     const tr = document.createElement('tr');
+    tr.className = t.gubun==='수입' ? 'income-row' : 'expense-row';
     if(isReport){
       tr.innerHTML = `
         <td>${escapeHTML(t.date||'-')}</td>
@@ -1494,6 +1498,7 @@ function renderPendingBox(){
   const tbody = table.querySelector('tbody');
   pending.forEach(t=>{
     const tr = document.createElement('tr');
+    tr.className = t.gubun==='수입' ? 'income-row' : 'expense-row';
     tr.innerHTML = `
       <td>${t.date||'-'}</td>
       <td style="color:${t.gubun==='수입'?'#3F72AF':'#112D4E'}">${t.gubun}</td>
@@ -1683,6 +1688,12 @@ document.getElementById('btn-add-hierarchy-row').addEventListener('click', ()=>{
 document.getElementById('hierarchy-form-body').addEventListener('click', event=>{
   const removeButton = event.target.closest('.hierarchy-row-delete');
   if(removeButton) removeButton.closest('.hierarchy-item-row').remove();
+});
+document.getElementById('hierarchy-form-body').addEventListener('change', event=>{
+  const typeSelect = event.target.closest('.hierarchy-category-type');
+  if(!typeSelect) return;
+  typeSelect.closest('.hierarchy-item-row').classList.toggle('income-row',typeSelect.value==='income');
+  typeSelect.closest('.hierarchy-item-row').classList.toggle('expense-row',typeSelect.value==='expense');
 });
 document.getElementById('hierarchy-form-body').addEventListener('input', event=>{
   if(event.target.matches('.hierarchy-item-budget')) formatBudgetInput(event.target);
