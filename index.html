@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>조합비 수입지출 결산 — 한국외국어대학교 노동조합</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23112D4E'/%3E%3Ctext x='32' y='45' text-anchor='middle' font-size='38' font-family='Arial,sans-serif' fill='%23F9F7F7'%3E%24%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -49,6 +50,13 @@ body { background-color:var(--paper-2); color:var(--ink); }
     padding:12px 22px; cursor:pointer; border-radius:6px 6px 0 0;
   }
   .tab-btn.active{background:var(--paper); color:var(--navy); font-weight:700;}
+  .type-budget-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 14px;}
+  .type-budget-summary-item{padding:12px;background:var(--paper-2);border:1px solid var(--line);text-align:center;}
+  .type-budget-summary-label{display:block;color:var(--ink-soft);font-size:13px;margin-bottom:6px;}
+  .type-budget-summary-values{font-weight:700;line-height:1.6;}
+  .hierarchy-summary-difference{font-weight:700;}
+  .hierarchy-summary-difference.mismatch{color:var(--expense);}
+  @media(max-width:600px){.type-budget-summary{grid-template-columns:1fr;}}
 
   .view{display:none;}
   .view.active{display:block;}
@@ -198,6 +206,12 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .hierarchy-table .del-btn{font-size:14px;}
   .hierarchy-table tbody tr:hover{background:var(--paper);}
   .hierarchy-table select,.hierarchy-table input{box-sizing:border-box;width:100%;min-width:0;}
+  .hierarchy-table .hierarchy-category-type{
+    appearance:none;-webkit-appearance:none;padding:9px 26px 9px 7px;text-align-last:center;
+    background-image:linear-gradient(45deg,transparent 50%,var(--ink-soft) 50%),linear-gradient(135deg,var(--ink-soft) 50%,transparent 50%);
+    background-position:calc(100% - 13px) 50%,calc(100% - 8px) 50%;
+    background-size:5px 5px;background-repeat:no-repeat;
+  }
   .hierarchy-table tbody td:not(:nth-child(5)) input,.hierarchy-table tbody td:not(:nth-child(5)) select{text-align:center;}
   .hierarchy-table .hierarchy-item-budget{text-align:right;}
   .budget-report-table{min-width:900px;}
@@ -337,8 +351,8 @@ body { background-color:var(--paper-2); color:var(--ink); }
 <div id="app-tabs" class="tabs-sticky hidden">
   <div class="tabs-inner">
     <nav class="tabs">
-      <button class="tab-btn active" data-view="report">보고서</button>
       <button class="tab-btn" data-view="entry">결산 관리</button>
+      <button class="tab-btn active" data-view="report">보고서</button>
       <button class="tab-btn" data-view="budget">예산 관리</button>
       <button class="tab-btn" data-view="staff">사용자 관리</button>
     </nav>
@@ -390,6 +404,11 @@ body { background-color:var(--paper-2); color:var(--ink); }
       <div class="sec-head"><span class="sec-num">01</span><h2>관·항·목 예산 대비 실적</h2></div>
       <p class="sec-desc">예산 관리에 등록된 수입·지출 관·항·목 순서대로 예산과 승인된 실적을 비교합니다.</p>
       <div class="card">
+        <div class="type-budget-summary" aria-label="수입·지출 총액">
+          <div class="type-budget-summary-item"><span class="type-budget-summary-label">수입 총액</span><div class="type-budget-summary-values">예산 <span id="report-income-budget-total">0원</span><br>결산 <span id="report-income-settled-total">0원</span></div></div>
+          <div class="type-budget-summary-item"><span class="type-budget-summary-label">지출 총액</span><div class="type-budget-summary-values">예산 <span id="report-expense-budget-total">0원</span><br>결산 <span id="report-expense-settled-total">0원</span></div></div>
+          <div class="type-budget-summary-item"><span class="type-budget-summary-label">전체 예산 차액 (수입 − 지출)</span><div class="type-budget-summary-values hierarchy-summary-difference" id="report-budget-difference">0원</div></div>
+        </div>
         <div class="table-scroll">
           <table class="budget-report-table">
             <thead><tr><th>구분</th><th>관</th><th>항</th><th>목</th><th class="num">예산액</th><th class="num">결산액</th><th class="num">집행률</th><th class="num">잔여</th></tr></thead>
@@ -445,6 +464,11 @@ body { background-color:var(--paper-2); color:var(--ink); }
       <p class="sec-desc">표에서 구분과 관·항·목을 한 행씩 관리하고 <b id="budget-year-label"></b> 예산을 입력합니다. 새 분류는 ‘목 추가’로 행을 만든 뒤 입력하고 저장하세요. 예산 대비 집행 현황은 지출 예산을 기준으로 표시됩니다.</p>
       <div class="notice hidden" id="budget-migration-notice"></div>
       <div class="hierarchy-toolbar"><button class="btn-text" id="btn-add-hierarchy-row" type="button">＋ 목 추가</button></div>
+      <div class="type-budget-summary" aria-label="수입·지출 예산 합계와 차액">
+        <div class="type-budget-summary-item"><span class="type-budget-summary-label">수입 예산 합계</span><div class="type-budget-summary-values" id="hierarchy-income-total-top">0원</div></div>
+        <div class="type-budget-summary-item"><span class="type-budget-summary-label">지출 예산 합계</span><div class="type-budget-summary-values" id="hierarchy-expense-total-top">0원</div></div>
+        <div class="type-budget-summary-item"><span class="type-budget-summary-label">전체 예산 차액 (수입 − 지출)</span><div class="type-budget-summary-values hierarchy-summary-difference" id="hierarchy-grand-total-top" role="status">0원 · 수입·지출 예산 동일</div></div>
+      </div>
       <div class="hierarchy-table-scroll">
         <table class="hierarchy-table">
           <thead><tr><th>구분</th><th>관</th><th>항</th><th>목</th><th class="num"><span id="budget-year-column"></span> 예산(원)</th><th></th></tr></thead>
@@ -1791,6 +1815,10 @@ function renderBudgetSection(approvedList){
   tbody.innerHTML = '';
   let totalBudget = 0;
   let totalSettled = 0;
+  let incomeBudget = 0;
+  let expenseBudget = 0;
+  let incomeSettled = 0;
+  let expenseSettled = 0;
   if(allGwans.length === 0){
     document.getElementById('budget-note').textContent = '아직 등록된 지출 관이 없습니다.';
   } else {
@@ -1800,6 +1828,13 @@ function renderBudgetSection(approvedList){
   const appendBudgetRow = (type, gwan, hang, mok, b, s)=>{
     totalBudget += b;
     totalSettled += s;
+    if(type==='income'){
+      incomeBudget += b;
+      incomeSettled += s;
+    }else{
+      expenseBudget += b;
+      expenseSettled += s;
+    }
     const pct = b > 0 ? (s/b*100) : (s>0 ? Infinity : 0);
     const remain = b - s;
     const pctText = b > 0 ? pct.toFixed(1) + '%' : (s>0 ? '예산 없음' : '-');
@@ -1842,6 +1877,14 @@ function renderBudgetSection(approvedList){
       });
     });
   });
+  document.getElementById('report-income-budget-total').textContent = fmtShort(incomeBudget);
+  document.getElementById('report-income-settled-total').textContent = fmtShort(incomeSettled);
+  document.getElementById('report-expense-budget-total').textContent = fmtShort(expenseBudget);
+  document.getElementById('report-expense-settled-total').textContent = fmtShort(expenseSettled);
+  const reportBudgetDifference = incomeBudget-expenseBudget;
+  const reportBudgetDifferenceElement = document.getElementById('report-budget-difference');
+  reportBudgetDifferenceElement.textContent = fmtShort(reportBudgetDifference);
+  reportBudgetDifferenceElement.classList.toggle('mismatch',reportBudgetDifference!==0);
   const totalRate = totalBudget>0 ? `${(totalSettled/totalBudget*100).toFixed(1)}%` : '-';
   document.getElementById('tbl-budget-total').innerHTML =
     `<tr class="report-total-row"><th colspan="4">전체 합계</th><td class="num">${fmtShort(totalBudget)}</td><td class="num">${fmtShort(totalSettled)}</td><td class="num">${totalRate}</td><td class="num">${fmtShort(totalBudget-totalSettled)}</td></tr>`;
@@ -1959,9 +2002,14 @@ function updateHierarchyBudgetTotals(){
   const difference = income-expense;
   const totalRow = document.getElementById('hierarchy-grand-total-row');
   const totalMessage = document.getElementById('hierarchy-total-message');
+  const topDifference = document.getElementById('hierarchy-grand-total-top');
+  document.getElementById('hierarchy-income-total-top').textContent = fmt(income);
+  document.getElementById('hierarchy-expense-total-top').textContent = fmt(expense);
   document.getElementById('hierarchy-grand-total').textContent = fmt(difference);
   totalRow.classList.toggle('hierarchy-total-mismatch',difference!==0);
   totalMessage.textContent = difference===0 ? '수입·지출 예산 동일' : '예산 불일치';
+  topDifference.textContent = `${fmt(difference)} · ${difference===0?'수입·지출 예산 동일':'예산 불일치'}`;
+  topDifference.classList.toggle('mismatch',difference!==0);
 }
 function repositionHierarchyRows(){
   const body = document.getElementById('hierarchy-form-body');
