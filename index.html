@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>조합비 수입지출 결산 — 대학노동조합 한국외국어대학교지부</title>
+<title>조합비 수입지출 결산 — 한국외국어대학교 노동조합</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700;900&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root{
@@ -17,7 +17,8 @@
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
-  body{background:var(--paper); color:var(--ink); font-family:'Noto Sans KR',sans-serif; line-height:1.6;}
+body, button, input, select, textarea { font-family: 'Nanum Gothic', sans-serif; }
+body { background-color: #F8FAFC; }  
   .wrap{max-width:1040px;margin:0 auto;padding:0 24px 80px;}
 
   header.masthead{
@@ -137,6 +138,8 @@
   <div class="masthead-inner">
     <p class="org">대학노동조합 한국외국어대학교지부</p>
     <h1 class="title">조합비 수입·지출 결산</h1>
+<select id="year-select" onchange="setYear(this.value)" title="회계연도: 1월 1일 ~ 12월 31일"
+ class="px-2.5 py-1.5 rounded-lg text-sm font-bold bg-white text-hufs-navy focus:outline-none focus:ring-2 focus:ring-hufs-gold"></select>
     <nav class="tabs">
       <button class="tab-btn active" data-view="report">보고서</button>
       <button class="tab-btn" data-view="entry">내역 입력·관리</button>
