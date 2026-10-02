@@ -63,7 +63,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .sec-head{display:flex;align-items:baseline;gap:12px;border-bottom:2px solid var(--navy);padding-bottom:10px;margin-bottom:22px;}
   .sec-num{font-family:'Pretendard',sans-serif;font-weight:700;color:var(--gold);font-size:15px;}
   h2{font-family:'Pretendard',sans-serif;font-weight:700;font-size:21px;margin:0;}
-  p.sec-desc{color:var(--ink-soft);font-size:14.5px;margin:0 0 20px;max-width:64ch;}
+  p.sec-desc{color:var(--ink-soft);font-size:14px;margin:0 0 20px;max-width:64ch;}
 
   .card{background:var(--paper-2);border:1px solid var(--line);padding:24px;}
   .chart-box{position:relative;height:300px;}
@@ -75,7 +75,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .table-scroll{max-height:440px;overflow-y:auto;overflow-x:auto;position:relative;}
   .table-scroll thead th{position:sticky;top:0;z-index:2;background:var(--paper-2);box-shadow:inset 0 -1px 0 var(--line);}
   th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
-  th{color:var(--ink-soft);font-weight:500;font-size:12.5px;}
+  th{color:var(--ink-soft);font-weight:500;font-size:14px;}
   td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
   tr:last-child td{border-bottom:none;}
   .bar-track{background:var(--paper);height:8px;overflow:hidden;margin-top:6px;}
@@ -85,11 +85,12 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .filter-btn{border:1px solid var(--line);background:var(--paper-2);padding:7px 14px;font-size:13px;font-family:'Pretendard',sans-serif;color:var(--ink-soft);cursor:pointer;}
   .filter-btn.active{background:var(--navy);border-color:var(--navy);color:var(--paper-2);}
   .tag{display:inline-block;font-size:11px;padding:2px 7px;background:var(--paper);color:var(--navy);border:1px solid var(--gold-soft);margin-top:3px;}
-  .count-note{font-size:13px;color:var(--ink-soft);margin-top:10px;}
+  .table-scroll .tag{font-size:14px;}
+  .count-note{font-size:14px;color:var(--ink-soft);margin-top:10px;}
 
   .notice{
     background:var(--paper); border:1px solid var(--gold-soft); color:var(--navy);
-    font-size:13.5px; padding:12px 16px; margin-bottom:20px;
+    font-size:14px; padding:12px 16px; margin-bottom:20px;
   }
 
 .year-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 4px;}
@@ -119,8 +120,9 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .hierarchy-toolbar{display:flex;justify-content:flex-end;margin:0 0 10px;}
   .hierarchy-table-scroll{max-height:65vh;overflow:auto;border:1px solid var(--line);background:var(--paper-2);}
   .hierarchy-table{width:100%;min-width:760px;border-collapse:collapse;}
-  .hierarchy-table th{position:sticky;top:0;z-index:1;background:var(--paper);padding:10px;text-align:left;}
+  .hierarchy-table th{position:sticky;top:0;z-index:1;background:var(--paper);padding:10px;text-align:left;font-size:14px;}
   .hierarchy-table td{padding:6px 8px;vertical-align:middle;}
+  .hierarchy-table .del-btn{font-size:14px;}
   .hierarchy-table tbody tr:hover{background:var(--paper);}
   .hierarchy-table select,.hierarchy-table input{box-sizing:border-box;width:100%;min-width:0;}
   .hierarchy-table .hierarchy-item-budget{text-align:right;}
@@ -142,27 +144,28 @@ body { background-color:var(--paper-2); color:var(--ink); }
   }
   .btn-primary:hover{background:var(--navy-2);}
   .btn-text{background:none;border:none;color:var(--ink-soft);text-decoration:underline;cursor:pointer;font-size:13px;padding:0;}
-  .del-btn{background:none;border:1px solid var(--line);color:var(--expense);font-size:12px;padding:4px 9px;cursor:pointer;}
+  .del-btn{background:none;border:1px solid var(--line);color:var(--expense);font-size:14px;padding:4px 9px;cursor:pointer;}
   .del-btn:hover{background:var(--paper);}
-  .locked-note{font-size:11.5px;color:var(--ink-soft);}
+  .locked-note{font-size:14px;color:var(--ink-soft);}
 
-  .status-badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:2px;font-weight:700;}
+  .status-badge{display:inline-block;font-size:14px;padding:2px 8px;border-radius:2px;font-weight:700;}
   .status-approved{background:var(--paper);color:var(--income);}
   .status-pending{background:var(--paper-2);color:var(--navy-2);}
   .status-rejected{background:var(--paper);color:var(--expense);}
 
   .action-row{display:flex;gap:6px;flex-wrap:wrap;}
-  .btn-approve{background:var(--income);color:var(--paper-2);border:none;font-size:12px;padding:5px 10px;cursor:pointer;}
-  .btn-reject{background:none;border:1px solid var(--expense);color:var(--expense);font-size:12px;padding:4px 9px;cursor:pointer;}
-  .btn-revert{background:none;border:1px solid var(--line);color:var(--ink-soft);font-size:12px;padding:4px 9px;cursor:pointer;}
+  .btn-approve{background:var(--income);color:var(--paper-2);border:none;font-size:14px;padding:5px 10px;cursor:pointer;}
+  .btn-reject{background:none;border:1px solid var(--expense);color:var(--expense);font-size:14px;padding:4px 9px;cursor:pointer;}
+  .btn-revert{background:none;border:1px solid var(--line);color:var(--ink-soft);font-size:14px;padding:4px 9px;cursor:pointer;}
 
   .pending-box{border:1px solid var(--gold-soft); background:var(--paper-2); margin-bottom:22px;}
   .pending-box .ph{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--gold-soft);}
   .pending-box .ph h3{font-family:'Pretendard',sans-serif;font-size:16px;margin:0;}
   .pending-count{background:var(--gold);color:var(--paper-2);border-radius:10px;font-size:12px;padding:1px 9px;margin-left:8px;}
-  .pending-empty{padding:18px;color:var(--ink-soft);font-size:13.5px;}
+  .pending-empty{padding:18px;color:var(--ink-soft);font-size:14px;}
 
-  #save-status{font-size:13px;color:var(--ink-soft);margin-left:14px;}
+  #save-status{font-size:14px;color:var(--ink-soft);margin-left:14px;}
+  #budget-save-status{font-size:14px;}
 
   footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-soft);display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;}
   @media (max-width:600px){.hierarchy-table-scroll{max-height:70vh;}}
