@@ -1524,6 +1524,23 @@ function refreshMokOptions(){
   select.innerHTML = '';
   let matchedPrevious = false;
   accountCategories[type].forEach(gwan=>{
+    if(gwan.name.replace(/_관$/, '')==='차기이월금'){
+      const accounts = gwan.accounts.filter(hang=>hang.items.length);
+      if(!accounts.length) return;
+      const optgroup = document.createElement('optgroup');
+      optgroup.label = '차기이월금';
+      accounts.forEach(hang=>{
+        hang.items.forEach(mok=>{
+          const option = document.createElement('option');
+          option.value = JSON.stringify({gwan:gwan.name,hang:hang.name,mok});
+          option.textContent = mok;
+          if(option.value===previousValue) matchedPrevious = true;
+          optgroup.appendChild(option);
+        });
+      });
+      select.appendChild(optgroup);
+      return;
+    }
     gwan.accounts.forEach(hang=>{
       if(!hang.items.length) return;
       const optgroup = document.createElement('optgroup');
