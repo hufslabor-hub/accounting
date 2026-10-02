@@ -280,6 +280,7 @@ body { background-color:#F8FAFC; color:var(--ink); }
       <p class="sec-desc">각 수입·지출 목 옆에서 <b id="budget-year-label"></b> 예산을 입력하거나 수정하세요. 보고서의 예산 대비 집행 현황은 지출 예산을 기준으로 표시됩니다.</p>
       <div class="notice hidden" id="budget-migration-notice"></div>
       <div id="hierarchy-form-body"></div>
+      <button class="btn-primary" id="btn-import-previous-budget" type="button" style="margin-top:16px;">전년도 예산 불러오기</button>
       <button class="btn-primary" id="btn-save-hierarchy" style="margin-top:16px;">분류 및 예산 저장</button>
       <span id="budget-save-status"></span>
     </section>
@@ -1667,6 +1668,62 @@ document.getElementById('btn-save-hierarchy').addEventListener('click', async ()
   setTimeout(()=>{ if(status.textContent) status.textContent=''; }, 5000);
   renderHierarchyForm();
   renderReport();
+});
+
+document.getElementById('btn-import-previous-budget').addEventListener('click', async event=>{
+  const button = event.currentTarget;
+  const status = document.getElementById('budget-save-status');
+  const previousYear = currentYear - 1;
+  button.disabled = true;
+  status.textContent = '';
+  try{
+    const result = await storageGet(budgetKey(previousYear));
+    const previousBudget = JSON.parse(result.value);
+    if(!previousBudget || typeof previousBudget !== 'object' || Array.isArray(previousBudget)){
+      throw new Error(`${previousYear}년 예산 자료 형식이 올바르지 않습니다.`);
+    }
+
+    const importedAmounts = [];
+    document.querySelectorAll('.hierarchy-gwan').forEach(card=>{
+      const type = card.dataset.categoryType;
+      const gwanName = card.querySelector('.hierarchy-gwan-name').value.trim();
+      card.querySelectorAll('.hierarchy-account').forEach(accountCard=>{
+        const hangName = accountCard.querySelector('.hierarchy-account-name').value.trim();
+        accountCard.querySelectorAll('.hierarchy-item-row').forEach(row=>{
+          const mokName = row.querySelector('.hierarchy-item-name').value.trim();
+          const input = row.querySelector('.hierarchy-item-budget');
+          const currentKey = mokBudgetKey(type,gwanName,hangName,mokName);
+          const legacyExpenseKey = `mok:${JSON.stringify([gwanName,hangName,mokName])}`;
+          const key = Object.prototype.hasOwnProperty.call(previousBudget,currentKey)
+            ? currentKey
+            : (type==='expense' && Object.prototype.hasOwnProperty.call(previousBudget,legacyExpenseKey)
+              ? legacyExpenseKey
+              : null);
+          if(!key) return;
+          const rawAmount = previousBudget[key];
+          const amount = Number(rawAmount);
+          if(rawAmount===null || (typeof rawAmount==='string' && !rawAmount.trim())){
+            throw new Error(`${previousYear}년 ${mokName} 예산 값이 0 이상의 정수가 아닙니다.`);
+          }
+          if(!Number.isFinite(amount) || amount<0 || !Number.isInteger(amount)){
+            throw new Error(`${previousYear}년 ${mokName} 예산 값이 0 이상의 정수가 아닙니다.`);
+          }
+          importedAmounts.push({input,amount});
+        });
+      });
+    });
+    importedAmounts.forEach(({input,amount})=>{ input.value = amount; });
+    const imported = importedAmounts.length;
+    status.textContent = imported
+      ? `${previousYear}년 예산 ${imported}개 목을 입력란에 불러왔습니다. 확인·수정한 뒤 '분류 및 예산 저장'을 눌러 저장하세요.`
+      : `${previousYear}년 예산 자료에서 현재 분류와 일치하는 목을 찾지 못했습니다.`;
+  }catch(error){
+    status.textContent = error.code==='accounting/not-found'
+      ? `${previousYear}년 예산 자료가 없습니다.`
+      : `전년도 예산을 불러오지 못했습니다: ${error.message || String(error)}`;
+  }finally{
+    button.disabled = false;
+  }
 });
 
 // ---------- init ----------
