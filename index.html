@@ -141,7 +141,7 @@ body { background-color:#F8FAFC; color:var(--ink); }
 
 <header class="masthead">
   <div class="masthead-inner">
-    <p class="org">대학노동조합 한국외국어대학교지부</p>
+    <p class="org">한국외국어대학교 노동조합</p>
 <h1 class="title">조합비 수입·지출 결산 <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
 <div class="year-bar">
   <label for="year-select">회계연도</label>
@@ -799,7 +799,8 @@ function setupDatalists(){
   window._refreshCategoryList = refreshCategoryList;
 
   const dlDesc = document.getElementById('dl-desc');
-const descSet = new Set(BASE_LEDGER.map(t=>t.desc).filter(Boolean));  Array.from(descSet).slice(0,200).forEach(d=>{ const o=document.createElement('option'); o.value=d; dlDesc.appendChild(o); });
+const descSet = new Set(BASE_LEDGER.map(t=>t.desc).filter(Boolean));  
+Array.from(descSet).slice(0,200).forEach(d=>{ const o=document.createElement('option'); o.value=d; dlDesc.appendChild(o); });
 }
 
 function setGubun(g){
@@ -826,6 +827,7 @@ async function addEntry(){
   if(date < fyStart(currentYear) || date > fyEnd(currentYear)){
   setStatus(`${currentYear} 회계연도(1/1~12/31) 날짜만 입력할 수 있습니다.`);
   return;
+  }
   const amount = Number(amountRaw);
   if(!amount || amount <= 0){
     setStatus('금액을 올바르게 입력해주세요.');
