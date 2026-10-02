@@ -209,6 +209,15 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .pending-box .ph h3{font-family:'Pretendard',sans-serif;font-size:16px;margin:0;}
   .pending-count{background:var(--gold);color:var(--paper-2);border-radius:10px;font-size:12px;padding:1px 9px;margin-left:8px;}
   .pending-empty{padding:18px;color:var(--ink-soft);font-size:14px;}
+  .pending-transaction-table{table-layout:fixed;}
+  .pending-transaction-table th{text-align:center;}
+  .pending-transaction-table .col-date{width:12%;}
+  .pending-transaction-table .col-type{width:8%;}
+  .pending-transaction-table .col-description{width:20%;}
+  .pending-transaction-table .col-mok{width:14%;}
+  .pending-transaction-table .col-payee{width:14%;}
+  .pending-transaction-table .col-amount{width:12%;}
+  .pending-transaction-table .col-actions{width:20%;}
 
   #save-status{font-size:14px;color:var(--ink-soft);margin-left:14px;}
   #budget-save-status{font-size:14px;}
@@ -402,11 +411,11 @@ body { background-color:var(--paper-2); color:var(--ink); }
           <div class="field"><label>날짜</label><input type="date" id="f-date"></div>
           <div class="field"><label>금액(원)</label><input type="number" id="f-amount" placeholder="예: 50000"></div>
 
-          <div class="field span2"><label>내용</label><input type="text" id="f-desc" placeholder="예: 집행부 회의 식비" list="dl-desc"></div>
-          <div class="field"><label>지급처</label><input type="text" id="f-payee" placeholder="예: 배달의민족"></div>
-
           <div class="field"><label for="f-mok">세부 계정과목</label><select id="f-mok"></select></div>
           <div class="field"><label>담당자</label><input type="text" id="f-spender" placeholder="입력자 이름" list="staff-name-options"><datalist id="staff-name-options"></datalist></div>
+
+          <div class="field span2"><label>내용</label><input type="text" id="f-desc" placeholder="예: 집행부 회의 식비" list="dl-desc"></div>
+          <div class="field"><label>지급처</label><input type="text" id="f-payee" placeholder="예: 배달의민족"></div>
         </div>
         <datalist id="dl-desc"></datalist>
 
@@ -1727,7 +1736,14 @@ function renderPendingBox(){
     return;
   }
   const table = document.createElement('table');
-  table.innerHTML = `<thead><tr><th>일자</th><th>구분</th><th>내용</th><th>지급처</th><th class="num">금액</th><th></th></tr></thead><tbody></tbody>`;
+  table.className = 'transaction-table pending-transaction-table';
+  table.innerHTML = `
+    <colgroup>
+      <col class="col-date"><col class="col-type"><col class="col-description">
+      <col class="col-mok"><col class="col-payee"><col class="col-amount"><col class="col-actions">
+    </colgroup>
+    <thead><tr><th>일자</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th class="num">금액</th><th></th></tr></thead>
+    <tbody></tbody>`;
   const tbody = table.querySelector('tbody');
   pending.forEach(t=>{
     const tr = document.createElement('tr');
@@ -1735,7 +1751,8 @@ function renderPendingBox(){
     tr.innerHTML = `
       <td>${t.date||'-'}</td>
       <td style="color:${t.gubun==='수입'?'#3F72AF':'#112D4E'}">${t.gubun}</td>
-      <td>${t.desc||''}<br><span class="tag">${escapeHTML(classificationPath(t))}</span></td>
+      <td>${escapeHTML(t.desc||'')}</td>
+      <td>${escapeHTML(t.category||'-')}</td>
       <td>${t.payee||t.spender||'-'}</td>
       <td class="num">${fmtShort(t.amount)}</td>
       <td>${rowActions(t)}</td>
