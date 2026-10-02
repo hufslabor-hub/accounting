@@ -9,22 +9,22 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root{
-    --navy:#16233f; --navy-2:#1f3357;
-    --paper:#eef1f2; --paper-2:#ffffff;
-    --gold:#b6822c; --gold-soft:#e4c580;
-    --income:#2f6f5e; --expense:#b6482f;
-    --ink:#16233f; --ink-soft:#4d5a72; --line:#d4d9de;
+    --navy:#112D4E; --navy-2:#3F72AF;
+    --paper:#DBE2EF; --paper-2:#F9F7F7;
+    --gold:#3F72AF; --gold-soft:#DBE2EF;
+    --income:#3F72AF; --expense:#112D4E;
+    --ink:#112D4E; --ink-soft:#3F72AF; --line:#DBE2EF;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
 body, button, input, select, textarea, table { font-family:'Pretendard',sans-serif; }
-body { background-color:#F8FAFC; color:var(--ink); }
+body { background-color:var(--paper-2); color:var(--ink); }
   .wrap{max-width:1040px;margin:0 auto;padding:0 24px 80px;}
 
   header.masthead{
     max-width:1200px;width:calc(100% - 32px);margin:0 auto;
     background:linear-gradient(180deg, var(--navy) 0%, var(--navy-2) 100%);
-    color:#f4f1e8; padding:44px 24px 28px; position:relative; overflow:hidden;
+    color:var(--paper-2); padding:44px 24px 28px; position:relative; overflow:hidden;
   }
   header.masthead::after{
     content:""; position:absolute; left:0; right:0; bottom:0; height:6px;
@@ -38,12 +38,12 @@ body { background-color:#F8FAFC; color:var(--ink); }
     position:sticky;top:0;z-index:30;
     max-width:1200px;width:calc(100% - 32px);margin:0 auto;
     background:var(--navy);border-bottom:4px solid var(--gold);
-    box-shadow:0 4px 12px rgba(22,35,63,.12);
+    box-shadow:0 4px 12px rgba(17,45,78,.12);
   }
   .tabs-inner{max-width:1040px;margin:0 auto;padding:0 24px;}
   nav.tabs{display:flex;gap:2px;margin:0;}
   .tab-btn{
-    background:rgba(255,255,255,.06); border:none; color:#cdd4e0;
+    background:rgba(249,247,247,.08); border:none; color:var(--paper);
     font-family:'Pretendard',sans-serif; font-size:14.5px; font-weight:500;
     padding:12px 22px; cursor:pointer; border-radius:6px 6px 0 0;
   }
@@ -73,33 +73,33 @@ body { background-color:#F8FAFC; color:var(--ink); }
 
   table{width:100%;border-collapse:collapse;font-size:14px;}
   .table-scroll{max-height:440px;overflow-y:auto;overflow-x:auto;position:relative;}
-  .table-scroll thead th{position:sticky;top:0;z-index:2;background:#fff;box-shadow:inset 0 -1px 0 var(--line);}
+  .table-scroll thead th{position:sticky;top:0;z-index:2;background:var(--paper-2);box-shadow:inset 0 -1px 0 var(--line);}
   th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
   th{color:var(--ink-soft);font-weight:500;font-size:12.5px;}
   td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
   tr:last-child td{border-bottom:none;}
-  .bar-track{background:#eee;height:8px;overflow:hidden;margin-top:6px;}
+  .bar-track{background:var(--paper);height:8px;overflow:hidden;margin-top:6px;}
   .bar-fill{height:100%;background:var(--expense);}
 
   .filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
   .filter-btn{border:1px solid var(--line);background:var(--paper-2);padding:7px 14px;font-size:13px;font-family:'Pretendard',sans-serif;color:var(--ink-soft);cursor:pointer;}
-  .filter-btn.active{background:var(--navy);border-color:var(--navy);color:#f4f1e8;}
-  .tag{display:inline-block;font-size:11px;padding:2px 7px;background:#f0ece0;color:var(--gold);border:1px solid var(--gold-soft);margin-top:3px;}
+  .filter-btn.active{background:var(--navy);border-color:var(--navy);color:var(--paper-2);}
+  .tag{display:inline-block;font-size:11px;padding:2px 7px;background:var(--paper);color:var(--navy);border:1px solid var(--gold-soft);margin-top:3px;}
   .count-note{font-size:13px;color:var(--ink-soft);margin-top:10px;}
 
   .notice{
-    background:#fbf7ea; border:1px solid var(--gold-soft); color:#6b551f;
+    background:var(--paper); border:1px solid var(--gold-soft); color:var(--navy);
     font-size:13.5px; padding:12px 16px; margin-bottom:20px;
   }
 
 .year-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 4px;}
-.year-bar label{color:var(--gold-soft);font-size:13px;}
-#year-select{padding:7px 12px;font-size:14px;font-weight:700;background:#fff;color:var(--navy);border:none;border-radius:6px;cursor:pointer;}
-#fy-range{font-size:12.5px;color:#cdd4e0;}
+.year-bar label{color:var(--gold-soft);font-size:14px;}
+#year-select{padding:7px 12px;font-size:14px;font-weight:700;background:var(--paper-2);color:var(--navy);border:none;border-radius:6px;cursor:pointer;}
+#fy-range{font-size:14px;color:var(--paper);}
 .auth-bar{display:flex;align-items:center;gap:10px;justify-content:flex-end;margin-top:0;}
-.auth-bar span{font-size:12.5px;color:#cdd4e0;}
-.btn-auth{background:#fff;color:var(--navy);border:0;border-radius:4px;padding:8px 12px;font-weight:700;cursor:pointer;}
-.auth-gate{max-width:560px;margin:56px auto;padding:28px;background:#fff;border:1px solid var(--line);text-align:center;}
+.auth-bar span{font-size:12.5px;color:var(--paper);}
+.btn-auth{background:var(--paper-2);color:var(--navy);border:0;border-radius:4px;padding:8px 12px;font-weight:700;cursor:pointer;}
+.auth-gate{max-width:560px;margin:56px auto;padding:28px;background:var(--paper-2);border:1px solid var(--line);text-align:center;}
 .auth-gate h2{margin-bottom:12px;}
 .auth-gate p{color:var(--ink-soft);line-height:1.7;}
 .auth-gate code{overflow-wrap:anywhere;}
@@ -111,17 +111,17 @@ body { background-color:#F8FAFC; color:var(--ink); }
   .field.span2{grid-column:span 2;}
   .field.span3{grid-column:span 3;}
   label{font-size:12.5px;color:var(--ink-soft);}
-  select{border:1px solid var(--line);padding:9px 10px;font-size:14px;background:#fcfcfb;font-family:'Pretendard',sans-serif;}
+  select{border:1px solid var(--line);padding:9px 10px;font-size:14px;background:var(--paper-2);font-family:'Pretendard',sans-serif;}
   input[type=text], input[type=date], input[type=number]{
     border:1px solid var(--line); padding:9px 10px; font-size:14px;
-    font-family:'Pretendard',sans-serif; background:#fcfcfb;
+    font-family:'Pretendard',sans-serif; background:var(--paper-2);
   }
   .hierarchy-toolbar{display:flex;justify-content:flex-end;margin:0 0 10px;}
-  .hierarchy-table-scroll{max-height:65vh;overflow:auto;border:1px solid var(--line);background:#fff;}
+  .hierarchy-table-scroll{max-height:65vh;overflow:auto;border:1px solid var(--line);background:var(--paper-2);}
   .hierarchy-table{width:100%;min-width:760px;border-collapse:collapse;}
-  .hierarchy-table th{position:sticky;top:0;z-index:1;background:#f3f5f7;padding:10px;text-align:left;}
+  .hierarchy-table th{position:sticky;top:0;z-index:1;background:var(--paper);padding:10px;text-align:left;}
   .hierarchy-table td{padding:6px 8px;vertical-align:middle;}
-  .hierarchy-table tbody tr:hover{background:#fbfcfd;}
+  .hierarchy-table tbody tr:hover{background:var(--paper);}
   .hierarchy-table select,.hierarchy-table input{box-sizing:border-box;width:100%;min-width:0;}
   .hierarchy-table .hierarchy-item-budget{text-align:right;}
   .budget-report-table{min-width:900px;}
@@ -130,36 +130,36 @@ body { background-color:#F8FAFC; color:var(--ink); }
   input:focus{outline:2px solid var(--navy); outline-offset:-1px;}
   .gubun-toggle{display:flex; border:1px solid var(--line); overflow:hidden;}
   .gubun-toggle button{
-    flex:1; border:none; padding:9px 10px; background:#fcfcfb; cursor:pointer;
+    flex:1; border:none; padding:9px 10px; background:var(--paper-2); cursor:pointer;
     font-family:'Pretendard',sans-serif; font-size:14px; color:var(--ink-soft);
   }
-  .gubun-toggle button.on-income.selected{background:var(--income); color:#fff;}
-  .gubun-toggle button.on-expense.selected{background:var(--expense); color:#fff;}
+  .gubun-toggle button.on-income.selected{background:var(--income); color:var(--paper-2);}
+  .gubun-toggle button.on-expense.selected{background:var(--expense); color:var(--paper-2);}
 
   .btn-primary{
-    background:var(--navy); color:#f4f1e8; border:none; padding:11px 22px;
+    background:var(--navy); color:var(--paper-2); border:none; padding:11px 22px;
     font-family:'Pretendard',sans-serif; font-size:14.5px; font-weight:700; cursor:pointer;
   }
   .btn-primary:hover{background:var(--navy-2);}
   .btn-text{background:none;border:none;color:var(--ink-soft);text-decoration:underline;cursor:pointer;font-size:13px;padding:0;}
   .del-btn{background:none;border:1px solid var(--line);color:var(--expense);font-size:12px;padding:4px 9px;cursor:pointer;}
-  .del-btn:hover{background:#fdf1ee;}
-  .locked-note{font-size:11.5px;color:#9aa4b3;}
+  .del-btn:hover{background:var(--paper);}
+  .locked-note{font-size:11.5px;color:var(--ink-soft);}
 
   .status-badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:2px;font-weight:700;}
-  .status-approved{background:#e6f0ec;color:var(--income);}
-  .status-pending{background:#fbf1de;color:#96650f;}
-  .status-rejected{background:#f7e9e5;color:var(--expense);}
+  .status-approved{background:var(--paper);color:var(--income);}
+  .status-pending{background:var(--paper-2);color:var(--navy-2);}
+  .status-rejected{background:var(--paper);color:var(--expense);}
 
   .action-row{display:flex;gap:6px;flex-wrap:wrap;}
-  .btn-approve{background:var(--income);color:#fff;border:none;font-size:12px;padding:5px 10px;cursor:pointer;}
+  .btn-approve{background:var(--income);color:var(--paper-2);border:none;font-size:12px;padding:5px 10px;cursor:pointer;}
   .btn-reject{background:none;border:1px solid var(--expense);color:var(--expense);font-size:12px;padding:4px 9px;cursor:pointer;}
   .btn-revert{background:none;border:1px solid var(--line);color:var(--ink-soft);font-size:12px;padding:4px 9px;cursor:pointer;}
 
-  .pending-box{border:1px solid var(--gold-soft); background:#fffdf7; margin-bottom:22px;}
+  .pending-box{border:1px solid var(--gold-soft); background:var(--paper-2); margin-bottom:22px;}
   .pending-box .ph{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--gold-soft);}
   .pending-box .ph h3{font-family:'Pretendard',sans-serif;font-size:16px;margin:0;}
-  .pending-count{background:var(--gold);color:#fff;border-radius:10px;font-size:12px;padding:1px 9px;margin-left:8px;}
+  .pending-count{background:var(--gold);color:var(--paper-2);border-radius:10px;font-size:12px;padding:1px 9px;margin-left:8px;}
   .pending-empty{padding:18px;color:var(--ink-soft);font-size:13.5px;}
 
   #save-status{font-size:13px;color:var(--ink-soft);margin-left:14px;}
@@ -1066,8 +1066,8 @@ function aggregates(list){
 
 // ---------- charts ----------
 Chart.defaults.font.family = "'Pretendard', sans-serif";
-Chart.defaults.color = '#4d5a72';
-const hangColors = ['#16233f','#b6822c','#2f6f5e','#b6482f','#5c7291','#8a6d3b','#3d5a80','#a35d47','#728c81','#c19a49','#4a5f7a','#9c6b4e','#6f8b93','#7a5a3f'];
+Chart.defaults.color = '#3F72AF';
+const hangColors = ['#112D4E','#3F72AF','#DBE2EF'];
 
 function destroy(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } }
 
@@ -1084,20 +1084,20 @@ function renderReport(){
   charts.monthly = new Chart(document.getElementById('chartMonthly'), {
     type:'bar',
     data:{ labels: ag.months, datasets:[
-      {label:'수입', data: ag.monthlyIncome, backgroundColor:'#2f6f5e'},
-      {label:'지출', data: ag.monthlyExpense, backgroundColor:'#b6482f'}
+      {label:'수입', data: ag.monthlyIncome, backgroundColor:'#3F72AF'},
+      {label:'지출', data: ag.monthlyExpense, backgroundColor:'#112D4E'}
     ]},
     options:{ responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{position:'top', align:'end', labels:{boxWidth:12, usePointStyle:true}},
         tooltip:{callbacks:{label: ctx => `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`}}},
-      scales:{ y:{ticks:{callback:v=>fmtShort(v)}, grid:{color:'#e3e6e9'}}, x:{grid:{display:false}} }
+      scales:{ y:{ticks:{callback:v=>fmtShort(v)}, grid:{color:'#DBE2EF'}}, x:{grid:{display:false}} }
     }
   });
 
   destroy('hang');
   charts.hang = new Chart(document.getElementById('chartExpenseHang'), {
     type:'doughnut',
-    data:{ labels: ag.gwanLabels, datasets:[{data: ag.gwanValues, backgroundColor: hangColors, borderColor:'#fff', borderWidth:2}]},
+    data:{ labels: ag.gwanLabels, datasets:[{data: ag.gwanValues, backgroundColor: ag.gwanLabels.map((_,i)=>hangColors[i%hangColors.length]), borderColor:'#F9F7F7', borderWidth:2}]},
     options:{ responsive:true, maintainAspectRatio:false, cutout:'58%',
       plugins:{ legend:{position:'right', labels:{boxWidth:11, font:{size:11.5}}},
         tooltip:{callbacks:{label: ctx => `${ctx.label}: ${fmt(ctx.parsed)}`}}}
@@ -1116,10 +1116,10 @@ function renderReport(){
   destroy('income');
   charts.income = new Chart(document.getElementById('chartIncome'), {
     type:'bar',
-    data:{ labels: ag.incomeLabels, datasets:[{data: ag.incomeValues, backgroundColor:'#16233f'}]},
+    data:{ labels: ag.incomeLabels, datasets:[{data: ag.incomeValues, backgroundColor:'#3F72AF'}]},
     options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
       plugins:{legend:{display:false}, tooltip:{callbacks:{label: ctx => fmt(ctx.parsed.x)}}},
-      scales:{ x:{ticks:{callback:v=>fmtShort(v)}, grid:{color:'#e3e6e9'}}, y:{grid:{display:false}} }
+      scales:{ x:{ticks:{callback:v=>fmtShort(v)}, grid:{color:'#DBE2EF'}}, y:{grid:{display:false}} }
     }
   });
 
@@ -1167,15 +1167,15 @@ function renderBudgetSection(approvedList){
       data:{
         labels: allGwans,
         datasets:[
-          {label:'예산', data: allGwans.map(g=>budgetByGwan[g]||0), backgroundColor:'#c4cbd3'},
-          {label:'집행액', data: allGwans.map(g=>spentByGwan[g]||0), backgroundColor:'#b6482f'}
+          {label:'예산', data: allGwans.map(g=>budgetByGwan[g]||0), backgroundColor:'#DBE2EF'},
+          {label:'집행액', data: allGwans.map(g=>spentByGwan[g]||0), backgroundColor:'#112D4E'}
         ]
       },
       options:{
         indexAxis:'y', responsive:true, maintainAspectRatio:false,
         plugins:{ legend:{position:'top', align:'end', labels:{boxWidth:12, usePointStyle:true}},
           tooltip:{callbacks:{label: ctx => `${ctx.dataset.label}: ${fmt(ctx.parsed.x)}`}}},
-        scales:{ x:{ticks:{callback:v=>fmtShort(v)}, grid:{color:'#e3e6e9'}}, y:{grid:{display:false}} }
+        scales:{ x:{ticks:{callback:v=>fmtShort(v)}, grid:{color:'#DBE2EF'}}, y:{grid:{display:false}} }
       }
     });
   }
@@ -1389,13 +1389,13 @@ function renderTxTable(mode){
         <td>${t.date||'-'}</td>
         <td>${t.desc||''}${t.category||t.hang?`<br><span class="tag">${escapeHTML(classificationPath(t))}</span>`:''}</td>
         <td>${t.payee||t.spender||'-'}</td>
-        <td class="num" style="color:#2f6f5e">${t.gubun==='수입'?fmtShort(t.amount):''}</td>
-        <td class="num" style="color:#b6482f">${t.gubun==='지출'?fmtShort(t.amount):''}</td>
+        <td class="num" style="color:#3F72AF">${t.gubun==='수입'?fmtShort(t.amount):''}</td>
+        <td class="num" style="color:#112D4E">${t.gubun==='지출'?fmtShort(t.amount):''}</td>
       `;
     } else {
       tr.innerHTML = `
         <td>${t.date||'-'}</td>
-        <td style="color:${t.gubun==='수입'?'#2f6f5e':'#b6482f'}">${t.gubun}</td>
+        <td style="color:${t.gubun==='수입'?'#3F72AF':'#112D4E'}">${t.gubun}</td>
         <td>${t.desc||''}<br><span class="tag">${escapeHTML(classificationPath(t))}</span></td>
         <td>${t.payee||t.spender||'-'}</td>
         <td class="num">${fmtShort(t.amount)}</td>
@@ -1466,7 +1466,7 @@ function renderPendingBox(){
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${t.date||'-'}</td>
-      <td style="color:${t.gubun==='수입'?'#2f6f5e':'#b6482f'}">${t.gubun}</td>
+      <td style="color:${t.gubun==='수입'?'#3F72AF':'#112D4E'}">${t.gubun}</td>
       <td>${t.desc||''}<br><span class="tag">${escapeHTML(classificationPath(t))}</span></td>
       <td>${t.payee||t.spender||'-'}</td>
       <td class="num">${fmtShort(t.amount)}</td>
