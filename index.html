@@ -75,8 +75,9 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .table-scroll{max-height:440px;overflow-y:auto;overflow-x:auto;position:relative;}
   .table-scroll thead th{position:sticky;top:0;z-index:2;background:var(--paper-2);box-shadow:inset 0 -1px 0 var(--line);}
   th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
-  th{color:var(--ink-soft);font-weight:500;font-size:14px;}
+  th{color:var(--ink-soft);font-weight:500;font-size:14px;text-align:center;}
   td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  th.num{text-align:center;}
   tr:last-child td{border-bottom:none;}
   .bar-track{background:var(--paper);height:8px;overflow:hidden;margin-top:6px;}
   .bar-fill{height:100%;background:var(--expense);}
@@ -111,7 +112,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .field{display:flex;flex-direction:column;gap:5px;}
   .field.span2{grid-column:span 2;}
   .field.span3{grid-column:span 3;}
-  label{font-size:12.5px;color:var(--ink-soft);}
+  label{font-size:14px;color:var(--ink);}
   select{border:1px solid var(--line);padding:9px 10px;font-size:14px;background:var(--paper-2);font-family:'Pretendard',sans-serif;}
   input[type=text], input[type=date], input[type=number]{
     border:1px solid var(--line); padding:9px 10px; font-size:14px;
@@ -401,7 +402,6 @@ function createDefaultAccountCategories(){
       group('기타수입_기부금등_관',[account('기타수입_기부금등_항',['기타수입(기부금 등)'])])
     ],
     expense:[
-      group('대학노조회비_관',[account('대학노조회비_항',['대학노조회비'])]),
       group('운영비_관',[account('사무실운영비_항',['사무실운영비'])]),
       group('사업비_관',[account('신문도서비_항',['신문도서비'])]),
       group('회의비_관',[account('통신비_SMS등_항',['통신비(SMS 등)'])]),
