@@ -78,6 +78,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .entry-table th,.entry-table td{white-space:nowrap;vertical-align:middle;}
   th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
   th{color:var(--ink-soft);font-weight:500;font-size:14px;text-align:center;}
+  .field label{font-size:14px;color:var(--ink-soft);}
   td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
   th.num{text-align:center;}
   tr:last-child td{border-bottom:none;}
@@ -251,7 +252,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
         <div class="filter-row" id="month-filters-report"></div>
         <div class="table-scroll">
           <table>
-            <thead><tr><th>일자</th><th>내용</th><th>지급처/대상</th><th class="num">수입</th><th class="num">지출</th></tr></thead>
+            <thead><tr><th>일자</th><th>내용</th><th>지급처</th><th class="num">수입</th><th class="num">지출</th></tr></thead>
             <tbody id="tx-body-report"></tbody>
           </table>
         </div>
@@ -326,7 +327,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
           <div class="field"><label>금액(원)</label><input type="number" id="f-amount" placeholder="예: 50000"></div>
 
           <div class="field span2"><label>내용</label><input type="text" id="f-desc" placeholder="예: 집행부 회의 식비" list="dl-desc"></div>
-          <div class="field"><label>지급처 / 대상</label><input type="text" id="f-payee" placeholder="예: 배달의민족"></div>
+          <div class="field"><label>지급처</label><input type="text" id="f-payee" placeholder="예: 배달의민족"></div>
 
           <div class="field"><label for="f-mok">세부 계정과목</label><select id="f-mok"></select></div>
           <div class="field"><label>담당자</label><input type="text" id="f-spender" placeholder="입력자 이름"></div>
@@ -345,7 +346,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
         <div class="filter-row" id="month-filters-entry"></div>
         <div class="table-scroll">
           <table class="entry-table">
-            <thead><tr><th>일자</th><th>구분</th><th>내용</th><th>지급처/담당</th><th class="num">금액</th><th>상태</th><th></th></tr></thead>
+            <thead><tr><th>일자</th><th>구분</th><th>내용</th><th>지급처</th><th class="num">금액</th><th>상태</th><th></th></tr></thead>
             <tbody id="tx-body-entry"></tbody>
           </table>
         </div>
@@ -1465,7 +1466,7 @@ function renderPendingBox(){
     return;
   }
   const table = document.createElement('table');
-  table.innerHTML = `<thead><tr><th>일자</th><th>구분</th><th>내용</th><th>지급처/담당</th><th class="num">금액</th><th></th></tr></thead><tbody></tbody>`;
+  table.innerHTML = `<thead><tr><th>일자</th><th>구분</th><th>내용</th><th>지급처</th><th class="num">금액</th><th></th></tr></thead><tbody></tbody>`;
   const tbody = table.querySelector('tbody');
   pending.forEach(t=>{
     const tr = document.createElement('tr');
