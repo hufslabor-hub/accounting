@@ -74,6 +74,8 @@ body { background-color:var(--paper-2); color:var(--ink); }
   table{width:100%;border-collapse:collapse;font-size:14px;}
   .table-scroll{max-height:440px;overflow-y:auto;overflow-x:auto;position:relative;}
   .table-scroll thead th{position:sticky;top:0;z-index:2;background:var(--paper-2);box-shadow:inset 0 -1px 0 var(--line);}
+  .entry-table{min-width:980px;}
+  .entry-table th,.entry-table td{white-space:nowrap;vertical-align:middle;}
   th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
   th{color:var(--ink-soft);font-weight:500;font-size:14px;text-align:center;}
   td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
@@ -342,7 +344,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
         <div class="filter-row" id="status-filters-entry"></div>
         <div class="filter-row" id="month-filters-entry"></div>
         <div class="table-scroll">
-          <table>
+          <table class="entry-table">
             <thead><tr><th>일자</th><th>구분</th><th>내용</th><th>지급처/담당</th><th class="num">금액</th><th>상태</th><th></th></tr></thead>
             <tbody id="tx-body-entry"></tbody>
           </table>
@@ -1399,7 +1401,7 @@ function renderTxTable(mode){
       tr.innerHTML = `
         <td>${t.date||'-'}</td>
         <td style="color:${t.gubun==='수입'?'#3F72AF':'#112D4E'}">${t.gubun}</td>
-        <td>${t.desc||''}<br><span class="tag">${escapeHTML(classificationPath(t))}</span></td>
+        <td>${t.desc||''} <span class="tag">${escapeHTML(classificationPath(t))}</span></td>
         <td>${t.payee||t.spender||'-'}</td>
         <td class="num">${fmtShort(t.amount)}</td>
         <td><span class="status-badge status-${t.status}">${STATUS_LABEL[t.status]||t.status}</span></td>
@@ -1523,29 +1525,16 @@ function refreshMokOptions(){
   const previousValue = select.value;
   select.innerHTML = '';
   let matchedPrevious = false;
-  accountCategories[type].forEach(gwan=>{
-    if(gwan.name.replace(/_관$/, '')==='차기이월금'){
-      const accounts = gwan.accounts.filter(hang=>hang.items.length);
-      if(!accounts.length) return;
+  [...accountCategories[type]]
+    .sort((a,b)=>a.name.replace(/_관$/,'').localeCompare(b.name.replace(/_관$/,''),'ko'))
+    .forEach(gwan=>{
+      const items = gwan.accounts.flatMap(hang=>
+        hang.items.map(mok=>({hang,mok}))
+      ).sort((a,b)=>a.mok.localeCompare(b.mok,'ko') || a.hang.name.localeCompare(b.hang.name,'ko'));
+      if(!items.length) return;
       const optgroup = document.createElement('optgroup');
-      optgroup.label = '차기이월금';
-      accounts.forEach(hang=>{
-        hang.items.forEach(mok=>{
-          const option = document.createElement('option');
-          option.value = JSON.stringify({gwan:gwan.name,hang:hang.name,mok});
-          option.textContent = mok;
-          if(option.value===previousValue) matchedPrevious = true;
-          optgroup.appendChild(option);
-        });
-      });
-      select.appendChild(optgroup);
-      return;
-    }
-    gwan.accounts.forEach(hang=>{
-      if(!hang.items.length) return;
-      const optgroup = document.createElement('optgroup');
-      optgroup.label = `${gwan.name} / ${hang.name}`;
-      hang.items.forEach(mok=>{
+      optgroup.label = gwan.name.replace(/_관$/,'');
+      items.forEach(({hang,mok})=>{
         const option = document.createElement('option');
         option.value = JSON.stringify({gwan:gwan.name,hang:hang.name,mok});
         option.textContent = mok;
@@ -1554,7 +1543,6 @@ function refreshMokOptions(){
       });
       select.appendChild(optgroup);
     });
-  });
   if(matchedPrevious) select.value = previousValue;
   if(!select.options.length){
     const option = document.createElement('option');
