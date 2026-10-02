@@ -108,21 +108,16 @@ body { background-color:#F8FAFC; color:var(--ink); }
     border:1px solid var(--line); padding:9px 10px; font-size:14px;
     font-family:'Pretendard',sans-serif; background:#fcfcfb;
   }
-  .hierarchy-gwan{margin:0 0 18px;padding:18px;}
-  .hierarchy-gwan-head,.hierarchy-account-head,.hierarchy-item-row,.hierarchy-add-row{display:flex;align-items:center;gap:8px;}
-  .hierarchy-gwan-head{padding-bottom:14px;border-bottom:1px solid var(--line);}
-  .hierarchy-level{font-size:12px;font-weight:700;color:var(--ink-soft);min-width:34px;}
-  .hierarchy-gwan-name{flex:1;font-weight:700;}
-  .hierarchy-item-budget{width:180px;text-align:right;}
-  .hierarchy-account{margin:14px 0 0 18px;padding:12px;border-left:3px solid var(--gold-soft);background:#fbfcfd;}
-  .hierarchy-account-head{margin-bottom:8px;}
-  .hierarchy-account-name{font-weight:700;flex:1;}
-  .hierarchy-item-list{display:grid;gap:6px;margin-left:16px;}
-  .hierarchy-item-row input,.hierarchy-add-row input{flex:1;}
-  .hierarchy-item-row .hierarchy-item-budget{flex:0 0 180px;}
-  .hierarchy-add-row{margin:10px 0 0 16px;}
-  .hierarchy-account > .hierarchy-add-row{margin-left:16px;}
-  .hierarchy-gwan > .hierarchy-add-row{margin-left:18px;}
+  .hierarchy-toolbar{display:flex;justify-content:flex-end;margin:0 0 10px;}
+  .hierarchy-table-scroll{max-height:65vh;overflow:auto;border:1px solid var(--line);background:#fff;}
+  .hierarchy-table{width:100%;min-width:760px;border-collapse:collapse;}
+  .hierarchy-table th{position:sticky;top:0;z-index:1;background:#f3f5f7;padding:10px;text-align:left;}
+  .hierarchy-table td{padding:6px 8px;vertical-align:middle;}
+  .hierarchy-table tbody tr:hover{background:#fbfcfd;}
+  .hierarchy-table select,.hierarchy-table input{box-sizing:border-box;width:100%;min-width:0;}
+  .hierarchy-table .hierarchy-item-budget{text-align:right;}
+  .hierarchy-table .hierarchy-row-delete{white-space:nowrap;}
+  .hierarchy-save-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;}
   input:focus{outline:2px solid var(--navy); outline-offset:-1px;}
   .gubun-toggle{display:flex; border:1px solid var(--line); overflow:hidden;}
   .gubun-toggle button{
@@ -161,7 +156,7 @@ body { background-color:#F8FAFC; color:var(--ink); }
   #save-status{font-size:13px;color:var(--ink-soft);margin-left:14px;}
 
   footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-soft);display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;}
-  @media (max-width:600px){.hierarchy-item-row .hierarchy-item-budget{flex-basis:120px;}}
+  @media (max-width:600px){.hierarchy-table-scroll{max-height:70vh;}}
 </style>
 </head>
 <body>
@@ -265,23 +260,21 @@ body { background-color:#F8FAFC; color:var(--ink); }
     <div class="notice" id="storage-notice" style="margin-top:28px;">
       관·항·목 분류를 관리합니다. 결산 관리에서는 <b>목</b>만 선택하며, 선택한 목의 관과 항은 거래 내역에 자동으로 연결됩니다. 예산은 회계연도별로 <b>목마다 입력·수정</b>하고, 항·관 예산은 소속 목 예산을 합산해 보고서에 표시합니다.
     </div>
-    <section style="margin-top:0;">
-      <div class="sec-head"><span class="sec-num">＋</span><h2>관 추가</h2></div>
-      <div class="card">
-        <div class="form-grid">
-          <div class="field"><label for="ng-type">구분</label><select id="ng-type"><option value="expense">지출</option><option value="income">수입</option></select></div>
-          <div class="field"><label for="ng-name">관 이름</label><input type="text" id="ng-name" placeholder="예: 행사비_관"></div>
-        </div>
-        <button class="btn-primary" id="btn-add-gwan">관 추가</button>
-      </div>
-    </section>
     <section>
       <div class="sec-head"><span class="sec-num">☰</span><h2>관·항·목 분류</h2></div>
-      <p class="sec-desc">각 수입·지출 목 옆에서 <b id="budget-year-label"></b> 예산을 입력하거나 수정하세요. 보고서의 예산 대비 집행 현황은 지출 예산을 기준으로 표시됩니다.</p>
+      <p class="sec-desc">표에서 구분과 관·항·목을 한 행씩 관리하고 <b id="budget-year-label"></b> 예산을 입력합니다. 새 분류는 ‘목 추가’로 행을 만든 뒤 입력하고 저장하세요. 예산 대비 집행 현황은 지출 예산을 기준으로 표시됩니다.</p>
       <div class="notice hidden" id="budget-migration-notice"></div>
-      <div id="hierarchy-form-body"></div>
-      <button class="btn-primary" id="btn-import-previous-budget" type="button" style="margin-top:16px;">전년도 예산 불러오기</button>
-      <button class="btn-primary" id="btn-save-hierarchy" style="margin-top:16px;">분류 및 예산 저장</button>
+      <div class="hierarchy-toolbar"><button class="btn-text" id="btn-add-hierarchy-row" type="button">＋ 목 추가</button></div>
+      <div class="hierarchy-table-scroll">
+        <table class="hierarchy-table">
+          <thead><tr><th>구분</th><th>관</th><th>항</th><th>목</th><th class="num"><span id="budget-year-column"></span> 예산(원)</th><th></th></tr></thead>
+          <tbody id="hierarchy-form-body"></tbody>
+        </table>
+      </div>
+      <div class="hierarchy-save-actions">
+        <button class="btn-primary" id="btn-import-previous-budget" type="button">전년도 예산 불러오기</button>
+        <button class="btn-primary" id="btn-save-hierarchy" type="button">분류 및 예산 저장</button>
+      </div>
       <span id="budget-save-status"></span>
     </section>
   </div>
@@ -814,6 +807,7 @@ function renderYearSelect(){
   document.getElementById('title-year').textContent = currentYear + ' 회계연도';
   document.getElementById('fy-range').textContent = `${currentYear}.01.01 ~ ${currentYear}.12.31`;
   document.getElementById('budget-year-label').textContent = `${currentYear}년`;
+  document.getElementById('budget-year-column').textContent = currentYear;
   const f = document.getElementById('f-date');
   f.min = fyStart(currentYear); f.max = fyEnd(currentYear); f.value = '';
 }
@@ -1100,111 +1094,86 @@ function renderBudgetSection(approvedList){
   });
 }
 
-function makeHierarchyButton(text, action, gwanIndex, accountIndex=null, itemIndex=null){
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'btn-text';
-  button.textContent = text;
-  button.dataset.hierarchyAction = action;
-  button.dataset.gwanIndex = gwanIndex;
-  if(accountIndex !== null) button.dataset.accountIndex = accountIndex;
-  if(itemIndex !== null) button.dataset.itemIndex = itemIndex;
-  return button;
+function createHierarchyInput(className, value, placeholder, ariaLabel){
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = className;
+  input.value = value;
+  input.placeholder = placeholder;
+  input.setAttribute('aria-label',ariaLabel);
+  return input;
+}
+
+function createHierarchyRow({type='expense',gwan='',hang='',mok='',amount=0,emptyKind=''}={}){
+  const row = document.createElement('tr');
+  row.className = 'hierarchy-item-row';
+  if(emptyKind) row.dataset.emptyKind = emptyKind;
+  const typeCell = document.createElement('td');
+  const typeSelect = document.createElement('select');
+  typeSelect.className = 'hierarchy-category-type';
+  typeSelect.setAttribute('aria-label','구분');
+  typeSelect.innerHTML = '<option value="income">수입</option><option value="expense">지출</option>';
+  typeSelect.value = type;
+  typeCell.appendChild(typeSelect);
+  row.appendChild(typeCell);
+
+  [
+    ['hierarchy-gwan-name',gwan,'관 이름','관'],
+    ['hierarchy-account-name',hang,'항 이름','항'],
+    ['hierarchy-item-name',mok,'목 이름','목']
+  ].forEach(([className,value,placeholder,label])=>{
+    const cell = document.createElement('td');
+    cell.appendChild(createHierarchyInput(className,value,placeholder,label));
+    row.appendChild(cell);
+  });
+
+  const budgetCell = document.createElement('td');
+  const budgetInput = document.createElement('input');
+  budgetInput.type = 'number';
+  budgetInput.className = 'hierarchy-item-budget';
+  budgetInput.min = '0';
+  budgetInput.step = '1';
+  budgetInput.setAttribute('aria-label',`${currentYear}년 ${mok || '목'} 예산`);
+  budgetInput.placeholder = '예산';
+  budgetInput.value = amount;
+  budgetCell.appendChild(budgetInput);
+  row.appendChild(budgetCell);
+
+  const actionCell = document.createElement('td');
+  const removeButton = document.createElement('button');
+  removeButton.type = 'button';
+  removeButton.className = 'btn-text hierarchy-row-delete';
+  removeButton.textContent = '삭제';
+  removeButton.setAttribute('aria-label',`${mok || '분류'} 행 삭제`);
+  actionCell.appendChild(removeButton);
+  row.appendChild(actionCell);
+  return row;
 }
 
 function renderHierarchyForm(){
   const body = document.getElementById('hierarchy-form-body');
   body.innerHTML = '';
   ['income','expense'].forEach(type=>{
-    const heading = document.createElement('h3');
-    heading.textContent = type==='income' ? '수입 관' : '지출 관';
-    body.appendChild(heading);
-    accountCategories[type].forEach((gwan, gwanIndex)=>{
-      const card = document.createElement('div');
-      card.className = 'card hierarchy-gwan';
-      card.dataset.categoryType = type;
-      card.dataset.gwanIndex = gwanIndex;
-
-      const header = document.createElement('div');
-      header.className = 'hierarchy-gwan-head';
-      const gwanLabel = document.createElement('span');
-      gwanLabel.className = 'hierarchy-level';
-      gwanLabel.textContent = '관';
-      const gwanInput = document.createElement('input');
-      gwanInput.type = 'text';
-      gwanInput.className = 'hierarchy-gwan-name';
-      gwanInput.setAttribute('aria-label','관 이름');
-      gwanInput.value = gwan.name;
-      header.append(gwanLabel,gwanInput);
-
-      header.appendChild(makeHierarchyButton('관 삭제','delete-gwan',gwanIndex));
-      card.appendChild(header);
-
-      gwan.accounts.forEach((hang, accountIndex)=>{
-        const accountCard = document.createElement('div');
-        accountCard.className = 'hierarchy-account';
-        const accountHead = document.createElement('div');
-        accountHead.className = 'hierarchy-account-head';
-        const accountLabel = document.createElement('span');
-        accountLabel.className = 'hierarchy-level';
-        accountLabel.textContent = '항';
-        const accountInput = document.createElement('input');
-        accountInput.type = 'text';
-        accountInput.className = 'hierarchy-account-name';
-        accountInput.setAttribute('aria-label','항 이름');
-        accountInput.value = hang.name;
-        accountHead.append(accountLabel,accountInput,makeHierarchyButton('항 삭제','delete-account',gwanIndex,accountIndex));
-        accountCard.appendChild(accountHead);
-
-        const itemLabel = document.createElement('span');
-        itemLabel.className = 'hierarchy-level';
-        itemLabel.textContent = '목';
-        accountCard.appendChild(itemLabel);
-        const itemList = document.createElement('div');
-        itemList.className = 'hierarchy-item-list';
-        hang.items.forEach((item,itemIndex)=>{
-          const itemRow = document.createElement('div');
-          itemRow.className = 'hierarchy-item-row';
-          const itemInput = document.createElement('input');
-          itemInput.type = 'text';
-          itemInput.className = 'hierarchy-item-name';
-          itemInput.setAttribute('aria-label','목 이름');
-          itemInput.value = item;
-          itemRow.appendChild(itemInput);
-          const budgetInput = document.createElement('input');
-          budgetInput.type = 'number';
-          budgetInput.className = 'hierarchy-item-budget';
-          budgetInput.min = '0';
-          budgetInput.step = '1';
-          budgetInput.setAttribute('aria-label',`${currentYear}년 ${item} 예산`);
-          budgetInput.placeholder = `${currentYear}년 예산(원)`;
-          budgetInput.value = budget[mokBudgetKey(type,gwan.name,hang.name,item)] || 0;
-          itemRow.appendChild(budgetInput);
-          itemRow.appendChild(makeHierarchyButton('목 삭제','delete-item',gwanIndex,accountIndex,itemIndex));
-          itemList.appendChild(itemRow);
+    accountCategories[type].forEach(gwan=>{
+      if(!gwan.accounts.length){
+        body.appendChild(createHierarchyRow({type,gwan:gwan.name,emptyKind:'gwan'}));
+        return;
+      }
+      gwan.accounts.forEach(hang=>{
+        if(!hang.items.length){
+          body.appendChild(createHierarchyRow({type,gwan:gwan.name,hang:hang.name,emptyKind:'account'}));
+          return;
+        }
+        hang.items.forEach(mok=>{
+          body.appendChild(createHierarchyRow({
+            type,
+            gwan:gwan.name,
+            hang:hang.name,
+            mok,
+            amount:budget[mokBudgetKey(type,gwan.name,hang.name,mok)] || 0
+          }));
         });
-        accountCard.appendChild(itemList);
-
-        const addItemRow = document.createElement('div');
-        addItemRow.className = 'hierarchy-add-row';
-        const addItemInput = document.createElement('input');
-        addItemInput.type = 'text';
-        addItemInput.className = 'new-hierarchy-item';
-        addItemInput.placeholder = '새 목 이름';
-        addItemRow.append(addItemInput,makeHierarchyButton('목 추가','add-item',gwanIndex,accountIndex));
-        accountCard.appendChild(addItemRow);
-        card.appendChild(accountCard);
       });
-
-      const addAccountRow = document.createElement('div');
-      addAccountRow.className = 'hierarchy-add-row';
-      const addAccountInput = document.createElement('input');
-      addAccountInput.type = 'text';
-      addAccountInput.className = 'new-hierarchy-account';
-      addAccountInput.placeholder = '새 항 이름';
-      addAccountRow.append(addAccountInput,makeHierarchyButton('항 추가','add-account',gwanIndex));
-      card.appendChild(addAccountRow);
-      body.appendChild(card);
     });
   });
   const migrationNotice = document.getElementById('budget-migration-notice');
@@ -1216,72 +1185,28 @@ function renderHierarchyForm(){
 function captureHierarchyForm(){
   const tree = {income:[],expense:[]};
   const nextBudget = {};
-  document.querySelectorAll('.hierarchy-gwan').forEach(card=>{
-    const type = card.dataset.categoryType;
-    const nameInput = card.querySelector('.hierarchy-gwan-name');
-    const name = nameInput.value.trim();
-    const group = {name,accounts:[]};
-    card.querySelectorAll('.hierarchy-account').forEach(accountCard=>{
-      const accountName = accountCard.querySelector('.hierarchy-account-name').value.trim();
-      const items = [...accountCard.querySelectorAll('.hierarchy-item-row')].map(row=>{
-        const mok = row.querySelector('.hierarchy-item-name').value.trim();
-        const amount = Number(row.querySelector('.hierarchy-item-budget').value)||0;
-        nextBudget[mokBudgetKey(type,name,accountName,mok)] = amount;
-        return mok;
-      });
-      group.accounts.push({
-        name:accountName,
-        items
-      });
-    });
-    tree[type].push(group);
+  document.querySelectorAll('.hierarchy-item-row').forEach(row=>{
+    const type = row.querySelector('.hierarchy-category-type').value;
+    const name = row.querySelector('.hierarchy-gwan-name').value.trim();
+    const accountName = row.querySelector('.hierarchy-account-name').value.trim();
+    const mok = row.querySelector('.hierarchy-item-name').value.trim();
+    let group = tree[type].find(item=>item.name===name);
+    if(!group){
+      group = {name,accounts:[]};
+      tree[type].push(group);
+    }
+    if(row.dataset.emptyKind==='gwan') return;
+    let account = group.accounts.find(item=>item.name===accountName);
+    if(!account){
+      account = {name:accountName,items:[]};
+      group.accounts.push(account);
+    }
+    if(row.dataset.emptyKind==='account') return;
+    account.items.push(mok);
+    nextBudget[mokBudgetKey(type,name,accountName,mok)] =
+      Number(row.querySelector('.hierarchy-item-budget').value) || 0;
   });
   return {tree,budget:nextBudget};
-}
-
-function updateHierarchyForm(actionButton){
-  const {tree,budget:nextBudget} = captureHierarchyForm();
-  const type = actionButton.closest('.hierarchy-gwan').dataset.categoryType;
-  const gwanIndex = Number(actionButton.dataset.gwanIndex);
-  const accountIndex = Number(actionButton.dataset.accountIndex);
-  const itemIndex = Number(actionButton.dataset.itemIndex);
-  const group = tree[type][gwanIndex];
-  switch(actionButton.dataset.hierarchyAction){
-    case 'delete-gwan':
-      tree[type].splice(gwanIndex,1);
-      break;
-    case 'add-account': {
-      const input = actionButton.parentElement.querySelector('.new-hierarchy-account');
-      const name = input.value.trim();
-      if(!name) return;
-      group.accounts.push({name,items:[]});
-      break;
-    }
-    case 'delete-account':
-      group.accounts.splice(accountIndex,1);
-      break;
-    case 'add-item': {
-      const input = actionButton.parentElement.querySelector('.new-hierarchy-item');
-      const name = input.value.trim();
-      if(!name) return;
-      group.accounts[accountIndex].items.push(name);
-      break;
-    }
-    case 'delete-item':
-      group.accounts[accountIndex].items.splice(itemIndex,1);
-      break;
-  }
-  const activeBudgetKeys = new Set(['income','expense'].flatMap(type=>
-    tree[type].flatMap(gwan=>
-      gwan.accounts.flatMap(hang=>hang.items.map(mok=>mokBudgetKey(type,gwan.name,hang.name,mok)))
-    )
-  ));
-  Object.keys(nextBudget).forEach(key=>{
-    if(!activeBudgetKeys.has(key)) delete nextBudget[key];
-  });
-  accountCategories = tree;
-  budget = nextBudget;
-  renderHierarchyForm();
 }
 
 function renderMonthFilters(containerId, sourceList, current, onClick){
@@ -1574,30 +1499,15 @@ document.getElementById('btn-sign-in').addEventListener('click', signInWithGoogl
 document.getElementById('gate-sign-in').addEventListener('click', signInWithGoogle);
 document.getElementById('btn-sign-out').addEventListener('click', signOut);
 
-document.getElementById('hierarchy-form-body').addEventListener('click', event=>{
-  const actionButton = event.target.closest('[data-hierarchy-action]');
-  if(actionButton) updateHierarchyForm(actionButton);
+document.getElementById('btn-add-hierarchy-row').addEventListener('click', ()=>{
+  const row = createHierarchyRow();
+  document.getElementById('hierarchy-form-body').appendChild(row);
+  row.querySelector('.hierarchy-gwan-name').focus();
 });
 
-document.getElementById('btn-add-gwan').addEventListener('click', ()=>{
-  const nameEl = document.getElementById('ng-name');
-  const type = document.getElementById('ng-type').value;
-  const name = nameEl.value.trim();
-  const status = document.getElementById('budget-save-status');
-  if(!name){
-    status.textContent = '관 이름을 입력해주세요.';
-    return;
-  }
-  const draft = captureHierarchyForm();
-  if(draft.tree[type].some(group=>group.name.trim()===name)){
-    status.textContent = '같은 구분에 이미 등록된 관입니다.';
-    return;
-  }
-  draft.tree[type].push({name,accounts:[]});
-  accountCategories = draft.tree;
-  budget = draft.budget;
-  nameEl.value = '';
-  renderHierarchyForm();
+document.getElementById('hierarchy-form-body').addEventListener('click', event=>{
+  const removeButton = event.target.closest('.hierarchy-row-delete');
+  if(removeButton) removeButton.closest('.hierarchy-item-row').remove();
 });
 
 document.getElementById('btn-save-hierarchy').addEventListener('click', async ()=>{
@@ -1684,33 +1594,30 @@ document.getElementById('btn-import-previous-budget').addEventListener('click', 
     }
 
     const importedAmounts = [];
-    document.querySelectorAll('.hierarchy-gwan').forEach(card=>{
-      const type = card.dataset.categoryType;
-      const gwanName = card.querySelector('.hierarchy-gwan-name').value.trim();
-      card.querySelectorAll('.hierarchy-account').forEach(accountCard=>{
-        const hangName = accountCard.querySelector('.hierarchy-account-name').value.trim();
-        accountCard.querySelectorAll('.hierarchy-item-row').forEach(row=>{
-          const mokName = row.querySelector('.hierarchy-item-name').value.trim();
-          const input = row.querySelector('.hierarchy-item-budget');
-          const currentKey = mokBudgetKey(type,gwanName,hangName,mokName);
-          const legacyExpenseKey = `mok:${JSON.stringify([gwanName,hangName,mokName])}`;
-          const key = Object.prototype.hasOwnProperty.call(previousBudget,currentKey)
-            ? currentKey
-            : (type==='expense' && Object.prototype.hasOwnProperty.call(previousBudget,legacyExpenseKey)
-              ? legacyExpenseKey
-              : null);
-          if(!key) return;
-          const rawAmount = previousBudget[key];
-          const amount = Number(rawAmount);
-          if(rawAmount===null || (typeof rawAmount==='string' && !rawAmount.trim())){
-            throw new Error(`${previousYear}년 ${mokName} 예산 값이 0 이상의 정수가 아닙니다.`);
-          }
-          if(!Number.isFinite(amount) || amount<0 || !Number.isInteger(amount)){
-            throw new Error(`${previousYear}년 ${mokName} 예산 값이 0 이상의 정수가 아닙니다.`);
-          }
-          importedAmounts.push({input,amount});
-        });
-      });
+    document.querySelectorAll('.hierarchy-item-row').forEach(row=>{
+      if(row.dataset.emptyKind) return;
+      const type = row.querySelector('.hierarchy-category-type').value;
+      const gwanName = row.querySelector('.hierarchy-gwan-name').value.trim();
+      const hangName = row.querySelector('.hierarchy-account-name').value.trim();
+      const mokName = row.querySelector('.hierarchy-item-name').value.trim();
+      const input = row.querySelector('.hierarchy-item-budget');
+      const currentKey = mokBudgetKey(type,gwanName,hangName,mokName);
+      const legacyExpenseKey = `mok:${JSON.stringify([gwanName,hangName,mokName])}`;
+      const key = Object.prototype.hasOwnProperty.call(previousBudget,currentKey)
+        ? currentKey
+        : (type==='expense' && Object.prototype.hasOwnProperty.call(previousBudget,legacyExpenseKey)
+          ? legacyExpenseKey
+          : null);
+      if(!key) return;
+      const rawAmount = previousBudget[key];
+      const amount = Number(rawAmount);
+      if(rawAmount===null || (typeof rawAmount==='string' && !rawAmount.trim())){
+        throw new Error(`${previousYear}년 ${mokName} 예산 값이 0 이상의 정수가 아닙니다.`);
+      }
+      if(!Number.isFinite(amount) || amount<0 || !Number.isInteger(amount)){
+        throw new Error(`${previousYear}년 ${mokName} 예산 값이 0 이상의 정수가 아닙니다.`);
+      }
+      importedAmounts.push({input,amount});
     });
     importedAmounts.forEach(({input,amount})=>{ input.value = amount; });
     const imported = importedAmounts.length;
