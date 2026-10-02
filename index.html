@@ -64,7 +64,8 @@ body { background-color:#F8FAFC; color:var(--ink); }
   @media (max-width:760px){ .two-col{grid-template-columns:1fr;} .stats{grid-template-columns:1fr;} .form-grid{grid-template-columns:1fr !important;} }
 
   table{width:100%;border-collapse:collapse;font-size:14px;}
-  thead th{position:sticky;top:0;z-index:2;background:#fff;box-shadow:inset 0 -1px 0 var(--line);}
+  .table-scroll{max-height:440px;overflow-y:auto;overflow-x:auto;position:relative;}
+  .table-scroll thead th{position:sticky;top:0;z-index:2;background:#fff;box-shadow:inset 0 -1px 0 var(--line);}
   th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
   th{color:var(--ink-soft);font-weight:500;font-size:12.5px;}
   td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
@@ -194,7 +195,7 @@ body { background-color:#F8FAFC; color:var(--ink); }
       <div class="sec-head"><span class="sec-num">04</span><h2>세부 거래 내역</h2></div>
       <div class="card">
         <div class="filter-row" id="month-filters-report"></div>
-        <div style="overflow-x:auto;">
+        <div class="table-scroll">
           <table>
             <thead><tr><th>일자</th><th>내용</th><th>지급처/대상</th><th class="num">수입</th><th class="num">지출</th></tr></thead>
             <tbody id="tx-body-report"></tbody>
@@ -292,7 +293,7 @@ body { background-color:#F8FAFC; color:var(--ink); }
       <div class="card">
         <div class="filter-row" id="status-filters-entry"></div>
         <div class="filter-row" id="month-filters-entry"></div>
-        <div style="overflow-x:auto;">
+        <div class="table-scroll">
           <table>
             <thead><tr><th>일자</th><th>구분</th><th>내용</th><th>지급처/담당</th><th class="num">금액</th><th>상태</th><th></th></tr></thead>
             <tbody id="tx-body-entry"></tbody>
