@@ -12,7 +12,7 @@
     --navy:#112D4E; --navy-2:#3F72AF;
     --paper:#DBE2EF; --paper-2:#F9F7F7;
     --gold:#3F72AF; --gold-soft:#DBE2EF;
-    --income:#3F72AF; --expense:#112D4E;
+    --income:#3F72AF; --income-row:#F2E2BE; --expense:#112D4E;
     --ink:#112D4E; --ink-soft:#3F72AF; --line:#DBE2EF;
   }
   *{box-sizing:border-box;}
@@ -66,6 +66,11 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .balance-check-result.unset{background:var(--paper-2);color:var(--ink-soft);}
   .staff-name-list{display:flex;flex-direction:column;gap:8px;}
   .staff-name-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background:var(--paper-2);border:1px solid var(--line);font-size:14px;}
+  .staff-profile-item{display:flex;flex-direction:column;gap:12px;padding:14px;background:var(--paper-2);border:1px solid var(--line);}
+  .staff-profile-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;font-weight:700;}
+  .staff-profile-fields{display:grid;grid-template-columns:1fr 1.5fr auto;gap:12px;align-items:end;}
+  .staff-profile-fields .field{min-width:0;}
+  @media (max-width:760px){.staff-profile-fields{grid-template-columns:1fr 1fr;}.staff-profile-fields .btn-primary{grid-column:1/-1;}}
   @media (max-width:760px){.balance-check{grid-template-columns:1fr;}}
 
   section{margin-top:56px;}
@@ -92,7 +97,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .transaction-table th,.transaction-table td{overflow-wrap:anywhere;vertical-align:middle;}
   .transaction-table th{white-space:normal;word-break:keep-all;}
   .transaction-table td:first-child{white-space:nowrap;}
-  .income-row{background:var(--paper);}
+  .income-row{background:var(--income-row);}
   .expense-row{background:var(--paper-2);}
   .transaction-table .col-date{width:13%;}
   .transaction-table .col-type{width:7%;}
@@ -119,6 +124,8 @@ body { background-color:var(--paper-2); color:var(--ink); }
     .entry-table .col-actions{width:14%;}
   }
   th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th+th,td+td{border-left:1px solid var(--line);}
+  thead th+th{border-left-color:rgba(219,226,239,.42);}
   th{color:var(--ink-soft);font-weight:500;font-size:14px;text-align:center;}
   .field label{font-size:14px;color:var(--ink-soft);}
   td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
@@ -211,6 +218,8 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .pending-empty{padding:18px;color:var(--ink-soft);font-size:14px;}
   .pending-transaction-table{table-layout:fixed;}
   .pending-transaction-table th{text-align:center;}
+  .pending-transaction-table tbody td:not(.num){text-align:center;}
+  .pending-transaction-table .action-row{justify-content:center;}
   .pending-transaction-table .col-date{width:12%;}
   .pending-transaction-table .col-type{width:8%;}
   .pending-transaction-table .col-description{width:20%;}
@@ -373,6 +382,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
     <section>
       <div class="sec-head"><span class="sec-num">☰</span><h2>담당자 이름 관리</h2></div>
       <p class="sec-desc">여기에 등록한 이름은 결산 관리의 담당자 입력란에서 선택할 수 있습니다. 목록에 없는 이름도 입력란에 직접 입력할 수 있습니다.</p>
+      <div class="notice">은행명과 계좌번호는 이 앱을 사용할 수 있는 모든 허가된 담당자에게 공유됩니다. 공유해도 되는 정보만 입력해 주세요.</div>
       <div class="card">
         <div class="form-grid" style="grid-template-columns:1fr auto;align-items:end;">
           <div class="field">
@@ -469,6 +479,7 @@ let ledger = [];
 let budget = {};
 let accountBalance = null;
 let staffNames = [];
+let staffBankDetails = [];
 let accountCategories = createDefaultAccountCategories();
 let charts = {};
 let currentMonthReport = '전체';
@@ -531,6 +542,7 @@ const ledgerKey = y => 'ledger:' + y;
 const budgetKey = y => 'budget:' + y;
 const accountBalanceKey = y => 'account-balance:' + y;
 const STAFF_NAMES_KEY = 'staff-names:list';
+const STAFF_BANK_DETAILS_KEY = 'staff-bank-details:list';
 const categoryKey = y => 'categories:' + y;
 const fyStart = y => `${y}-01-01`;
 const fyEnd = y => `${y}-12-31`;
@@ -567,6 +579,21 @@ async function storageSet(key, value){
   });
 }
 
+async function storageSetMany(entries){
+  lastStorageError = '';
+  if(!hasSharedStorage()) throw new Error('Firebase에 로그인한 뒤 다시 시도해주세요.');
+  const batch = db.batch();
+  entries.forEach(([key,value])=>{
+    batch.set(db.collection('accountingData').doc(key),{
+      value,
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy:currentUser.uid,
+      updatedByEmail:currentUser.email || ''
+    });
+  });
+  await batch.commit();
+}
+
 function renderStorageNotice(){
   const notice = document.getElementById('storage-notice');
   if(!notice) return;
@@ -594,7 +621,7 @@ function stopSharedDataWatchers(){
 
 function watchSharedData(){
   stopSharedDataWatchers();
-  const watchedKeys = [YEARS_KEY,ledgerKey(currentYear),budgetKey(currentYear),accountBalanceKey(currentYear),STAFF_NAMES_KEY,categoryKey(currentYear)];
+  const watchedKeys = [YEARS_KEY,ledgerKey(currentYear),budgetKey(currentYear),accountBalanceKey(currentYear),STAFF_NAMES_KEY,STAFF_BANK_DETAILS_KEY,categoryKey(currentYear)];
   watchedKeys.forEach(key=>{
     const unsubscribe = db.collection('accountingData').doc(key).onSnapshot(snapshot=>{
       if(!snapshot.exists) return;
@@ -628,6 +655,9 @@ function watchSharedData(){
             throw new Error('저장된 담당자 이름 목록이 올바르지 않습니다.');
           }
           staffNames = normalizeStaffNames(data);
+          renderStaffNames();
+        } else if(key===STAFF_BANK_DETAILS_KEY){
+          staffBankDetails = normalizeStaffBankDetails(data);
           renderStaffNames();
         } else if(key===categoryKey(currentYear)){
           if(JSON.stringify(accountCategories)!==JSON.stringify(data)){
@@ -833,6 +863,26 @@ function normalizeStaffNames(names){
     .sort((a,b)=>a.localeCompare(b,'ko'));
 }
 
+function normalizeStaffBankDetails(details){
+  if(!Array.isArray(details) || !details.every(detail=>
+    detail && typeof detail.name==='string' &&
+    typeof detail.bank==='string' &&
+    typeof detail.accountNumber==='string'
+  )){
+    throw new Error('저장된 담당자 은행 정보가 올바르지 않습니다.');
+  }
+  const byName = new Map();
+  details.forEach(detail=>{
+    const name = detail.name.trim();
+    if(name) byName.set(name,{
+      name,
+      bank:detail.bank.trim(),
+      accountNumber:detail.accountNumber.trim()
+    });
+  });
+  return [...byName.values()].sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+}
+
 async function loadStaffNames(){
   try{
     const res = await storageGet(STAFF_NAMES_KEY);
@@ -844,6 +894,16 @@ async function loadStaffNames(){
   }catch(e){
     if(e.code !== 'accounting/not-found') throw e;
     staffNames = normalizeStaffNames([...BASE_LEDGER,...ledger].map(entry=>entry.spender || ''));
+  }
+}
+
+async function loadStaffBankDetails(){
+  try{
+    const res = await storageGet(STAFF_BANK_DETAILS_KEY);
+    staffBankDetails = normalizeStaffBankDetails(JSON.parse(res.value));
+  }catch(e){
+    if(e.code !== 'accounting/not-found') throw e;
+    staffBankDetails = [];
   }
 }
 
@@ -865,9 +925,11 @@ function renderStaffNames(){
     list.appendChild(empty);
     return;
   }
-  staffNames.forEach(name=>{
+  staffNames.forEach((name,index)=>{
     const item = document.createElement('div');
-    item.className = 'staff-name-item';
+    item.className = 'staff-profile-item';
+    const heading = document.createElement('div');
+    heading.className = 'staff-profile-heading';
     const label = document.createElement('span');
     label.textContent = name;
     const remove = document.createElement('button');
@@ -875,7 +937,50 @@ function renderStaffNames(){
     remove.className = 'del-btn';
     remove.dataset.staffName = name;
     remove.textContent = '삭제';
-    item.append(label,remove);
+    heading.append(label,remove);
+
+    const details = staffBankDetails.find(detail=>detail.name===name) || {bank:'',accountNumber:''};
+    const fields = document.createElement('div');
+    fields.className = 'staff-profile-fields';
+
+    const bankField = document.createElement('div');
+    bankField.className = 'field';
+    const bankLabel = document.createElement('label');
+    bankLabel.htmlFor = `staff-bank-${index}`;
+    bankLabel.textContent = '은행';
+    const bankInput = document.createElement('input');
+    bankInput.id = `staff-bank-${index}`;
+    bankInput.type = 'text';
+    bankInput.autocomplete = 'off';
+    bankInput.placeholder = '예: 은행명';
+    bankInput.value = details.bank;
+    bankInput.setAttribute('aria-label',`${name} 은행`);
+    bankInput.dataset.staffField = 'bank';
+
+    const accountField = document.createElement('div');
+    accountField.className = 'field';
+    const accountLabel = document.createElement('label');
+    accountLabel.htmlFor = `staff-account-${index}`;
+    accountLabel.textContent = '계좌번호';
+    const accountInput = document.createElement('input');
+    accountInput.id = `staff-account-${index}`;
+    accountInput.type = 'text';
+    accountInput.inputMode = 'numeric';
+    accountInput.autocomplete = 'off';
+    accountInput.placeholder = '계좌번호 입력';
+    accountInput.value = details.accountNumber;
+    accountInput.setAttribute('aria-label',`${name} 계좌번호`);
+    accountInput.dataset.staffField = 'accountNumber';
+
+    bankField.append(bankLabel,bankInput);
+    accountField.append(accountLabel,accountInput);
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'btn-primary';
+    save.dataset.saveStaffProfile = name;
+    save.textContent = '계좌 정보 저장';
+    fields.append(bankField,accountField,save);
+    item.append(heading,fields);
     list.appendChild(item);
   });
 }
@@ -913,15 +1018,49 @@ async function addStaffName(){
 async function removeStaffName(name){
   const status = document.getElementById('staff-name-status');
   const previousNames = staffNames;
+  const previousBankDetails = staffBankDetails;
   staffNames = staffNames.filter(item=>item!==name);
+  staffBankDetails = staffBankDetails.filter(detail=>detail.name!==name);
   try{
-    await saveStaffNames();
-    status.textContent = `${name} 담당자를 목록에서 삭제했습니다. 기존 거래 내역은 변경되지 않습니다.`;
+    if(previousBankDetails.length!==staffBankDetails.length){
+      await storageSetMany([
+        [STAFF_NAMES_KEY,JSON.stringify(staffNames)],
+        [STAFF_BANK_DETAILS_KEY,JSON.stringify(staffBankDetails)]
+      ]);
+    }else{
+      await saveStaffNames();
+    }
+    status.textContent = `${name} 담당자와 등록된 계좌 정보를 삭제했습니다. 기존 거래 내역은 변경되지 않습니다.`;
     renderStaffNames();
   }catch(e){
     staffNames = previousNames;
+    staffBankDetails = previousBankDetails;
     renderStaffNames();
     status.textContent = `담당자 저장 실패: ${e.message || String(e)}`;
+  }
+}
+
+async function saveStaffBankDetails(name){
+  const status = document.getElementById('staff-name-status');
+  const item = [...document.querySelectorAll('.staff-profile-item')].find(row=>
+    row.querySelector('[data-save-staff-profile]')?.dataset.saveStaffProfile===name
+  );
+  if(!item) return;
+  const bank = item.querySelector('[data-staff-field="bank"]').value.trim();
+  const accountNumber = item.querySelector('[data-staff-field="accountNumber"]').value.trim();
+  const previousDetails = staffBankDetails;
+  staffBankDetails = staffBankDetails.filter(detail=>detail.name!==name);
+  if(bank || accountNumber) staffBankDetails = normalizeStaffBankDetails([...staffBankDetails,{name,bank,accountNumber}]);
+  try{
+    await storageSet(STAFF_BANK_DETAILS_KEY,JSON.stringify(staffBankDetails));
+    status.textContent = bank || accountNumber
+      ? `${name} 담당자의 은행 및 계좌번호를 저장했습니다.`
+      : `${name} 담당자의 은행 및 계좌번호를 비웠습니다.`;
+    renderStaffNames();
+  }catch(e){
+    staffBankDetails = previousDetails;
+    renderStaffNames();
+    status.textContent = `계좌 정보 저장 실패: ${e.message || String(e)}`;
   }
 }
 
@@ -1210,6 +1349,7 @@ async function loadYearData(){
   await loadBudget();
   await loadAccountBalance();
   await loadStaffNames();
+  await loadStaffBankDetails();
   await loadAccountCategories();
   if(migrateBudgetToMok() && !await persistBudget()){
     throw new Error(`목별 예산을 Firestore로 이전하지 못했습니다: ${lastStorageError}`);
@@ -1935,8 +2075,13 @@ document.getElementById('staff-name-input').addEventListener('keydown',event=>{
   }
 });
 document.getElementById('staff-name-list').addEventListener('click',event=>{
-  const button = event.target.closest('[data-staff-name]');
-  if(button) removeStaffName(button.dataset.staffName);
+  const saveButton = event.target.closest('[data-save-staff-profile]');
+  if(saveButton){
+    saveStaffBankDetails(saveButton.dataset.saveStaffProfile);
+    return;
+  }
+  const removeButton = event.target.closest('[data-staff-name]');
+  if(removeButton) removeStaffName(removeButton.dataset.staffName);
 });
 document.getElementById('btn-sign-in').addEventListener('click', signInWithGoogle);
 document.getElementById('gate-sign-in').addEventListener('click', signInWithGoogle);
