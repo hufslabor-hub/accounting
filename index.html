@@ -725,6 +725,84 @@ function mokBudgetKey(type, gwan, hang, mok){
   return 'mok:' + JSON.stringify([type,gwan,hang,mok]);
 }
 
+function normalizeCategoryName(name, suffix){
+  return String(name || '').trim().replace(new RegExp(`${suffix}$`),'').trim();
+}
+
+function normalizeHierarchySuffixes(){
+  const categoriesBefore = JSON.stringify(accountCategories);
+  const budgetBefore = JSON.stringify(budget);
+  let ledgerChanged = false;
+  ['income','expense'].forEach(type=>{
+    const normalizedGroups = new Map();
+    accountCategories[type].forEach(gwan=>{
+      const gwanName = normalizeCategoryName(gwan.name,'_관');
+      let normalizedGwan = normalizedGroups.get(gwanName);
+      if(!normalizedGwan){
+        normalizedGwan = {name:gwanName,accounts:[]};
+        normalizedGroups.set(gwanName,normalizedGwan);
+      }
+      gwan.accounts.forEach(hang=>{
+        const hangName = normalizeCategoryName(hang.name,'_항');
+        let normalizedHang = normalizedGwan.accounts.find(account=>account.name===hangName);
+        if(!normalizedHang){
+          normalizedHang = {name:hangName,items:[]};
+          normalizedGwan.accounts.push(normalizedHang);
+        }
+        hang.items.forEach(item=>{
+          if(!normalizedHang.items.includes(item)) normalizedHang.items.push(item);
+        });
+      });
+    });
+    accountCategories[type] = [...normalizedGroups.values()];
+  });
+
+  ledger.forEach(entry=>{
+    const gwan = typeof entry.gwan==='string'
+      ? normalizeCategoryName(entry.gwan,'_관')
+      : entry.gwan;
+    const hang = typeof entry.hang==='string'
+      ? normalizeCategoryName(entry.hang,'_항')
+      : entry.hang;
+    if(gwan!==entry.gwan || hang!==entry.hang){
+      entry.gwan = gwan;
+      entry.hang = hang;
+      ledgerChanged = true;
+    }
+  });
+
+  const normalizedBudget = {};
+  Object.entries(budget).forEach(([key,amount])=>{
+    if(!key.startsWith('mok:')){
+      normalizedBudget[key] = amount;
+      return;
+    }
+    const parts = JSON.parse(key.slice(4));
+    if(parts.length !== 4){
+      normalizedBudget[key] = amount;
+      return;
+    }
+    const [type,gwan,hang,mok] = parts;
+    const normalizedKey = mokBudgetKey(
+      type,
+      normalizeCategoryName(gwan,'_관'),
+      normalizeCategoryName(hang,'_항'),
+      mok
+    );
+    const numericAmount = Number(amount);
+    if(!Number.isFinite(numericAmount) || numericAmount<0 || !Number.isInteger(numericAmount)){
+      throw new Error(`예산 분류 정리 중 금액이 올바르지 않습니다: ${key}`);
+    }
+    normalizedBudget[normalizedKey] = (normalizedBudget[normalizedKey] || 0) + numericAmount;
+  });
+  budget = normalizedBudget;
+  return {
+    categoriesChanged:categoriesBefore!==JSON.stringify(accountCategories),
+    budgetChanged:budgetBefore!==JSON.stringify(budget),
+    ledgerChanged
+  };
+}
+
 function migrateBudgetToMok(){
   budgetMigrationMessage = '';
   const keys = Object.keys(budget);
@@ -821,6 +899,15 @@ async function loadYearData(){
   }
   if(migrateLedgerClassifications() && !await persist()){
     throw new Error(`관·항·목 분류 이전 실패: ${lastStorageError}`);
+  }
+  const normalized = normalizeHierarchySuffixes();
+  const saves = await Promise.all([
+    normalized.categoriesChanged ? persistAccountCategories() : true,
+    normalized.budgetChanged ? persistBudget() : true,
+    normalized.ledgerChanged ? persist() : true
+  ]);
+  if(saves.some(saved=>!saved)){
+    throw new Error(`관·항 명칭 정리 저장 실패: ${lastStorageError}`);
   }
 }
 
@@ -1187,8 +1274,8 @@ function captureHierarchyForm(){
   const nextBudget = {};
   document.querySelectorAll('.hierarchy-item-row').forEach(row=>{
     const type = row.querySelector('.hierarchy-category-type').value;
-    const name = row.querySelector('.hierarchy-gwan-name').value.trim();
-    const accountName = row.querySelector('.hierarchy-account-name').value.trim();
+    const name = normalizeCategoryName(row.querySelector('.hierarchy-gwan-name').value,'_관');
+    const accountName = normalizeCategoryName(row.querySelector('.hierarchy-account-name').value,'_항');
     const mok = row.querySelector('.hierarchy-item-name').value.trim();
     let group = tree[type].find(item=>item.name===name);
     if(!group){
@@ -1597,8 +1684,8 @@ document.getElementById('btn-import-previous-budget').addEventListener('click', 
     document.querySelectorAll('.hierarchy-item-row').forEach(row=>{
       if(row.dataset.emptyKind) return;
       const type = row.querySelector('.hierarchy-category-type').value;
-      const gwanName = row.querySelector('.hierarchy-gwan-name').value.trim();
-      const hangName = row.querySelector('.hierarchy-account-name').value.trim();
+      const gwanName = normalizeCategoryName(row.querySelector('.hierarchy-gwan-name').value,'_관');
+      const hangName = normalizeCategoryName(row.querySelector('.hierarchy-account-name').value,'_항');
       const mokName = row.querySelector('.hierarchy-item-name').value.trim();
       const input = row.querySelector('.hierarchy-item-budget');
       const currentKey = mokBudgetKey(type,gwanName,hangName,mokName);
