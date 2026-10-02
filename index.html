@@ -109,6 +109,13 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .transaction-table .col-status{width:8%;}
   .transaction-table .col-actions{width:14%;}
   .transaction-table td.num{white-space:nowrap;}
+  .entry-table td:nth-child(7){white-space:nowrap;}
+  tfoot tr{background:#e9eef4;font-weight:700;}
+  tfoot th,tfoot td{border-top:2px solid var(--navy-2);vertical-align:middle;}
+  .report-total-row{background:#e9eef4;font-weight:700;}
+  .hierarchy-total-label{text-align:right;font-weight:700;}
+  .hierarchy-total-value{text-align:right;font-weight:700;white-space:nowrap;}
+  .status-confirmed{background:var(--income-row);color:var(--navy);}
   .report-transaction-table .col-date{width:10%;}
   .report-transaction-table .col-description{width:20%;}
   .report-transaction-table .col-mok{width:13%;}
@@ -203,6 +210,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .locked-note{font-size:14px;color:var(--ink-soft);}
 
   .status-badge{display:inline-block;font-size:14px;padding:2px 8px;border-radius:2px;font-weight:700;}
+  .management-number{display:block;margin-top:4px;color:var(--ink-soft);font-size:11px;line-height:1.35;}
   .status-paid{background:var(--income-row);color:var(--navy);}
   .status-input-complete{background:var(--paper-2);color:var(--navy-2);}
   .status-submitted{background:var(--paper);color:var(--navy);}
@@ -252,6 +260,8 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .payment-report-parties{table-layout:fixed;margin-bottom:10px;}
   .payment-report-parties th,.payment-report-parties td{border:1px solid #26394d;padding:8px 7px;text-align:center;vertical-align:middle;}
   .payment-report-parties th{background:#f2f5f8;color:#26394d;font-size:10px;white-space:nowrap;}
+  .payment-report-management{display:flex;justify-content:space-between;gap:12px;padding:9px 12px;margin:12px 0 0;border:1px solid #26394d;background:#f2f5f8;}
+  .payment-report-management strong{white-space:nowrap;}
   .payment-report-request{display:grid;grid-template-columns:1fr 1fr 1fr;border:1px solid #26394d;margin:12px 0 16px;page-break-inside:avoid;break-inside:avoid;}
   .payment-report-request div{padding:9px 8px;text-align:center;border-left:1px solid #26394d;}
   .payment-report-request div:first-child{border-left:0;}
@@ -369,8 +379,9 @@ body { background-color:var(--paper-2); color:var(--ink); }
       <div class="card">
         <div class="table-scroll">
           <table class="budget-report-table">
-            <thead><tr><th>구분</th><th>관</th><th>항</th><th>목</th><th class="num">예산</th><th class="num">집행액</th><th class="num">집행률</th><th class="num">잔여</th></tr></thead>
+            <thead><tr><th>구분</th><th>관</th><th>항</th><th>목</th><th class="num">예산액</th><th class="num">결산액</th><th class="num">집행률</th><th class="num">잔여</th></tr></thead>
             <tbody id="tbl-budget"></tbody>
+            <tfoot id="tbl-budget-total"></tfoot>
           </table>
         </div>
         <p class="count-note" id="budget-note"></p>
@@ -387,8 +398,9 @@ body { background-color:var(--paper-2); color:var(--ink); }
               <col class="col-date"><col class="col-description"><col class="col-mok">
               <col class="col-payee"><col class="col-amount"><col class="col-amount">
             </colgroup>
-            <thead><tr><th>일자</th><th>내용</th><th>목</th><th>지급처</th><th class="num">수입</th><th class="num">지출</th></tr></thead>
+            <thead><tr><th>결제일</th><th>내용</th><th>목</th><th>지급처</th><th class="num">수입</th><th class="num">지출</th></tr></thead>
             <tbody id="tx-body-report"></tbody>
+            <tfoot id="tx-report-total"></tfoot>
           </table>
         </div>
         <p class="count-note" id="tx-count-report"></p>
@@ -402,7 +414,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
       <div class="two-col" style="margin-top:20px;">
         <div class="card"><div class="chart-box tall"><canvas id="chartExpenseHang"></canvas></div></div>
         <div class="card">
-          <table><thead><tr><th>관·항·목</th><th class="num">지출액</th></tr></thead><tbody id="tbl-top-mok"></tbody></table>
+          <table><thead><tr><th>관·항·목</th><th class="num">지출액</th></tr></thead><tbody id="tbl-top-mok"></tbody><tfoot id="tbl-top-mok-total"></tfoot></table>
         </div>
       </div>
       <div class="card" style="margin-top:20px;"><div class="chart-box"><canvas id="chartIncome"></canvas></div></div>
@@ -424,6 +436,11 @@ body { background-color:var(--paper-2); color:var(--ink); }
         <table class="hierarchy-table">
           <thead><tr><th>구분</th><th>관</th><th>항</th><th>목</th><th class="num"><span id="budget-year-column"></span> 예산(원)</th><th></th></tr></thead>
           <tbody id="hierarchy-form-body"></tbody>
+          <tfoot>
+            <tr><td class="hierarchy-total-label" colspan="4">수입 예산 합계</td><td class="hierarchy-total-value" id="hierarchy-income-total">0원</td><td></td></tr>
+            <tr><td class="hierarchy-total-label" colspan="4">지출 예산 합계</td><td class="hierarchy-total-value" id="hierarchy-expense-total">0원</td><td></td></tr>
+            <tr><td class="hierarchy-total-label" colspan="4">전체 예산 합계</td><td class="hierarchy-total-value" id="hierarchy-grand-total">0원</td><td></td></tr>
+          </tfoot>
         </table>
       </div>
       <div class="hierarchy-save-actions">
@@ -453,14 +470,9 @@ body { background-color:var(--paper-2); color:var(--ink); }
   </div>
   <div class="view" id="view-entry">
     <div class="notice" style="margin-top:28px;">
-      이 화면에 입력한 내역은 <b>이 페이지를 함께 보는 재정담당자 전원에게 공유</b>됩니다. 새 내역은 <b>입력완료</b>로 등록되며, 같은 담당자의 내역을 선택해 제출·지급 처리할 수 있습니다. <b>지급완료된 건만 보고서 탭 집계에 반영</b>됩니다. 기존 엑셀에서 가져온 내역(8월 24일 이전)은 원본 보존을 위해 삭제할 수 없습니다.
+      이 화면에 입력한 내역은 <b>이 페이지를 함께 보는 재정담당자 전원에게 공유</b>됩니다. 새 내역은 <b>입력완료</b>로 등록되며, 같은 담당자의 내역을 선택해 제출·처리할 수 있습니다. 지출은 <b>지급완료</b>, 수입은 <b>확인완료</b>된 건만 보고서 탭 집계에 반영됩니다. 기존 엑셀에서 가져온 내역(8월 24일 이전)은 원본 보존을 위해 삭제할 수 없습니다.
       <b id="entry-storage-warning"></b>
     </div>
-
-    <section class="pending-section" style="margin-top:28px;">
-      <div class="sec-head"><span class="sec-num">☰</span><h2>입력·지급 처리 <span class="pending-count" id="pending-count">0</span></h2></div>
-      <div class="pending-box" id="pending-box"><div id="pending-list"></div></div>
-    </section>
 
     <section style="margin-top:0;">
       <div class="sec-head"><span class="sec-num">＋</span><h2>새 내역 입력</h2></div>
@@ -473,20 +485,24 @@ body { background-color:var(--paper-2); color:var(--ink); }
               <button type="button" id="btn-gubun-expense" class="on-expense selected">지출</button>
             </div>
           </div>
-          <div class="field"><label>날짜</label><input type="date" id="f-date"></div>
-          <div class="field"><label>금액(원)</label><input type="number" id="f-amount" placeholder="예: 50000"></div>
-
+          <div class="field"><label>결제일</label><input type="date" id="f-date"></div>
           <div class="field"><label for="f-mok">세부 계정과목</label><select id="f-mok"></select></div>
           <div class="field"><label>담당자</label><input type="text" id="f-spender" placeholder="입력자 이름" list="staff-name-options"><datalist id="staff-name-options"></datalist></div>
 
           <div class="field span2"><label>내용</label><input type="text" id="f-desc" placeholder="예: 집행부 회의 식비" list="dl-desc"></div>
           <div class="field"><label>지급처</label><input type="text" id="f-payee" placeholder="예: 배달의민족"></div>
+          <div class="field"><label>금액(원)</label><input type="number" id="f-amount" placeholder="예: 50000"></div>
         </div>
         <datalist id="dl-desc"></datalist>
 
         <button class="btn-primary" id="btn-add">내역 추가</button>
         <span id="save-status"></span>
       </div>
+    </section>
+
+    <section class="pending-section" style="margin-top:28px;">
+      <div class="sec-head"><span class="sec-num">☰</span><h2>입력 완료 <span class="pending-count" id="pending-count">0</span></h2></div>
+      <div class="pending-box" id="pending-box"><div id="pending-list"></div></div>
     </section>
 
     <section>
@@ -500,7 +516,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
               <col class="col-date"><col class="col-type"><col class="col-description"><col class="col-mok">
               <col class="col-payee"><col class="col-amount"><col class="col-status"><col class="col-actions">
             </colgroup>
-            <thead><tr><th>일자</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th class="num">금액</th><th>상태</th><th></th></tr></thead>
+            <thead><tr><th>결제일</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th class="num">금액</th><th>상태</th><th></th></tr></thead>
             <tbody id="tx-body-entry"></tbody>
           </table>
         </div>
@@ -519,7 +535,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
       <p id="payment-report-status" role="status"></p>
     </div>
     <div class="payment-dialog-actions">
-      <button class="btn-primary" id="btn-approve-payment-report" type="button">선택 건 지급완료 승인 및 PDF 저장</button>
+      <button class="btn-primary" id="btn-approve-payment-report" type="button">선택 건 승인 및 PDF 저장</button>
     </div>
   </dialog>
 
@@ -563,6 +579,7 @@ const STATUS_LABEL = {
   'input-complete':'입력완료',
   submitted:'제출완료',
   paid:'지급완료',
+  confirmed:'확인완료',
   rejected:'반려됨'
 };
 const DRIVE_FOLDER_ID = '1gMzC9jbjYONOXv9ZCqJpB8kH8NYmb2it';
@@ -620,6 +637,7 @@ const budgetKey = y => 'budget:' + y;
 const accountBalanceKey = y => 'account-balance:' + y;
 const STAFF_NAMES_KEY = 'staff-names:list';
 const STAFF_BANK_DETAILS_KEY = 'staff-bank-details:list';
+const SUBMISSION_SEQUENCE_KEY = 'management-sequence:submission';
 const categoryKey = y => 'categories:' + y;
 const fyStart = y => `${y}-01-01`;
 const fyEnd = y => `${y}-12-31`;
@@ -871,9 +889,10 @@ function applyFixes(list){
   const fixes = DATE_FIXES[currentYear] || {};
   let changed = false;
   list.forEach(t=>{
-    if(!t.status){ t.status = t.locked ? 'paid' : 'input-complete'; changed = true; }
+    if(!t.status){ t.status = t.locked ? (t.gubun==='수입'?'confirmed':'paid') : 'input-complete'; changed = true; }
     else if(t.status==='pending'){ t.status = 'input-complete'; changed = true; }
     else if(t.status==='approved'){ t.status = 'paid'; changed = true; }
+    if(t.gubun==='수입' && t.status==='paid'){ t.status='confirmed'; changed=true; }
     if(fixes[t.id] && t.date !== fixes[t.id]){ t.date = fixes[t.id]; changed = true; }
   });
   return changed;
@@ -1574,7 +1593,7 @@ const hangColors = ['#112D4E','#3F72AF','#DBE2EF'];
 function destroy(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } }
 
 function renderReport(){
-  const approved = ledger.filter(t => t.status === 'paid');
+  const approved = ledger.filter(t => t.status === 'paid' || t.status === 'confirmed');
   const ag = aggregates(approved);
 
   document.getElementById('r-income').textContent = fmt(ag.totalIncome);
@@ -1615,6 +1634,8 @@ function renderReport(){
     tr.innerHTML = `<td>${escapeHTML(name)}<div class="bar-track"><div class="bar-fill" style="width:${(val/maxMok*100).toFixed(1)}%"></div></div></td><td class="num">${fmtShort(val)}</td>`;
     tblTopMok.appendChild(tr);
   });
+  document.getElementById('tbl-top-mok-total').innerHTML =
+    `<tr class="report-total-row"><th>표시 합계</th><td class="num">${fmtShort(ag.topMok.reduce((sum,[,amount])=>sum+amount,0))}</td></tr>`;
 
   destroy('income');
   charts.income = new Chart(document.getElementById('chartIncome'), {
@@ -1685,6 +1706,8 @@ function renderBudgetSection(approvedList){
 
   const tbody = document.getElementById('tbl-budget');
   tbody.innerHTML = '';
+  let totalBudget = 0;
+  let totalSettled = 0;
   if(allGwans.length === 0){
     document.getElementById('budget-note').textContent = '아직 등록된 지출 관이 없습니다.';
   } else {
@@ -1692,6 +1715,8 @@ function renderBudgetSection(approvedList){
   }
 
   const appendBudgetRow = (type, gwan, hang, mok, b, s)=>{
+    totalBudget += b;
+    totalSettled += s;
     const pct = b > 0 ? (s/b*100) : (s>0 ? Infinity : 0);
     const remain = b - s;
     const pctText = b > 0 ? pct.toFixed(1) + '%' : (s>0 ? '예산 없음' : '-');
@@ -1734,6 +1759,9 @@ function renderBudgetSection(approvedList){
       });
     });
   });
+  const totalRate = totalBudget>0 ? `${(totalSettled/totalBudget*100).toFixed(1)}%` : '-';
+  document.getElementById('tbl-budget-total').innerHTML =
+    `<tr class="report-total-row"><th colspan="4">전체 합계</th><td class="num">${fmtShort(totalBudget)}</td><td class="num">${fmtShort(totalSettled)}</td><td class="num">${totalRate}</td><td class="num">${fmtShort(totalBudget-totalSettled)}</td></tr>`;
   document.getElementById('budget-note').textContent = rowCount
     ? '예산 관리에 등록된 목 순서로 표시합니다.'
     : '등록된 예산 항목이 없습니다.';
@@ -1825,8 +1853,22 @@ function renderHierarchyForm(){
   migrationNotice.textContent = budgetMigrationMessage;
   migrationNotice.classList.toggle('hidden',!budgetMigrationMessage);
   refreshMokOptions();
+  updateHierarchyBudgetTotals();
 }
 
+function updateHierarchyBudgetTotals(){
+  let income = 0;
+  let expense = 0;
+  document.querySelectorAll('#hierarchy-form-body .hierarchy-item-row').forEach(row=>{
+    const amount = parseBudgetAmount(row.querySelector('.hierarchy-item-budget').value);
+    if(!Number.isFinite(amount)) return;
+    if(row.querySelector('.hierarchy-category-type').value==='income') income += amount;
+    else expense += amount;
+  });
+  document.getElementById('hierarchy-income-total').textContent = fmt(income);
+  document.getElementById('hierarchy-expense-total').textContent = fmt(expense);
+  document.getElementById('hierarchy-grand-total').textContent = fmt(income+expense);
+}
 function captureHierarchyForm(){
   const tree = {income:[],expense:[]};
   const nextBudget = {};
@@ -1875,7 +1917,7 @@ function renderTxTable(mode){
   const body = document.getElementById(bodyId);
   body.innerHTML = '';
 
-  const source = isReport ? ledger.filter(t=>t.status==='paid') : ledger;
+  const source = isReport ? ledger.filter(t=>t.status==='paid' || t.status==='confirmed') : ledger;
 
   const filtered = source
     .filter(t => monthSel==='전체' || t.month===monthSel)
@@ -1890,7 +1932,7 @@ function renderTxTable(mode){
     tr.className = t.gubun==='수입' ? 'income-row' : 'expense-row';
     if(isReport){
       tr.innerHTML = `
-        <td>${escapeHTML(t.date||'-')}</td>
+        <td>${escapeHTML(formatEntryDate(t.date))}</td>
         <td>${escapeHTML(t.desc||'')}</td>
         <td>${escapeHTML(t.category||'-')}</td>
         <td>${escapeHTML(t.payee||t.spender||'-')}</td>
@@ -1905,12 +1947,18 @@ function renderTxTable(mode){
         <td>${escapeHTML(t.category||'-')}</td>
         <td>${escapeHTML(t.payee||t.spender||'-')}</td>
         <td class="num">${fmtShort(t.amount)}</td>
-        <td><span class="status-badge status-${t.status}">${STATUS_LABEL[t.status]||t.status}</span></td>
+        <td><span class="status-badge status-${t.status}">${STATUS_LABEL[t.status]||t.status}</span>${t.managementNo?`<span class="management-number">관리번호 ${escapeHTML(String(t.managementNo))}</span>`:''}</td>
         <td>${rowActions(t)}</td>
       `;
     }
     body.appendChild(tr);
   });
+  if(isReport){
+    const totalIncome = filtered.reduce((sum,entry)=>sum+(entry.gubun==='수입'?Number(entry.amount||0):0),0);
+    const totalExpense = filtered.reduce((sum,entry)=>sum+(entry.gubun==='지출'?Number(entry.amount||0):0),0);
+    document.getElementById('tx-report-total').innerHTML =
+      `<tr class="report-total-row"><th colspan="4">합계 · ${filtered.length}건</th><td class="num">${fmtShort(totalIncome)}</td><td class="num">${fmtShort(totalExpense)}</td></tr>`;
+  }
 
   document.getElementById(countId).textContent = filtered.length > shown.length
     ? `${monthSel} 거래 ${filtered.length.toLocaleString('ko-KR')}건 중 최근 ${shown.length}건 표시`
@@ -1922,7 +1970,10 @@ function renderTxTable(mode){
 }
 
 function rowActions(t){
-  if(t.locked || t.status==='paid') return `<span class="locked-note">${t.locked?'가져온 내역':'지급완료'}</span>`;
+  if(t.locked || t.status==='paid' || t.status==='confirmed'){
+    const statusText = t.status==='confirmed' ? '확인완료' : '지급완료';
+    return `<span class="locked-note">${t.locked?'가져온 내역':statusText}</span>`;
+  }
   const parts = [];
   if(t.status==='rejected') parts.push(`<button class="btn-revert" data-act="input-complete" data-id="${escapeHTML(t.id)}">입력완료로 복원</button>`);
   parts.push(`<button class="del-btn" data-act="delete" data-id="${t.id}">삭제</button>`);
@@ -1960,12 +2011,12 @@ function workflowTable(entries,status){
       <td>${escapeHTML(t.desc||'')}</td>
       <td>${escapeHTML(t.category||'-')}</td>
       <td>${escapeHTML(t.payee||'-')}</td>
-      <td>${escapeHTML(t.spender||'미지정')}</td>
+      <td>${escapeHTML(t.spender||'미지정')}${t.managementNo?`<span class="management-number">관리번호 ${escapeHTML(String(t.managementNo))}</span>`:''}</td>
       <td class="num">${fmtShort(t.amount)}</td>
     </tr>`).join('');
   return `<div class="table-scroll transaction-table-scroll">
     <table class="transaction-table pending-transaction-table">
-      <thead><tr><th>선택</th><th>일자</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th>담당자</th><th class="num">금액</th></tr></thead>
+      <thead><tr><th>선택</th><th>결제일</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th>담당자</th><th class="num">금액</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
   </div>`;
@@ -1991,7 +2042,7 @@ function renderPendingBox(){
       ${workflowTable(submitted,'submitted')}
       <div class="workflow-actions">
         <button class="btn-primary" type="button" data-workflow-action="preview">선택 내역 보고서 열람</button>
-        <button class="btn-primary" type="button" data-workflow-action="payment">선택 건 지급 승인 및 PDF 저장</button>
+        <button class="btn-primary" type="button" data-workflow-action="payment">선택 건 승인 및 PDF 저장</button>
         <button class="btn-reject" type="button" data-workflow-action="reject-submitted">선택 내역 반려</button>
       </div>
     </div>
@@ -2024,6 +2075,72 @@ function requireSingleSpender(entries){
   return spenders[0];
 }
 
+function highestSubmissionSequence(){
+  return ledger.reduce((max,entry)=>{
+    const saved = Number(entry.submissionSequence);
+    const legacy = /^\d+$/.test(String(entry.managementNo||'')) ? Number(entry.managementNo) : 0;
+    return Math.max(max,Number.isSafeInteger(saved)?saved:0,Number.isSafeInteger(legacy)?legacy:0);
+  },0);
+}
+
+async function persistSubmissionBatch(entries,submittedAt,submittedBy){
+  if(!hasSharedStorage()) throw new Error('관리번호를 발급하려면 공유 저장소에 로그인해야 합니다.');
+  const sequenceRef = db.collection('accountingData').doc(SUBMISSION_SEQUENCE_KEY);
+  const ledgerRef = db.collection('accountingData').doc(ledgerKey(currentYear));
+  const initialSequence = highestSubmissionSequence();
+  let assignedSequence = 0;
+  await db.runTransaction(async transaction=>{
+    const snapshot = await transaction.get(sequenceRef);
+    const storedSequence = snapshot.exists ? Number(snapshot.data().value) : initialSequence;
+    if(!Number.isSafeInteger(storedSequence) || storedSequence<0 || storedSequence>=Number.MAX_SAFE_INTEGER){
+      throw new Error('저장된 관리번호 일련번호가 올바르지 않습니다.');
+    }
+    assignedSequence = storedSequence+1;
+    entries.forEach(entry=>{
+      entry.status = 'submitted';
+      entry.submittedAt = submittedAt;
+      entry.submittedBy = submittedBy;
+      entry.submissionSequence = assignedSequence;
+      entry.managementNo = String(assignedSequence);
+    });
+    const updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+    const updatedBy = currentUser.uid;
+    const updatedByEmail = currentUser.email || '';
+    transaction.set(sequenceRef,{value:assignedSequence,updatedAt,updatedBy,updatedByEmail});
+    transaction.set(ledgerRef,{value:JSON.stringify(ledger),updatedAt,updatedBy,updatedByEmail});
+  });
+  return assignedSequence;
+}
+
+async function allocatePaymentManagementNumber(date){
+  if(!hasSharedStorage()) throw new Error('관리번호를 발급하려면 공유 저장소에 로그인해야 합니다.');
+  const dateKey = `${date.getFullYear()}${String(date.getMonth()+1).padStart(2,'0')}${String(date.getDate()).padStart(2,'0')}`;
+  const prefix = new RegExp(`^${dateKey}(\\d+)$`);
+  const initialSequence = ledger.reduce((max,entry)=>{
+    const match = prefix.exec(String(entry.managementNo||''));
+    if(!match) return max;
+    const sequence = Number(match[1]);
+    return Number.isSafeInteger(sequence)?Math.max(max,sequence):max;
+  },0);
+  const sequenceRef = db.collection('accountingData').doc(`management-sequence:payment:${dateKey}`);
+  let assignedSequence = 0;
+  await db.runTransaction(async transaction=>{
+    const snapshot = await transaction.get(sequenceRef);
+    const storedSequence = snapshot.exists ? Number(snapshot.data().value) : initialSequence;
+    if(!Number.isSafeInteger(storedSequence) || storedSequence<0 || storedSequence>=Number.MAX_SAFE_INTEGER){
+      throw new Error('저장된 지급 관리번호 일련번호가 올바르지 않습니다.');
+    }
+    assignedSequence = storedSequence+1;
+    transaction.set(sequenceRef,{
+      value:assignedSequence,
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy:currentUser.uid,
+      updatedByEmail:currentUser.email || ''
+    });
+  });
+  return `${dateKey}${String(assignedSequence).padStart(3,'0')}`;
+}
+
 async function updateSelectedWorkflow(fromStatus,toStatus){
   const entries = selectedWorkflowEntries(fromStatus);
   if(!entries.length){
@@ -2034,22 +2151,26 @@ async function updateSelectedWorkflow(fromStatus,toStatus){
     const spender = requireSingleSpender(entries);
     const previous = entries.map(entry=>({...entry}));
     const now = new Date().toISOString();
-    entries.forEach(entry=>{
-      entry.status = toStatus;
+    try{
       if(toStatus==='submitted'){
-        entry.submittedAt = now;
-        entry.submittedBy = currentUser?.email || currentUser?.displayName || '';
-      }else if(toStatus==='rejected'){
-        entry.rejectedAt = now;
-        entry.rejectedBy = currentUser?.email || currentUser?.displayName || '';
+        await persistSubmissionBatch(entries,now,currentUser?.email || currentUser?.displayName || '');
+      }else{
+        entries.forEach(entry=>{
+          entry.status = toStatus;
+          if(toStatus==='rejected'){
+            entry.rejectedAt = now;
+            entry.rejectedBy = currentUser?.email || currentUser?.displayName || '';
+            delete entry.managementNo;
+          }
+        });
+        if(!await persist()) throw new Error(lastStorageError || '공유 저장소에 저장하지 못했습니다.');
       }
-    });
-    if(!await persist()){
+    }catch(error){
       entries.forEach((entry,index)=>Object.assign(entry,previous[index]));
-      throw new Error(lastStorageError || '공유 저장소에 저장하지 못했습니다.');
+      throw error;
     }
     setStatus(toStatus==='submitted'
-      ? `${spender} 담당자의 ${entries.length}건을 제출완료로 처리했습니다.`
+      ? `${spender} 담당자의 ${entries.length}건을 관리번호 ${entries[0].managementNo}로 제출완료 처리했습니다.`
       : `${spender} 담당자의 ${entries.length}건을 반려했습니다.`);
     renderReport();
     renderEntryView();
@@ -2081,11 +2202,15 @@ function openPaymentReport(status){
   }
 }
 
-function renderPaymentReport(entries,spender,approval=null){
+function renderPaymentReport(entries,spender,approval=null,managementNoOverride=null){
   const total = entries.reduce((sum,entry)=>sum+Number(entry.amount||0),0);
   const today = new Date();
   const todayKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
   const requestDate = entries.map(entry=>entry.submittedAt).filter(Boolean).sort()[0]?.slice(0,10) || todayKey;
+  const existingManagementNumbers = [...new Set(entries.map(entry=>entry.managementNo).filter(Boolean).map(String))];
+  const managementNo = managementNoOverride || (existingManagementNumbers.length===1
+    ? existingManagementNumbers[0]
+    : existingManagementNumbers.length>1 ? `복수 (${existingManagementNumbers.length}개)` : '제출 후 부여');
   const bankDetails = staffBankDetails.find(detail=>detail.name===spender) || {bank:'',accountNumber:''};
   const sheet = document.getElementById('payment-report-sheet');
   const rows = entries.map((entry,index)=>`
@@ -2098,7 +2223,7 @@ function renderPaymentReport(entries,spender,approval=null){
       <td>${escapeHTML(entry.category||'-')}</td>
     </tr>`).join('');
   const approvalStamp = approval
-    ? `<div class="payment-approval-stamp">지급 승인 완료<br><small>${escapeHTML(approval.date)}<br>${escapeHTML(approval.approver)}</small></div>`
+    ? `<div class="payment-approval-stamp">${escapeHTML(approval.label||'지급 승인 완료')}<br><small>${escapeHTML(approval.date)}<br>${escapeHTML(approval.approver)}</small></div>`
     : '<span class="payment-report-note">승인 시 날인</span>';
   const paymentDate = approval ? escapeHTML(approval.date.split(' ')[0]) : '승인 후 기재';
   sheet.innerHTML = `
@@ -2120,9 +2245,10 @@ function renderPaymentReport(entries,spender,approval=null){
       <div><strong>신청자</strong>${escapeHTML(spender)}</div>
       <div><strong>서명</strong>________________</div>
     </div>
+    <div class="payment-report-management"><strong>관리번호</strong><span>${escapeHTML(String(managementNo))}</span></div>
     <h2>지 출 목 록</h2>
     <table class="payment-report-items">
-      <thead><tr><th class="report-seq">순번</th><th class="report-date">결재일</th><th class="report-description">내역</th><th class="report-payee">지급처</th><th class="report-amount">금액</th><th class="report-note">비고</th></tr></thead>
+      <thead><tr><th class="report-seq">순번</th><th class="report-date">결제일</th><th class="report-description">내역</th><th class="report-payee">지급처</th><th class="report-amount">금액</th><th class="report-note">비고</th></tr></thead>
       <tbody>${rows}</tbody>
       <tfoot><tr><td colspan="4">합계 · ${entries.length}건</td><td colspan="2">${fmt(total)}</td></tr></tfoot>
     </table>
@@ -2185,7 +2311,7 @@ async function approvePaymentReport(){
   const status = document.getElementById('payment-report-status');
   const entries = paymentReportEntryIds.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
   if(paymentReportSourceStatus!=='submitted'){
-    status.textContent = '지급완료 승인과 PDF 저장은 제출완료된 내역만 가능합니다.';
+    status.textContent = '선택 내역 승인과 PDF 저장은 제출완료된 내역만 가능합니다.';
     return;
   }
   if(!entries.length || entries.length!==paymentReportEntryIds.length || entries.some(entry=>entry.status!=='submitted')){
@@ -2207,10 +2333,14 @@ async function approvePaymentReport(){
   try{
     token = await getDriveAccessToken();
     const approvalTime = new Date();
+    const managementNo = await allocatePaymentManagementNumber(approvalTime);
     const approvalDate = `${approvalTime.getFullYear()}-${String(approvalTime.getMonth()+1).padStart(2,'0')}-${String(approvalTime.getDate()).padStart(2,'0')}`;
     const approver = currentUser.displayName || currentUser.email || '로그인 사용자';
+    const approvalAction = entries.every(entry=>entry.gubun==='수입')
+      ? '수입 확인 완료'
+      : entries.some(entry=>entry.gubun==='수입') ? '지출 지급 승인 · 수입 확인 완료' : '지급 승인 완료';
     const approvalLabel = `${formatEntryDate(approvalDate)} ${approvalTime.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}`;
-    renderPaymentReport(entries,spender,{date:approvalLabel,approver});
+    renderPaymentReport(entries,spender,{date:approvalLabel,approver,label:approvalAction},managementNo);
     if(document.fonts?.ready) await document.fonts.ready;
     const blob = await window.html2pdf().set({
       margin:8,
@@ -2226,9 +2356,15 @@ async function approvePaymentReport(){
     uploadedFile = await uploadPaymentReport(token,blob,fileName);
 
     entries.forEach(entry=>{
-      entry.status = 'paid';
-      entry.paidAt = approvalTime.toISOString();
-      entry.paidBy = currentUser.email || currentUser.displayName || '';
+      entry.status = entry.gubun==='수입' ? 'confirmed' : 'paid';
+      if(entry.gubun==='수입'){
+        entry.confirmedAt = approvalTime.toISOString();
+        entry.confirmedBy = currentUser.email || currentUser.displayName || '';
+      }else{
+        entry.paidAt = approvalTime.toISOString();
+        entry.paidBy = currentUser.email || currentUser.displayName || '';
+      }
+      entry.managementNo = managementNo;
       entry.paymentReportFileId = uploadedFile.id;
       entry.paymentReportUrl = uploadedFile.webViewLink || '';
     });
@@ -2243,7 +2379,7 @@ async function approvePaymentReport(){
         throw cleanupError;
       }
     }
-    status.textContent = `지급완료 처리 및 승인 PDF 저장을 마쳤습니다: ${fileName}`;
+    status.textContent = `선택 내역 승인 및 PDF 저장을 마쳤습니다: ${fileName}`;
     if(uploadedFile.webViewLink){
       const link = document.createElement('a');
       link.href = uploadedFile.webViewLink;
@@ -2256,7 +2392,7 @@ async function approvePaymentReport(){
     renderEntryView();
   }catch(error){
     if(entries.every(entry=>entry.status==='submitted')) renderPaymentReport(entries,spender);
-    status.textContent = `지급완료 처리 실패: ${error.message || String(error)}`;
+    status.textContent = `선택 내역 처리 실패: ${error.message || String(error)}`;
   }finally{
     button.disabled = false;
   }
@@ -2272,7 +2408,7 @@ function renderEntryView(){
 function renderStatusFilters(){
   const el = document.getElementById('status-filters-entry');
   el.innerHTML = '';
-  const options = ['전체','input-complete','submitted','paid','rejected'];
+  const options = ['전체','input-complete','submitted','paid','confirmed','rejected'];
   options.forEach(s=>{
     const btn = document.createElement('button');
     btn.className = 'filter-btn' + (s===currentStatusEntry ? ' active' : '');
@@ -2308,7 +2444,8 @@ function refreshMokOptions(){
     .forEach(gwan=>{
       const items = gwan.accounts.flatMap(hang=>
         hang.items.map(mok=>({hang,mok}))
-      ).sort((a,b)=>a.mok.localeCompare(b.mok,'ko') || a.hang.name.localeCompare(b.hang.name,'ko'));
+      ).filter(({mok})=>mok.trim()!=='대학노조회비')
+        .sort((a,b)=>a.mok.localeCompare(b.mok,'ko') || a.hang.name.localeCompare(b.hang.name,'ko'));
       if(!items.length) return;
       const optgroup = document.createElement('optgroup');
       optgroup.label = gwan.name.replace(/_관$/,'');
@@ -2331,6 +2468,7 @@ function refreshMokOptions(){
 }
 
 function hasAccount(type, classification){
+  if(classification.mok==='대학노조회비') return false;
   return (accountCategories[type] || []).some(gwan=>
     gwan.name===classification.gwan && (gwan.accounts || []).some(hang=>
       hang.name===classification.hang && (hang.items || []).includes(classification.mok)
@@ -2469,21 +2607,29 @@ document.querySelectorAll('[data-close-payment-report]').forEach(button=>
 document.getElementById('btn-add-hierarchy-row').addEventListener('click', ()=>{
   const row = createHierarchyRow();
   document.getElementById('hierarchy-form-body').appendChild(row);
+  updateHierarchyBudgetTotals();
   row.querySelector('.hierarchy-gwan-name').focus();
 });
 
 document.getElementById('hierarchy-form-body').addEventListener('click', event=>{
   const removeButton = event.target.closest('.hierarchy-row-delete');
-  if(removeButton) removeButton.closest('.hierarchy-item-row').remove();
+  if(removeButton){
+    removeButton.closest('.hierarchy-item-row').remove();
+    updateHierarchyBudgetTotals();
+  }
 });
 document.getElementById('hierarchy-form-body').addEventListener('change', event=>{
   const typeSelect = event.target.closest('.hierarchy-category-type');
   if(!typeSelect) return;
   typeSelect.closest('.hierarchy-item-row').classList.toggle('income-row',typeSelect.value==='income');
   typeSelect.closest('.hierarchy-item-row').classList.toggle('expense-row',typeSelect.value==='expense');
+  updateHierarchyBudgetTotals();
 });
 document.getElementById('hierarchy-form-body').addEventListener('input', event=>{
-  if(event.target.matches('.hierarchy-item-budget')) formatBudgetInput(event.target);
+  if(event.target.matches('.hierarchy-item-budget')){
+    formatBudgetInput(event.target);
+    updateHierarchyBudgetTotals();
+  }
 });
 
 document.getElementById('btn-save-hierarchy').addEventListener('click', async ()=>{
