@@ -224,26 +224,48 @@ body { background-color:#F8FAFC; color:var(--ink); }
   <!-- ============ BUDGET VIEW ============ -->
   <div class="view" id="view-budget">
     <div class="notice" style="margin-top:28px;">
-      항목(대분류)별 연간 예산을 입력하면, 보고서 탭의 <b>예산 대비 집행 현황</b>에 반영됩니다. 예산도 공유 저장소에 저장되어 함께 보는 담당자 모두에게 동일하게 보입니다.
+      항목(대분류)과 세부 계정과목은 이 탭에서 등록·수정한 항목만 결산 관리의 선택 목록에 표시됩니다. 항목별 연간 예산은 보고서의 <b>예산 대비 집행 현황</b>에 반영됩니다.
     </div>
     <section style="margin-top:0;">
-      <div class="sec-head"><span class="sec-num">＋</span><h2>새 항목 추가</h2></div>
+      <div class="sec-head"><span class="sec-num">＋</span><h2>새 항목(대분류) 추가</h2></div>
       <div class="card">
         <div class="form-grid">
-          <div class="field span2"><label>항목명</label><input type="text" id="nb-name" placeholder="예: 조직사업비"></div>
+          <div class="field span2"><label>항목(대분류)명</label><input type="text" id="nb-name" placeholder="예: 조직사업비"></div>
           <div class="field"><label>예산(원)</label><input type="number" id="nb-amount" placeholder="예: 13000000"></div>
         </div>
         <button class="btn-primary" id="btn-add-budget-row">항목 추가</button>
       </div>
     </section>
     <section>
-      <div class="sec-head"><span class="sec-num">☰</span><h2>항목별 예산</h2></div>
+      <div class="sec-head"><span class="sec-num">☰</span><h2>항목(대분류) 및 예산</h2></div>
       <div class="card">
         <table>
-          <thead><tr><th>항목</th><th class="num">예산(원)</th><th></th></tr></thead>
+          <thead><tr><th>항목(대분류)명</th><th class="num">예산(원)</th><th></th></tr></thead>
           <tbody id="budget-form-body"></tbody>
         </table>
-        <button class="btn-primary" id="btn-save-budget" style="margin-top:16px;">예산 저장</button>
+      </div>
+    </section>
+    <section>
+      <div class="sec-head"><span class="sec-num">☰</span><h2>세부 계정과목 관리</h2></div>
+      <div class="card">
+        <div class="form-grid">
+          <div class="field">
+            <label for="nc-gubun">구분</label>
+            <select id="nc-gubun" style="border:1px solid var(--line);padding:9px 10px;font-size:14px;background:#fcfcfb;">
+              <option value="expense">지출</option>
+              <option value="income">수입</option>
+            </select>
+          </div>
+          <div class="field span2"><label for="nc-name">세부 계정과목명</label><input type="text" id="nc-name" placeholder="예: 조직강화비"></div>
+        </div>
+        <button class="btn-primary" id="btn-add-category">계정과목 추가</button>
+        <div style="overflow-x:auto;margin-top:18px;">
+          <table>
+            <thead><tr><th>구분</th><th>세부 계정과목명</th><th></th></tr></thead>
+            <tbody id="category-form-body"></tbody>
+          </table>
+        </div>
+        <button class="btn-primary" id="btn-save-budget" style="margin-top:16px;">변경사항 저장</button>
         <span id="budget-save-status"></span>
       </div>
     </section>
@@ -319,6 +341,7 @@ const SUGGESTIONS = JSON.parse(document.getElementById('suggestions').textConten
 
 let ledger = [];
 let budget = {};
+let accountCategories = {income:[], expense:[]};
 let charts = {};
 let currentMonthReport = '전체';
 let currentMonthEntry = '전체';
@@ -335,6 +358,7 @@ const monthList = ['1월','2월','3월','4월','5월','6월','7월','8월','9월
 const YEARS_KEY = 'years:list';
 const ledgerKey = y => 'ledger:' + y;
 const budgetKey = y => 'budget:' + y;
+const categoryKey = y => 'categories:' + y;
 const fyStart = y => `${y}-01-01`;
 const fyEnd = y => `${y}-12-31`;
 // 원본 엑셀의 날짜 오타 보정 (이미 저장된 데이터에도 적용됨)
@@ -411,8 +435,30 @@ async function loadBudget(){
   }
 }
 
+async function loadAccountCategories(){
+  try{
+    const res = await window.storage.get(categoryKey(currentYear), true);
+    const saved = JSON.parse(res.value);
+    accountCategories = {
+      income: Array.isArray(saved.income) ? saved.income : [],
+      expense: Array.isArray(saved.expense) ? saved.expense : []
+    };
+  }catch(e){
+    accountCategories = {
+      income: [...SUGGESTIONS.catsInc],
+      expense: [...SUGGESTIONS.catsExp]
+    };
+    try{ await window.storage.set(categoryKey(currentYear), JSON.stringify(accountCategories), true); }catch(e2){}
+  }
+}
+
 async function persistBudget(){
   try{ await window.storage.set(budgetKey(currentYear), JSON.stringify(budget), true); return true; }
+  catch(e){ return false; }
+}
+
+async function persistAccountCategories(){
+  try{ await window.storage.set(categoryKey(currentYear), JSON.stringify(accountCategories), true); return true; }
   catch(e){ return false; }
 }
 
@@ -430,6 +476,7 @@ function renderYearSelect(){
 async function loadYearData(){
   await loadLedger();
   await loadBudget();
+  await loadAccountCategories();
 }
 
 function renderAll(){
@@ -437,6 +484,7 @@ function renderAll(){
   renderReport();
   renderEntryView();
   renderBudgetForm();
+  renderCategoryForm();
 }
 
 async function setYear(v){
@@ -619,19 +667,71 @@ function renderBudgetForm(){
   const names = Object.keys(budget).sort();
   names.forEach(name=>{
     const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${name}</td>
-      <td class="num"><input type="number" class="budget-input" data-name="${name}" value="${budget[name]||0}" style="width:140px;text-align:right;"></td>
-      <td><button class="del-btn" data-name="${name}">삭제</button></td>
-    `;
-    body.appendChild(tr);
-  });
-  body.querySelectorAll('.del-btn').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      delete budget[btn.getAttribute('data-name')];
+    tr.className = 'budget-row';
+    const nameCell = document.createElement('td');
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.className = 'budget-name';
+    nameInput.value = name;
+    nameInput.dataset.originalName = name;
+    nameCell.appendChild(nameInput);
+
+    const amountCell = document.createElement('td');
+    amountCell.className = 'num';
+    const amountInput = document.createElement('input');
+    amountInput.type = 'number';
+    amountInput.className = 'budget-input';
+    amountInput.value = budget[name] || 0;
+    amountInput.style.cssText = 'width:140px;text-align:right;';
+    amountCell.appendChild(amountInput);
+
+    const actionCell = document.createElement('td');
+    const deleteButton = document.createElement('button');
+    deleteButton.className = 'del-btn';
+    deleteButton.textContent = '삭제';
+    deleteButton.addEventListener('click', ()=>{
+      delete budget[name];
       renderBudgetForm();
     });
+    actionCell.appendChild(deleteButton);
+    tr.append(nameCell, amountCell, actionCell);
+    body.appendChild(tr);
   });
+  refreshManagedDatalists();
+}
+
+function renderCategoryForm(){
+  const body = document.getElementById('category-form-body');
+  body.innerHTML = '';
+  ['expense','income'].forEach(type=>{
+    accountCategories[type].forEach(name=>{
+      const tr = document.createElement('tr');
+      tr.className = 'category-row';
+      tr.dataset.categoryType = type;
+
+      const typeCell = document.createElement('td');
+      typeCell.textContent = type === 'income' ? '수입' : '지출';
+      const nameCell = document.createElement('td');
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.className = 'category-name';
+      nameInput.value = name;
+      nameCell.appendChild(nameInput);
+
+      const actionCell = document.createElement('td');
+      const deleteButton = document.createElement('button');
+      deleteButton.className = 'del-btn';
+      deleteButton.textContent = '삭제';
+      deleteButton.addEventListener('click', ()=>{
+        accountCategories[type] = accountCategories[type].filter(category=>category!==name);
+        renderCategoryForm();
+      });
+      actionCell.appendChild(deleteButton);
+      tr.append(typeCell, nameCell, actionCell);
+      body.appendChild(tr);
+    });
+  });
+  refreshManagedDatalists();
 }
 
 function renderMonthFilters(containerId, sourceList, current, onClick){
@@ -788,21 +888,31 @@ function setStatus(msg){
 
 // ---------- form ----------
 function setupDatalists(){
-  const dlHang = document.getElementById('dl-hang');
-  SUGGESTIONS.hangsExp.forEach(h=>{ const o=document.createElement('option'); o.value=h; dlHang.appendChild(o); });
-
-  const dlCategory = document.getElementById('dl-category');
-  function refreshCategoryList(){
-    dlCategory.innerHTML = '';
-    const list = currentGubun==='수입' ? SUGGESTIONS.catsInc : SUGGESTIONS.catsExp;
-    list.forEach(c=>{ const o=document.createElement('option'); o.value=c; dlCategory.appendChild(o); });
-  }
-  refreshCategoryList();
-  window._refreshCategoryList = refreshCategoryList;
-
   const dlDesc = document.getElementById('dl-desc');
 const descSet = new Set(BASE_LEDGER.map(t=>t.desc).filter(Boolean));  
 Array.from(descSet).slice(0,200).forEach(d=>{ const o=document.createElement('option'); o.value=d; dlDesc.appendChild(o); });
+  refreshManagedDatalists();
+}
+
+function refreshManagedDatalists(){
+  const dlHang = document.getElementById('dl-hang');
+  const dlCategory = document.getElementById('dl-category');
+  if(!dlHang || !dlCategory) return;
+
+  dlHang.innerHTML = '';
+  Object.keys(budget).sort().forEach(name=>{
+    const option = document.createElement('option');
+    option.value = name;
+    dlHang.appendChild(option);
+  });
+
+  dlCategory.innerHTML = '';
+  const list = accountCategories[currentGubun==='수입' ? 'income' : 'expense'];
+  list.forEach(name=>{
+    const option = document.createElement('option');
+    option.value = name;
+    dlCategory.appendChild(option);
+  });
 }
 
 function setGubun(g){
@@ -810,7 +920,7 @@ function setGubun(g){
   document.getElementById('btn-gubun-income').classList.toggle('selected', g==='수입');
   document.getElementById('btn-gubun-expense').classList.toggle('selected', g==='지출');
   document.getElementById('field-hang').style.display = g==='지출' ? 'flex' : 'none';
-  if(window._refreshCategoryList) window._refreshCategoryList();
+  refreshManagedDatalists();
 }
 
 async function addEntry(){
@@ -900,15 +1010,72 @@ document.getElementById('btn-add-budget-row').addEventListener('click', ()=>{
   renderBudgetForm();
 });
 
+document.getElementById('btn-add-category').addEventListener('click', ()=>{
+  const nameEl = document.getElementById('nc-name');
+  const type = document.getElementById('nc-gubun').value;
+  const name = nameEl.value.trim();
+  const status = document.getElementById('budget-save-status');
+  if(!name){
+    status.textContent = '세부 계정과목명을 입력해주세요.';
+    return;
+  }
+  if(accountCategories[type].includes(name)){
+    status.textContent = '같은 구분에 이미 등록된 계정과목입니다.';
+    return;
+  }
+  accountCategories[type].push(name);
+  nameEl.value = '';
+  status.textContent = '계정과목이 추가되었습니다. 변경사항 저장을 눌러 반영해주세요.';
+  renderCategoryForm();
+});
+
 document.getElementById('btn-save-budget').addEventListener('click', async ()=>{
-  document.querySelectorAll('.budget-input').forEach(inp=>{
-    budget[inp.getAttribute('data-name')] = Number(inp.value) || 0;
-  });
-  const ok = await persistBudget();
-  const el = document.getElementById('budget-save-status');
-  el.textContent = ok ? '저장되었습니다 (공유 저장소 반영됨)' : '저장에 실패했습니다. 다시 시도해주세요.';
-  setTimeout(()=>{ if(el.textContent) el.textContent=''; }, 4000);
+  const status = document.getElementById('budget-save-status');
+  const nextBudget = {};
+  const budgetNames = new Set();
+  for(const row of document.querySelectorAll('.budget-row')){
+    const name = row.querySelector('.budget-name').value.trim();
+    if(!name){
+      status.textContent = '항목(대분류)명을 입력해주세요.';
+      return;
+    }
+    if(budgetNames.has(name)){
+      status.textContent = '중복된 항목(대분류)명이 있습니다.';
+      return;
+    }
+    budgetNames.add(name);
+    nextBudget[name] = Number(row.querySelector('.budget-input').value) || 0;
+  }
+
+  const nextCategories = {income:[], expense:[]};
+  for(const row of document.querySelectorAll('.category-row')){
+    const type = row.dataset.categoryType;
+    const name = row.querySelector('.category-name').value.trim();
+    if(!name){
+      status.textContent = '세부 계정과목명을 입력해주세요.';
+      return;
+    }
+    if(nextCategories[type].includes(name)){
+      status.textContent = '같은 구분에 중복된 세부 계정과목명이 있습니다.';
+      return;
+    }
+    nextCategories[type].push(name);
+  }
+
+  budget = nextBudget;
+  accountCategories = nextCategories;
+  const [budgetSaved, categoriesSaved] = await Promise.all([
+    persistBudget(),
+    persistAccountCategories()
+  ]);
+  if(budgetSaved && categoriesSaved){
+    status.textContent = '예산 및 분류가 저장되었습니다 (공유 저장소 반영됨)';
+  } else {
+    status.textContent = `저장에 실패했습니다. 예산 ${budgetSaved ? '성공' : '실패'}, 계정과목 ${categoriesSaved ? '성공' : '실패'}.`;
+  }
+  setTimeout(()=>{ if(status.textContent) status.textContent=''; }, 5000);
   renderBudgetForm();
+  renderCategoryForm();
   renderReport();
 });
 
