@@ -2078,12 +2078,6 @@ document.getElementById('year-select').addEventListener('change',event=>setYear(
 document.getElementById('account-balance-input').addEventListener('input',event=>formatBudgetInput(event.target));
 document.getElementById('btn-save-account-balance').addEventListener('click',saveAccountBalance);
 document.getElementById('btn-add-staff-name').addEventListener('click',addStaffName);
-document.getElementById('staff-name-input').addEventListener('keydown',event=>{
-  if(event.key==='Enter'){
-    event.preventDefault();
-    addStaffName();
-  }
-});
 document.getElementById('staff-name-list').addEventListener('click',event=>{
   const saveButton = event.target.closest('[data-save-staff-profile]');
   if(saveButton){
@@ -2092,6 +2086,29 @@ document.getElementById('staff-name-list').addEventListener('click',event=>{
   }
   const removeButton = event.target.closest('[data-staff-name]');
   if(removeButton) removeStaffName(removeButton.dataset.staffName);
+});
+document.addEventListener('keydown',event=>{
+  if(event.key!=='Enter' || event.isComposing) return;
+  const input = event.target;
+  if(!(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)) return;
+
+  let actionButton = null;
+  if(input.id==='account-balance-input'){
+    actionButton = document.getElementById('btn-save-account-balance');
+  } else if(input.id==='staff-name-input'){
+    actionButton = document.getElementById('btn-add-staff-name');
+  } else if(input.matches('[data-staff-field]')){
+    actionButton = input.closest('.staff-profile-item')?.querySelector('[data-save-staff-profile]');
+  } else if(input.matches('#f-date, #f-amount, #f-spender, #f-desc, #f-payee')){
+    actionButton = document.getElementById('btn-add');
+  } else if(input.closest('.hierarchy-item-row')){
+    actionButton = document.getElementById('btn-save-hierarchy');
+  }
+
+  if(actionButton){
+    event.preventDefault();
+    actionButton.click();
+  }
 });
 document.getElementById('btn-sign-in').addEventListener('click', signInWithGoogle);
 document.getElementById('gate-sign-in').addEventListener('click', signInWithGoogle);
