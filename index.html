@@ -102,6 +102,8 @@ body { background-color:var(--paper-2); color:var(--ink); }
   }
   .table-scroll thead th{position:sticky;top:0;z-index:2;box-shadow:0 2px 5px rgba(17,45,78,.14);}
   .transaction-table-scroll{overflow-x:auto;}
+  .entry-table-container{position:relative;}
+  .entry-table-container thead th{position:sticky;top:48px;z-index:10;box-shadow:0 2px 5px rgba(17,45,78,.14);}
   .transaction-table{width:100%;min-width:0;table-layout:fixed;}
   .transaction-table th,.transaction-table td{overflow-wrap:anywhere;vertical-align:middle;}
   .transaction-table th{white-space:normal;word-break:keep-all;}
@@ -129,10 +131,10 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .hierarchy-total-message{text-align:center;font-weight:700;}
   .hierarchy-total-mismatch td{background:#f8e1df;color:var(--expense);font-weight:700;}
   .status-approved,.status-confirmed{background:var(--income-row);color:var(--navy);}
-  .report-transaction-table .col-date{width:10%;}
-  .report-transaction-table .col-description{width:20%;}
-  .report-transaction-table .col-mok{width:13%;}
-  .report-transaction-table .col-payee{width:25%;}
+  .report-transaction-table .col-date{width:16%;}
+  .report-transaction-table .col-description{width:19%;}
+  .report-transaction-table .col-mok{width:12%;}
+  .report-transaction-table .col-payee{width:20%;}
   .report-transaction-table .col-amount{width:16%;}
   @media (max-width:600px){
     .transaction-table th,.transaction-table td{padding:6px 3px;font-size:12px;}
@@ -549,7 +551,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
       <div class="card">
         <div class="filter-row" id="status-filters-entry"></div>
         <div class="filter-row" id="month-filters-entry"></div>
-        <div class="table-scroll transaction-table-scroll">
+        <div class="entry-table-container">
           <table class="transaction-table entry-table">
             <colgroup>
               <col class="col-date"><col class="col-type"><col class="col-description"><col class="col-mok">
@@ -2118,8 +2120,11 @@ function renderTxTable(mode){
 }
 
 function rowActions(t){
-  if(t.locked || t.status==='approved' || t.status==='paid' || t.status==='confirmed'){
-    return `<span class="locked-note">${t.locked?'가져온 내역':'승인'}</span>`;
+  if(t.locked){
+    return '<span class="locked-note">가져온 내역</span>';
+  }
+  if(t.status==='approved' || t.status==='paid' || t.status==='confirmed'){
+    return `<button class="btn-revert" data-act="unapprove" data-id="${escapeHTML(t.id)}">승인 취소</button>`;
   }
   const parts = [];
   if(t.status==='rejected') parts.push(`<button class="btn-revert" data-act="input-complete" data-id="${escapeHTML(t.id)}">입력완료로 복원</button>`);
@@ -2132,16 +2137,35 @@ function bindRowActions(container){
     btn.addEventListener('click', async ()=>{
       const id = btn.getAttribute('data-id');
       const act = btn.getAttribute('data-act');
+      if(act==='unapprove' && !window.confirm('승인을 취소하고 선택 내역을 제출완료 대기 목록으로 되돌리시겠습니까?')) return;
+      const entry = ledger.find(t=>t.id===id);
+      const previousEntry = entry ? {...entry} : null;
       if(act === 'delete'){
         ledger = ledger.filter(t=>t.id!==id);
       } else {
-        const entry = ledger.find(t=>t.id===id);
         if(entry && act==='input-complete') entry.status = 'input-complete';
+        if(entry && act==='unapprove' && ['approved','paid','confirmed'].includes(entry.status)){
+          entry.status='submitted';
+          entry.approvalCancelledAt=new Date().toISOString();
+          entry.approvalCancelledBy=currentUser?.email || currentUser?.displayName || '';
+          ['approvedAt','approvedBy','paidAt','paidBy','confirmedAt','confirmedBy','managementNo','submissionSequence']
+            .forEach(key=>delete entry[key]);
+        }
       }
       const ok = await persist();
-      setStatus(ok
-        ? (hasSharedStorage() ? '반영되어 공유 저장소에 저장됨' : '이 브라우저에 저장됨 (다른 담당자와 공유되지 않음)')
-        : `변경됐지만 저장에 실패했습니다: ${lastStorageError || '저장소 오류'}`);
+      if(!ok){
+        if(act==='delete'){
+          if(previousEntry) ledger.push(previousEntry);
+        }else if(previousEntry){
+          const index=ledger.findIndex(item=>item.id===id);
+          if(index>=0) ledger[index]=previousEntry;
+        }
+      }
+      setStatus(!ok
+        ? `변경됐지만 저장에 실패했습니다: ${lastStorageError || '저장소 오류'}`
+        : act==='unapprove'
+          ? '승인을 취소해 제출완료 대기 목록으로 되돌렸습니다.'
+          : hasSharedStorage() ? '반영되어 공유 저장소에 저장됨' : '이 브라우저에 저장됨 (다른 담당자와 공유되지 않음)');
       renderReport();
       renderEntryView();
     });
@@ -2180,7 +2204,7 @@ function renderPendingBox(){
       ${workflowTable(inputComplete,'input-complete')}
       <div class="workflow-actions">
         <button class="btn-primary" type="button" data-workflow-action="preview-input">선택 내역 보고서 열람</button>
-        <button class="btn-primary" type="button" data-workflow-action="submit">선택 내역 제출완료</button>
+        <button class="btn-primary" type="button" data-workflow-action="submit">선택 내역 제출</button>
         <button class="btn-revert" type="button" data-workflow-action="edit-input">선택 내용 수정</button>
         <button class="btn-reject" type="button" data-workflow-action="delete-input">선택 내역 삭제</button>
       </div>
@@ -2275,8 +2299,8 @@ function requireSingleSpender(entries){
   return spenders[0];
 }
 
-function highestSubmissionSequence(){
-  return ledger.reduce((max,entry)=>{
+function highestSubmissionSequence(sourceLedger=ledger){
+  return sourceLedger.reduce((max,entry)=>{
     const saved = Number(entry.submissionSequence);
     const legacy = /^\d+$/.test(String(entry.managementNo||'')) ? Number(entry.managementNo) : 0;
     return Math.max(max,Number.isSafeInteger(saved)?saved:0,Number.isSafeInteger(legacy)?legacy:0);
@@ -2287,28 +2311,46 @@ async function persistSubmissionBatch(entries,submittedAt,submittedBy){
   if(!hasSharedStorage()) throw new Error('관리번호를 발급하려면 공유 저장소에 로그인해야 합니다.');
   const sequenceRef = db.collection('accountingData').doc(SUBMISSION_SEQUENCE_KEY);
   const ledgerRef = db.collection('accountingData').doc(ledgerKey(currentYear));
-  const initialSequence = highestSubmissionSequence();
+  const selectedIds = new Set(entries.map(entry=>entry.id));
   let assignedSequence = 0;
+  let submittedLedger = null;
   await db.runTransaction(async transaction=>{
-    const snapshot = await transaction.get(sequenceRef);
-    const storedSequence = snapshot.exists ? Number(snapshot.data().value) : initialSequence;
+    const [sequenceSnapshot,ledgerSnapshot] = await Promise.all([
+      transaction.get(sequenceRef),
+      transaction.get(ledgerRef)
+    ]);
+    let latestLedger = ledgerSnapshot.exists ? JSON.parse(ledgerSnapshot.data().value) : ledger.map(entry=>({...entry}));
+    if(!Array.isArray(latestLedger)) throw new Error('공유 저장소의 내역 형식이 올바르지 않습니다. 새로고침 후 다시 시도해 주세요.');
+    const latestSelected = latestLedger.filter(entry=>selectedIds.has(entry.id));
+    if(latestSelected.length!==selectedIds.size || latestSelected.some(entry=>entry.status!=='input-complete' || entry.locked)){
+      throw new Error('선택한 내역의 상태가 바뀌었거나 공유 저장소에서 찾을 수 없습니다. 목록을 새로고침한 뒤 다시 선택해 주세요.');
+    }
+    requireSingleSpender(latestSelected);
+    const storedSequence = sequenceSnapshot.exists
+      ? Number(sequenceSnapshot.data().value)
+      : highestSubmissionSequence(latestLedger);
     if(!Number.isSafeInteger(storedSequence) || storedSequence<0 || storedSequence>=Number.MAX_SAFE_INTEGER){
       throw new Error('저장된 관리번호 일련번호가 올바르지 않습니다.');
     }
     assignedSequence = storedSequence+1;
-    entries.forEach(entry=>{
-      entry.status = 'submitted';
-      entry.submittedAt = submittedAt;
-      entry.submittedBy = submittedBy;
-      entry.submissionSequence = assignedSequence;
-      entry.managementNo = String(assignedSequence);
+    submittedLedger = latestLedger.map(entry=>{
+      if(!selectedIds.has(entry.id)) return entry;
+      return {
+        ...entry,
+        status:'submitted',
+        submittedAt,
+        submittedBy,
+        submissionSequence:assignedSequence,
+        managementNo:String(assignedSequence)
+      };
     });
     const updatedAt = firebase.firestore.FieldValue.serverTimestamp();
     const updatedBy = currentUser.uid;
     const updatedByEmail = currentUser.email || '';
     transaction.set(sequenceRef,{value:assignedSequence,updatedAt,updatedBy,updatedByEmail});
-    transaction.set(ledgerRef,{value:JSON.stringify(ledger),updatedAt,updatedBy,updatedByEmail});
+    transaction.set(ledgerRef,{value:JSON.stringify(submittedLedger),updatedAt,updatedBy,updatedByEmail});
   });
+  ledger = submittedLedger;
   return assignedSequence;
 }
 
@@ -2351,9 +2393,13 @@ async function updateSelectedWorkflow(fromStatus,toStatus){
     const spender = requireSingleSpender(entries);
     const previous = entries.map(entry=>({...entry}));
     const now = new Date().toISOString();
+    let submissionSequence = 0;
+    const submitButton = [...document.querySelectorAll('[data-workflow-action="submit"]')]
+      .find(button=>button.closest('.workflow-stage')?.querySelector(`[data-workflow-id][data-workflow-status="${fromStatus}"]:checked`));
+    if(submitButton) submitButton.disabled = true;
     try{
       if(toStatus==='submitted'){
-        await persistSubmissionBatch(entries,now,currentUser?.email || currentUser?.displayName || '');
+        submissionSequence = await persistSubmissionBatch(entries,now,currentUser?.email || currentUser?.displayName || '');
       }else{
         entries.forEach(entry=>{
           entry.status = toStatus;
@@ -2368,14 +2414,16 @@ async function updateSelectedWorkflow(fromStatus,toStatus){
     }catch(error){
       entries.forEach((entry,index)=>Object.assign(entry,previous[index]));
       throw error;
+    }finally{
+      if(submitButton) submitButton.disabled = false;
     }
     setStatus(toStatus==='submitted'
-      ? `${spender} 담당자의 ${entries.length}건을 관리번호 ${entries[0].managementNo}로 제출완료 처리했습니다.`
+      ? `${spender} 담당자의 ${entries.length}건을 관리번호 ${submissionSequence}로 제출했습니다.`
       : `${spender} 담당자의 ${entries.length}건을 반려했습니다.`);
     renderReport();
     renderEntryView();
   }catch(error){
-    setStatus(error.message || String(error),error.code==='accounting/spender-mismatch');
+    setStatus(error.message || String(error),toStatus==='submitted' || error.code==='accounting/spender-mismatch');
   }
 }
 
