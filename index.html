@@ -866,12 +866,21 @@ async function addEntry(){
 }
 
 // ---------- tabs ----------
+function activateTab(view){
+  const button = [...document.querySelectorAll('.tab-btn')].find(btn=>btn.dataset.view===view);
+  const panel = document.getElementById('view-' + view);
+  if(!button || !panel) return false;
+
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b===button));
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v===panel));
+  return true;
+}
+
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
-    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('view-' + btn.dataset.view).classList.add('active');
+    if(activateTab(btn.dataset.view)){
+      window.history.replaceState(null, '', '#' + btn.dataset.view);
+    }
   });
 });
 
@@ -905,6 +914,7 @@ document.getElementById('btn-save-budget').addEventListener('click', async ()=>{
 
 // ---------- init ----------
 (async function init(){
+  activateTab(window.location.hash.slice(1) || 'report');
   await loadYears();
   await loadYearData();
   setupDatalists();
