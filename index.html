@@ -886,6 +886,7 @@ async function handleAuthState(user){
     document.getElementById('auth-status').textContent = user.email || '로그인됨';
     await initializeApplicationData();
   }catch(e){
+    console.error(e);  
     stopSharedDataWatchers();
     stopLedgerWatcher();
     showAuthGate(
