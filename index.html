@@ -35,7 +35,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .masthead-inner{max-width:1040px;margin:0 auto;}
   .org{font-size:14px;letter-spacing:.02em;color:var(--gold-soft);font-weight:500;margin:0 0 10px;}
   h1.title{font-family:'Pretendard',sans-serif;font-weight:800;font-size:clamp(24px,4vw,36px);line-height:1.25;margin:0 0 20px;max-width:none;}
-
+  .budget-orphan-row td{color:var(--expense);font-weight:700;}
   .tabs-sticky{
     position:sticky;top:0;z-index:30;
     max-width:1200px;width:calc(100% - 32px);margin:0 auto;
@@ -103,10 +103,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .table-scroll thead th{position:sticky;top:0;z-index:2;box-shadow:0 2px 5px rgba(17,45,78,.14);}
   .transaction-table-scroll{overflow-x:auto;}
   .entry-table-container{position:relative;}
-  .entry-table-container thead th{
-    position:sticky;top:48px;z-index:10;background:#112D4E!important;
-    box-shadow:0 -3px 0 2px #112D4E,0 2px 5px rgba(17,45,78,.14);
-  }
+ 
   .transaction-table{width:100%;min-width:0;table-layout:fixed;}
   .transaction-table th,.transaction-table td{overflow-wrap:anywhere;vertical-align:middle;}
   .transaction-table th{white-space:normal;word-break:keep-all;}
@@ -546,7 +543,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
 
           <div class="field span2"><label>내용</label><input type="text" id="f-desc" placeholder="예: 집행부 회의 식비" list="dl-desc"></div>
           <div class="field"><label>지급처</label><input type="text" id="f-payee" placeholder="예: 배달의민족" list="recent-payee-options"><datalist id="recent-payee-options"></datalist></div>
-          <div class="field"><label>금액(원)</label><input type="number" id="f-amount" placeholder="예: 50000"></div>
+          <div class="field"><label>금액(원)</label><input type="number" id="f-amount" placeholder="예: 50,000 (환불은 -50,000)"></div>
         </div>
         <datalist id="dl-desc"></datalist>
 
@@ -566,7 +563,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
       <div class="card">
         <div class="filter-row" id="status-filters-entry"></div>
         <div class="filter-row" id="month-filters-entry"></div>
-        <div class="entry-table-container">
+<div class="table-scroll transaction-table-scroll entry-table-container">
           <table class="transaction-table entry-table">
             <colgroup>
               <col class="col-date"><col class="col-type"><col class="col-description"><col class="col-mok">
@@ -597,8 +594,9 @@ body { background-color:var(--paper-2); color:var(--ink); }
   </dialog>
 
   <footer>
-    <span> 한국외국어대학교 노동조합(/span>
-    <span id="footer-sync">-</span>
+<span>한국외국어대학교 노동조합</span>
+<button class="btn-text" id="btn-export-ledger" type="button">장부 백업(JSON)</button>
+<span id="footer-sync">-</span>
   </footer>
 </div>
 
@@ -743,10 +741,6 @@ function writeMeta(){
   };
 }
 
-// Re-reads the LATEST ledger inside a transaction, applies the change, writes it back.
-// mutator(list) must be synchronous. Return false to skip the write. Throw to abort.
-// Firestore may re-run it on contention, so don't accumulate state outside it.
-
 
 async function storageSet(key, value){
   lastStorageError = '';
@@ -814,11 +808,7 @@ function watchSharedData(){
             years = data;
             renderYearSelect();
           }
-          if(JSON.stringify(ledger)!==JSON.stringify(data)){
-            ledger = data;
-            renderReport();
-            renderEntryView();
-          }
+        
         } else if(key===budgetKey(currentYear)){
           if(JSON.stringify(budget)!==JSON.stringify(data)){
             budget = data;
@@ -950,7 +940,6 @@ const DATE_FIXES = { 2026: { imp_1:'2026-01-01', imp_80:'2026-01-29' } };
 
 let currentYear = new Date().getFullYear();
 let years = [];
-let yearToken = 0;
 
 async function persistYears(){
   try{ await storageSet(YEARS_KEY, JSON.stringify(years)); return true; }
@@ -1086,19 +1075,8 @@ async function ensureLedgerMigrated(year){
 }
 
 
-function setFooter(msg){
-  const out = ledger.filter(t => !(t.date||'').startsWith(currentYear + '-')).length;
-  const kb = Math.round(new Blob([JSON.stringify(ledger)]).size/1024);
-  document.getElementById('footer-sync').textContent =
-    `${currentYear}년 · ${msg} · ${ledger.length}건 · 장부 ${kb.toLocaleString('ko-KR')}KB / 1,024KB`
-    + (kb>700 ? ' · ⚠ 용량 한도 임박' : '')
-    + (out ? ` · ⚠ 회계연도 밖 날짜 ${out}건` : '');
-}
 
-async function persist(){
-  try{ await storageSet(ledgerKey(currentYear), JSON.stringify(ledger)); return true; }
-  catch(e){ lastStorageError = e.message || String(e); return false; }
-}
+
 
 async function loadBudget(){
   try{
@@ -1446,9 +1424,9 @@ function remapBudgetForCategoryReset(){
   budgetNeedsMigration = before!==JSON.stringify(budget);
 }
 
-function reconcileLedgerClassifications(){
+function reconcileLedgerClassifications(list=ledger){  
   let changed = false;
-  ledger.forEach(entry=>{
+  list.forEach(entry=>{        
     const type = entry.gubun==='수입' ? 'income' : 'expense';
     const matches = accountCategories[type].flatMap(group=>
       group.accounts.flatMap(account=>account.items.map(mok=>({group,account,mok})))
@@ -1505,7 +1483,6 @@ function normalizeCategoryName(name, suffix){
 function normalizeHierarchySuffixes(){
   const categoriesBefore = JSON.stringify(accountCategories);
   const budgetBefore = JSON.stringify(budget);
-  let ledgerChanged = false;
   ['income','expense'].forEach(type=>{
     const normalizedGroups = new Map();
     accountCategories[type].forEach(gwan=>{
@@ -1530,19 +1507,7 @@ function normalizeHierarchySuffixes(){
     accountCategories[type] = [...normalizedGroups.values()];
   });
 
-  ledger.forEach(entry=>{
-    const gwan = typeof entry.gwan==='string'
-      ? normalizeCategoryName(entry.gwan,'_관')
-      : entry.gwan;
-    const hang = typeof entry.hang==='string'
-      ? normalizeCategoryName(entry.hang,'_항')
-      : entry.hang;
-    if(gwan!==entry.gwan || hang!==entry.hang){
-      entry.gwan = gwan;
-      entry.hang = hang;
-      ledgerChanged = true;
-    }
-  });
+
 
   const normalizedBudget = {};
   Object.entries(budget).forEach(([key,amount])=>{
@@ -1572,7 +1537,6 @@ function normalizeHierarchySuffixes(){
   return {
     categoriesChanged:categoriesBefore!==JSON.stringify(accountCategories),
     budgetChanged:budgetBefore!==JSON.stringify(budget),
-    ledgerChanged
   };
 }
 
@@ -1677,11 +1641,7 @@ async function loadYearData(){
     throw new Error(`목별 예산을 Firestore로 이전하지 못했습니다: ${lastStorageError}`);
   }
   const normalized = normalizeHierarchySuffixes();
-  const ledgerSaved = repairLedger().then(()=>true,error=>{ lastStorageError = error.message || String(error); return false; });    let changed = reconcileLedgerClassifications(list);
-    changed = migrateLedgerClassifications(list) || changed;
-    changed = normalizeLedgerSuffixes(list) || changed;
-    return changed;
-  }).then(()=>true,error=>{ lastStorageError = error.message || String(error); return false; });
+  const ledgerSaved = repairLedger().then(()=>true,error=>{ lastStorageError = error.message || String(error); return false; });
   const saves = await Promise.all([
     categoriesNeedMigration || normalized.categoriesChanged ? persistAccountCategories() : true,
     budgetNeedsMigration || normalized.budgetChanged ? persistBudget() : true,
@@ -1765,14 +1725,14 @@ function classificationPath(entry){
   return [entry.gwan, entry.hang, entry.category].filter(Boolean).join(' > ') || '미분류';
 }
 
-function migrateLedgerClassifications(){
+function migrateLedgerClassifications(list=ledger){    
   let changed = false;
   const legacyMokAliases = {
     '기타수입_기부금등':'기타수입(기부금 등)',
     '통신비_SMS등':'통신비(SMS 등)'
   };
-  ledger.forEach(entry=>{
-    if(entry.gwan) return;
+list.forEach(entry=>{
+    if(entry.gwan) return;                              
     const type = entry.gubun === '수입' ? 'income' : 'expense';
     const mokName = legacyMokAliases[entry.category] || entry.category;
     const match = findAccount(type, mokName) ||
@@ -1932,7 +1892,8 @@ function renderReport(){
 
   document.getElementById('r-income').textContent = fmt(ag.totalIncome);
   document.getElementById('r-expense').textContent = fmt(ag.totalExpense);
-document.getElementById('r-count').textContent = `승인된 ${approved.length.toLocaleString('ko-KR')}건 거래`;  document.getElementById('r-balance').textContent = fmt(ag.totalIncome - ag.totalExpense);
+document.getElementById('r-count').textContent = `승인된 ${approved.length.toLocaleString('ko-KR')}건 거래`; 
+document.getElementById('r-balance').textContent = fmt(ag.totalIncome - ag.totalExpense);
   renderAccountBalanceCheck(ag.totalIncome - ag.totalExpense);
 
   destroy('monthly');
@@ -1952,8 +1913,7 @@ document.getElementById('r-count').textContent = `승인된 ${approved.length.to
   destroy('hang');
   charts.hang = new Chart(document.getElementById('chartExpenseHang'), {
     type:'doughnut',
-    data:{ labels: ag.gwanLabels, datasets:[{data: ag.gwanValues, backgroundColor: ag.gwanLabels.map((_,i)=>hangColors[i%hangColors.length]), borderColor:'#F9F7F7', borderWidth:2}]},
-    options:{ responsive:true, maintainAspectRatio:false, cutout:'58%',
+data:{ labels: ag.gwanLabels, datasets:[{data: ag.gwanValues.map(v=>Math.max(0,v)), backgroundColor: ag.gwanLabels.map((_,i)=>hangColors[i%hangColors.length]), borderColor:'#F9F7F7', borderWidth:2}]},    options:{ responsive:true, maintainAspectRatio:false, cutout:'58%',
       plugins:{ legend:{position:'right', labels:{boxWidth:11, font:{size:11.5}}},
         tooltip:{callbacks:{label: ctx => `${ctx.label}: ${fmt(ctx.parsed)}`}}}
     }
@@ -1964,7 +1924,7 @@ document.getElementById('r-count').textContent = `승인된 ${approved.length.to
   const maxMok = Math.max(1, ...ag.topMok.map(m=>m[1]));
   ag.topMok.forEach(([name,val])=>{
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${escapeHTML(name)}<div class="bar-track"><div class="bar-fill" style="width:${(val/maxMok*100).toFixed(1)}%"></div></div></td><td class="num">${fmtShort(val)}</td>`;
+    tr.tr.innerHTML = `<td>${escapeHTML(name)}<div class="bar-track"><div class="bar-fill" style="width:${Math.max(0,val/maxMok*100).toFixed(1)}%"></div></div></td><td class="num">${fmtShort(val)}</td>`;innerHTML = `<td>${escapeHTML(name)}<div class="bar-track"><div class="bar-fill" style="width:${(val/maxMok*100).toFixed(1)}%"></div></div></td><td class="num">${fmtShort(val)}</td>`;
     tblTopMok.appendChild(tr);
   });
   document.getElementById('tbl-top-mok-total').innerHTML =
@@ -2135,7 +2095,7 @@ Object.entries(spentByMok).forEach(([key,amount])=>{
 document.getElementById('budget-note').textContent = rowCount
   ? '예산 관리에 등록된 목 순서로 표시합니다. 삭제·변경된 분류의 거래는 "미분류/삭제된 항목"에 합산됩니다.'
   : '등록된 예산 항목이 없습니다.';
-  .budget-orphan-row td{color:var(--expense);font-weight:700;}
+
 }
 
 function createHierarchyInput(className, value, placeholder, ariaLabel){
@@ -2600,7 +2560,7 @@ async function persistSubmissionBatch(entries,submittedAt,submittedBy){
       throw stateChangedError('선택한 내역의 상태가 바뀌었거나 찾을 수 없습니다. 목록을 새로고침한 뒤 다시 선택해 주세요.');
     }
     requireSingleSpender(targets);
-    const sequenceSnapshot = await api.tx.get(sequenceRef);                       // read before any write
+    const sequenceSnapshot = await api.tx.get(sequenceRef);
     const stored = sequenceSnapshot.exists ? Number(sequenceSnapshot.data().value) : highestSubmissionSequence(ledger);
     assigned = checkSequence(stored,'관리번호')+1;
     targets.forEach(entry=>api.set({
@@ -2610,49 +2570,9 @@ async function persistSubmissionBatch(entries,submittedAt,submittedBy){
     api.tx.set(sequenceRef,{value:String(assigned),...writeMeta()});
   });
   return assigned;
-}  if(!hasSharedStorage()) throw new Error('관리번호를 발급하려면 공유 저장소에 로그인해야 합니다.');
-  const sequenceRef = db.collection('accountingData').doc(SUBMISSION_SEQUENCE_KEY);
-  const ledgerRef = db.collection('accountingData').doc(ledgerKey(currentYear));
-  const selectedIds = new Set(entries.map(entry=>entry.id));
-  const latestSelected = ledger.filter(entry=>selectedIds.has(entry.id));
-  if(latestSelected.length!==selectedIds.size || latestSelected.some(entry=>entry.status!=='input-complete' || entry.locked)){
-    throw new Error('선택한 내역의 상태가 바뀌었거나 공유 저장소에서 찾을 수 없습니다. 목록을 새로고침한 뒤 다시 선택해 주세요.');
-  }
-  requireSingleSpender(latestSelected);
-  const initialSequence = highestSubmissionSequence(ledger);
-  let assignedSequence = 0;
-  let submittedLedger = null;
-  await db.runTransaction(async transaction=>{
-    const sequenceSnapshot = await transaction.get(sequenceRef);
-    const storedSequence = sequenceSnapshot.exists
-      ? Number(sequenceSnapshot.data().value)
-      : initialSequence;
-    if(!Number.isSafeInteger(storedSequence) || storedSequence<0 || storedSequence>=Number.MAX_SAFE_INTEGER){
-      throw new Error('저장된 관리번호 일련번호가 올바르지 않습니다.');
-    }
-    assignedSequence = storedSequence+1;
-    submittedLedger = ledger.map(entry=>{
-      if(!selectedIds.has(entry.id)) return entry;
-      return {
-        ...entry,
-        status:'submitted',
-        submittedAt,
-        submittedBy,
-        submissionSequence:assignedSequence,
-        managementNo:String(assignedSequence)
-      };
-    });
-    const updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-    const updatedBy = currentUser.uid;
-    const updatedByEmail = currentUser.email || '';
-    transaction.set(sequenceRef,{value:String(assignedSequence),updatedAt,updatedBy,updatedByEmail});
-    transaction.set(ledgerRef,{value:JSON.stringify(submittedLedger),updatedAt,updatedBy,updatedByEmail});
-  });
-  ledger = submittedLedger;
-  return assignedSequence;
 }
 
-unction checkSequence(value,label){
+function checkSequence(value,label){
   if(!Number.isSafeInteger(value) || value<0 || value>=Number.MAX_SAFE_INTEGER){
     throw new Error(`저장된 ${label} 일련번호가 올바르지 않습니다.`);
   }
@@ -2840,8 +2760,8 @@ function openPaymentReport(status){
   }
 }
 
-function renderPaymentReport(entries,spender,approval=null,managementNoOverride=null){
-  const total = entries.reduce((sum,entry)=>sum+Number(entry.amount||0),0);
+function renderPaymentReport(entries,spender,approval=null,managementNoOverride=null,target=document.getElementById('payment-report-sheet')){
+  const ordered = entries.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'') || String(a.id).localeCompare(String(b.id)));
   const today = new Date();
   const todayKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
   const requestDate = entries.map(entry=>entry.submittedAt).filter(Boolean).sort()[0]?.slice(0,10) || todayKey;
@@ -2850,10 +2770,9 @@ function renderPaymentReport(entries,spender,approval=null,managementNoOverride=
     ? existingManagementNumbers[0]
     : existingManagementNumbers.length>1 ? `복수 (${existingManagementNumbers.length}개)` : '제출 후 부여');
   const bankDetails = staffBankDetails.find(detail=>detail.name===spender) || {bank:'',accountNumber:''};
-  const sheet = document.getElementById('payment-report-sheet');
-  const rows = entries.map((entry,index)=>`
-    <tr class="report-row">
-      <td>${index+1}</td>
+  const sheet = target;                     
+const rows = ordered.map((entry,index)=>`
+    <tr class="report-row">      <td>${index+1}</td>
       <td>${escapeHTML(formatEntryDate(entry.date))}</td>
       <td colspan="2">${escapeHTML(entry.desc||'')}</td>
       <td colspan="2">${escapeHTML(entry.payee||'-')}</td>
@@ -3233,7 +3152,7 @@ if(!Number.isFinite(amount) || !Number.isInteger(amount) || amount===0){
     setStatus('예산 관리에서 등록된 목을 선택해주세요.');
     return;
   }
-   const month = (parseInt(date.split('-')[1],10)) + '월';
+     const month = (parseInt(date.split('-')[1],10)) + '월';
   const values = {
     date, month, gubun:currentGubun, desc, payee, spender, amount,
     gwan:classification.gwan, hang:classification.hang, category:classification.mok
@@ -3242,16 +3161,12 @@ if(!Number.isFinite(amount) || !Number.isInteger(amount) || amount===0){
   if(editingEntryId){
     const editId = editingEntryId;
     try{
-     await entryTransaction([editId],(found,api)=>{
+      await entryTransaction([editId],(found,api)=>{
         const entry = found.get(editId);
         if(!entry || entry.status!=='input-complete' || entry.locked){
           throw stateChangedError('선택한 내역은 더 이상 수정할 수 없습니다. 목록을 새로 확인해 주세요.');
         }
         api.set({...entry,...values});
-      }
-      await entryTransaction([entry.id],(found,api)=>{
-        if(found.has(entry.id)) throw stateChangedError('같은 id의 내역이 이미 있습니다. 다시 시도해 주세요.');
-        api.set(entry);
       });
     }catch(error){
       if(error.code==='accounting/state-changed') cancelEntryEdit();
@@ -3270,7 +3185,10 @@ if(!Number.isFinite(amount) || !Number.isInteger(amount) || amount===0){
       status:'input-complete'
     };
     try{
-      await mutateLedger(list=>{ list.push(entry); });
+      await entryTransaction([entry.id],(found,api)=>{
+        if(found.has(entry.id)) throw stateChangedError('같은 id의 내역이 이미 있습니다. 다시 시도해 주세요.');
+        api.set(entry);
+      });
     }catch(error){
       setStatus(`내역 저장에 실패했습니다: ${error.message || String(error)}`,true);
       renderEntryView();
@@ -3318,6 +3236,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   });
 });
 
+document.getElementById('btn-export-ledger').addEventListener('click',exportLedgerBackup);
 document.getElementById('btn-gubun-income').addEventListener('click', ()=>setGubun('수입'));
 document.getElementById('btn-gubun-expense').addEventListener('click', ()=>setGubun('지출'));
 document.getElementById('btn-add').addEventListener('click', addEntry);
