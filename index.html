@@ -2545,7 +2545,7 @@ function renderPendingBox(){
       if(action==='submit') updateSelectedWorkflow('input-complete','submitted');
       else if(action==='edit-input') editSelectedInputEntry();
       else if(action==='delete-input') deleteSelectedInputEntries();
-      else if(action==='reject-submitted') updateSelectedWorkflow('submitted','rejected');
+      else if(action==='reject-submitted') updateSelectedWorkflow('submitted','input-complete');
       else if(action==='preview-input') openPaymentReport('input-complete');
       else openPaymentReport('submitted');
     });
@@ -2817,11 +2817,20 @@ async function updateSelectedWorkflow(fromStatus,toStatus){
       }
       targets.forEach(entry=>{
         const next = {...entry,status:toStatus};
-        if(toStatus==='rejected'){ next.rejectedAt = now; next.rejectedBy = actor; delete next.managementNo; }
+        if(toStatus==='input-complete' && fromStatus==='submitted'){
+          // 반려: 제출완료 → 입력완료로 되돌림
+          next.rejectedAt = now;
+          next.rejectedBy = actor;
+          ['managementNo','submissionSequence','submittedAt','submittedBy'].forEach(key=>delete next[key]);
+        } else if(toStatus==='rejected'){
+          next.rejectedAt = now;
+          next.rejectedBy = actor;
+          delete next.managementNo;
+        }
         api.set(next);
       });
     });
-    setStatus(`${spender} 담당자의 ${ids.length}건을 반려했습니다.`);
+    setStatus(`${spender} 담당자의 ${ids.length}건을 반려하여 입력완료로 되돌렸습니다.`);
     renderReport();
     renderEntryView();
   }catch(error){
