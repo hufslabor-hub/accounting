@@ -339,6 +339,13 @@ body { background-color:var(--paper-2); color:var(--ink); }
 
   footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-soft);display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;}
   @media (max-width:600px){.hierarchy-table-scroll{max-height:70vh;}}
+  .usage-box{margin-top:14px;padding:12px 14px;background:rgba(249,247,247,.10);border:1px solid rgba(219,226,239,.35);}
+.usage-head,.usage-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--paper);}
+.usage-head strong{color:var(--paper-2);font-weight:700;}
+.usage-track{height:12px;background:rgba(249,247,247,.2);margin:8px 0;overflow:hidden;}
+.usage-fill{height:100%;width:0;background:var(--paper);transition:width .4s,background .4s;}
+.usage-fill.warn{background:#f2c14e;}
+.usage-fill.danger{background:#e5484d;}
 </style>
 </head>
 <body>
@@ -358,6 +365,17 @@ body { background-color:var(--paper-2); color:var(--ink); }
         <select id="year-select"></select>
         <span id="fy-range"></span>
       </div>
+        <div class="usage-box">
+    <div class="usage-head">
+      <span>오늘 Firestore 읽기 사용량</span>
+      <strong id="usage-numbers">-</strong>
+    </div>
+    <div class="usage-track"><div class="usage-fill" id="usage-fill"></div></div>
+    <div class="usage-foot">
+      <span id="usage-note">아직 조회하지 않았습니다.</span>
+      <button class="btn-auth" id="btn-usage-refresh" type="button">사용량 조회</button>
+    </div>
+  </div>
     </div>
   </div>
 </header>
@@ -3862,6 +3880,94 @@ document.getElementById('btn-rebuild-report').addEventListener('click',async ()=
   await loadReportSummary(true);
 });
   // ---------- init ----------
+  // ---------- Firestore 읽기 사용량 (Cloud Monitoring) ----------
+const FREE_READ_LIMIT = 50000;
+let monitoringToken = null, monitoringTokenExp = 0;
+
+async function getMonitoringToken(){
+  if(monitoringToken && Date.now() < monitoringTokenExp) return monitoringToken;
+  if(!auth?.currentUser) throw new Error('로그인이 필요합니다.');
+  const provider = new firebase.auth.GoogleAuthProvider();
+  provider.addScope('https://www.googleapis.com/auth/monitoring.read');
+  if(auth.currentUser.email) provider.setCustomParameters({login_hint:auth.currentUser.email});
+  const result = await auth.currentUser.reauthenticateWithPopup(provider);
+  const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result) || result.credential;
+  if(!credential?.accessToken) throw new Error('모니터링 읽기 권한 동의가 필요합니다.');
+  monitoringToken = credential.accessToken;
+  monitoringTokenExp = Date.now() + 50*60*1000;   // 약 50분간 재사용
+  return monitoringToken;
+}
+
+// 미국 태평양시 기준 "오늘 0시" (무료 할당량이 초기화되는 시각)
+function pacificDayStart(now=new Date()){
+  const parts = new Intl.DateTimeFormat('en-US',{
+    timeZone:'America/Los_Angeles',hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'
+  }).formatToParts(now);
+  const get = type => Number(parts.find(p=>p.type===type).value);
+  const elapsed = ((get('hour')%24)*3600 + get('minute')*60 + get('second'))*1000;
+  return new Date(now.getTime() - elapsed);
+}
+
+async function fetchTodayReads(){
+  const token = await getMonitoringToken();
+  const projectId = window.FIREBASE_CONFIG.projectId;
+  const end = new Date();
+  const start = pacificDayStart(end);
+  const period = Math.max(60, Math.ceil((end-start)/1000));
+  const params = new URLSearchParams({
+    filter:'metric.type="firestore.googleapis.com/document/read_count"',
+    'interval.startTime':start.toISOString(),
+    'interval.endTime':end.toISOString(),
+    'aggregation.alignmentPeriod':`${period}s`,
+    'aggregation.perSeriesAligner':'ALIGN_SUM',
+    'aggregation.crossSeriesReducer':'REDUCE_SUM'
+  });
+  const res = await fetch(
+    `https://monitoring.googleapis.com/v3/projects/${encodeURIComponent(projectId)}/timeSeries?${params}`,
+    {headers:{Authorization:`Bearer ${token}`}}
+  );
+  const data = await res.json();
+  if(!res.ok){
+    monitoringToken = null;
+    throw new Error(data.error?.message || `조회 실패 (${res.status})`);
+  }
+  let total = 0;
+  (data.timeSeries||[]).forEach(ts=>(ts.points||[]).forEach(p=>{
+    total += Number(p.value?.int64Value || 0);
+  }));
+  return {total,start};
+}
+
+function renderUsage(total,start){
+  const pct = Math.min(100,total/FREE_READ_LIMIT*100);
+  const fill = document.getElementById('usage-fill');
+  fill.style.width = pct + '%';
+  fill.classList.toggle('warn',pct>=70 && pct<90);
+  fill.classList.toggle('danger',pct>=90);
+  document.getElementById('usage-numbers').textContent =
+    `${total.toLocaleString('ko-KR')} / ${FREE_READ_LIMIT.toLocaleString('ko-KR')}건 (${pct.toFixed(1)}%)`;
+  const reset = new Date(start.getTime() + 24*3600*1000);
+  const fmtTime = d => d.toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  document.getElementById('usage-note').textContent =
+    `초기화 ${fmtTime(reset)} · 조회 ${fmtTime(new Date())}`;
+}
+
+document.getElementById('btn-usage-refresh').addEventListener('click',async event=>{
+  const button = event.currentTarget;
+  const note = document.getElementById('usage-note');
+  button.disabled = true;
+  note.textContent = '조회 중…';
+  try{
+    const {total,start} = await fetchTodayReads();
+    renderUsage(total,start);
+  }catch(error){
+    note.textContent = /permission|403|PERMISSION/i.test(error.message)
+      ? '권한이 없습니다. 프로젝트 소유자/뷰어 계정이거나 Monitoring API가 켜져 있는지 확인하세요.'
+      : `사용량 조회 실패: ${error.message}`;
+  }finally{
+    button.disabled = false;
+  }
+});
 connectFirebase();
 </script>
 
