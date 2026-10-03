@@ -899,13 +899,6 @@ async function handleAuthState(user){
 }
 
 function connectFirebase(){
-  auth.getRedirectResult().then(result => {
-  if (result.user) {
-    // successfully signed in via redirect
-  }
-}).catch(error => {
-  document.getElementById('auth-status').textContent = `Google 로그인 실패: ${error.message}`;
-});
   if(!window.firebase || !window.FIREBASE_CONFIG){
     showAuthGate('Firebase 연결 실패','Firebase SDK를 불러오지 못했습니다. 인터넷 연결과 Firebase 설정 파일을 확인해 주세요.');
     document.getElementById('auth-status').textContent = 'Firebase SDK 또는 설정을 사용할 수 없음';
@@ -916,12 +909,24 @@ function connectFirebase(){
     const app = firebase.initializeApp(window.FIREBASE_CONFIG);
     auth = app.auth();
     db = app.firestore();
-    auth.onAuthStateChanged(handleAuthState,error=>{
-      showAuthGate('로그인 상태 확인 실패',error.message);
+
+    // Handle redirect result (must be after auth is created)
+    auth.getRedirectResult()
+      .then(result => {
+        // Optional: you can do something when redirect login succeeds
+        // if (result.user) { ... }
+      })
+      .catch(error => {
+        document.getElementById('auth-status').textContent = `Google 로그인 실패: ${error.message}`;
+        document.getElementById('auth-gate-message').textContent = `Google 로그인을 완료하지 못했습니다. ${error.message}`;
+      });
+
+    auth.onAuthStateChanged(handleAuthState, error => {
+      showAuthGate('로그인 상태 확인 실패', error.message);
       document.getElementById('auth-status').textContent = '인증 상태 확인 실패';
     });
   }catch(e){
-    showAuthGate('Firebase 초기화 실패',e.message);
+    showAuthGate('Firebase 초기화 실패', e.message);
     document.getElementById('auth-status').textContent = 'Firebase 초기화 실패';
     document.getElementById('btn-sign-in').disabled = true;
   }
@@ -931,15 +936,12 @@ async function signInWithGoogle(){
   if(!auth) return;
   try{
     const provider = new firebase.auth.GoogleAuthProvider();
-    // Optional: add scopes if you need Drive access later
-    // provider.addScope('https://www.googleapis.com/auth/drive.file');
     await auth.signInWithRedirect(provider);
   }catch(e){
     document.getElementById('auth-status').textContent = `Google 로그인 실패: ${e.message}`;
     document.getElementById('auth-gate-message').textContent = `Google 로그인을 완료하지 못했습니다. ${e.message}`;
   }
 }
-
 async function signOut(){
   if(!auth) return;
   try{ await auth.signOut(); }
@@ -1934,9 +1936,10 @@ data:{ labels: ag.gwanLabels, datasets:[{data: ag.gwanValues.map(v=>Math.max(0,v
   tblTopMok.innerHTML = '';
   const maxMok = Math.max(1, ...ag.topMok.map(m=>m[1]));
   ag.topMok.forEach(([name,val])=>{
-    const tr = document.createElement('tr');
-tr.innerHTML = `<td>${escapeHTML(name)}<div class="bar-track"><div class="bar-fill" style="width:${Math.max(0,val/maxMok*100).toFixed(1)}%"></div></div></td><td class="num">${fmtShort(val)}</td>`;    tblTopMok.appendChild(tr);
-  });
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td>${escapeHTML(name)}<div class="bar-track"><div class="bar-fill" style="width:${Math.max(0,val/maxMok*100).toFixed(1)}%"></div></div></td><td class="num">${fmtShort(val)}</td>`;
+  tblTopMok.appendChild(tr);
+});
   document.getElementById('tbl-top-mok-total').innerHTML =
     `<tr class="report-total-row"><th>표시 합계</th><td class="num">${fmtShort(ag.topMok.reduce((sum,[,amount])=>sum+amount,0))}</td></tr>`;
 
@@ -2772,6 +2775,7 @@ function openPaymentReport(status){
 
 function renderPaymentReport(entries,spender,approval=null,managementNoOverride=null,target=document.getElementById('payment-report-sheet')){
   const ordered = entries.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'') || String(a.id).localeCompare(String(b.id)));
+  const total = entries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
   const today = new Date();
   const total = entries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
   const todayKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
