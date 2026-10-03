@@ -1171,11 +1171,51 @@ async function loadStaffNames(){
   }
 }
 
+// JSON과 일반 텍스트(메모장/엑셀)를 모두 자동으로 알아채고 해석하는 만능 파서
+function parseStaffBankDetails(rawValue) {
+  if (!rawValue || typeof rawValue !== 'string') return [];
+  
+  const trimmed = rawValue.trim();
+  
+  // 1. 만약 대괄호([)나 중괄호({)로 시작하면 JSON으로 해석을 시도합니다.
+  if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+    try {
+      return normalizeStaffBankDetails(JSON.parse(trimmed));
+    } catch (e) {
+      // JSON 해석에 실패하면 아래 일반 텍스트 파싱으로 넘어갑니다.
+    }
+  }
+  
+  // 2. JSON이 아니라면 메모장/엑셀 텍스트(줄바꿈 + 탭/공백 구분)로 해석합니다.
+  const lines = trimmed.split('\n');
+  const details = [];
+  
+  for (const line of lines) {
+    const cleanLine = line.trim();
+    if (!cleanLine) continue; // 빈 줄은 패스
+    
+    // 탭(\t)이나 공백 문자열 기준으로 글자를 쪼갭니다 (이름, 은행, 계좌)
+    const parts = cleanLine.split(/\s+/); 
+    
+    if (parts.length >= 3) {
+      details.push({
+        name: parts[0],
+        bank: parts[1],
+        accountNumber: parts[2]
+      });
+    }
+  }
+  
+  return normalizeStaffBankDetails(details);
+}
+
+// 데이터를 불러오는 핵심 함수를 새 파서 기반으로 업그레이드합니다.
 async function loadStaffBankDetails(){
-  try{
+  try {
     const res = await storageGet(STAFF_BANK_DETAILS_KEY);
-    staffBankDetails = normalizeStaffBankDetails(JSON.parse(res.value));
-  }catch(e){
+    // 무조건 JSON.parse를 하던 구조에서 '자동 감지 파서'를 거치도록 변경합니다.
+    staffBankDetails = parseStaffBankDetails(res.value);
+  } catch(e) {
     if(e.code !== 'accounting/not-found') throw e;
     staffBankDetails = [];
   }
