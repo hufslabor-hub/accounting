@@ -977,8 +977,7 @@ async function handleAuthState(user){
     document.getElementById('auth-status').textContent = user.email || '로그인됨';
     await initializeApplicationData();
     }catch(e){
-    console.error(e);
-    stopSharedDataWatchers();
+console.error('AUTH-GATE ERROR', e.code, e.message, e);    stopSharedDataWatchers();
     stopLedgerWatcher();
     if(isQuotaError(e)){
       showQuotaGate();
