@@ -384,6 +384,11 @@ body { background-color:var(--paper-2); color:var(--ink); }
 
   <!-- ============ REPORT VIEW ============ -->
   <div class="view active" id="view-report">
+    <div class="notice" id="report-data-note" style="margin-top:28px;">
+  <span id="report-data-text">보고서 데이터를 불러오는 중…</span>
+  <button class="btn-text" id="btn-reload-report" type="button">보고서 새로고침</button>
+      <button class="btn-text" id="btn-rebuild-report" type="button">집계 다시 계산</button>
+</div>
     <div class="stats">
       <div class="stat"><p class="label">총 수입</p><p class="value income" id="r-income">-</p><p class="sub">전기이월금 포함</p></div>
       <div class="stat"><p class="label">총 지출</p><p class="value expense" id="r-expense">-</p><p class="sub" id="r-count">-</p></div>
@@ -579,6 +584,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
           </table>
         </div>
         <p class="count-note" id="tx-count-entry"></p>
+<button class="btn-primary hidden" id="btn-load-more-entries" type="button" style="margin-top:12px;">이전 내역 더 보기</button>
       </div>
     </section>
   </div>
@@ -850,12 +856,13 @@ function watchSharedData(){
 }
 
 async function initializeApplicationData(){
-  activateTab(window.location.hash.slice(1) || 'report');
+  activateTab(window.location.hash.slice(1) || 'entry');
   renderStorageNotice();
   await loadYears();
   await loadYearData();
   setupDatalists();
   setGubun('지출');
+  appReady = true;
   renderAll();
   watchSharedData();
 }
@@ -993,8 +1000,7 @@ function applyFixes(list){
 function setFooter(msg){
   const out = ledger.filter(t => !(t.date||'').startsWith(currentYear + '-')).length;
   document.getElementById('footer-sync').textContent =
-    `${currentYear}년 · ${msg} · ${ledger.length}건` + (out ? ` · ⚠ 회계연도 밖 날짜 ${out}건` : '');
-}
+`${currentYear}년 · ${msg} · 불러온 내역 ${ledger.length}건` + (out ? ` · ⚠ 회계연도 밖 날짜 ${out}건` : '');}
 
 const entriesRef = year => db.collection('accountingData').doc(ledgerKey(year)).collection('entries');
 const ledgerMetaRef = year => db.collection('accountingData').doc('ledger-meta:' + year);
@@ -1002,14 +1008,51 @@ const MIGRATION_LOCK_MS = 120000;
 let ledgerUnsubscribe = null;
 let ledgerRenderTimer = null;
 
+  const ENTRY_PAGE_SIZE = 70;
+let pendingUnsubscribe = null;
+let ledgerSources = {recent:new Map(), pending:new Map(), older:new Map()};
+let olderCursor = null, cursorSet = false, olderHasMore = false, olderLoading = false;
+let reportSummary = null, reportMonthCache = {}, reportLoading = false, reportLoadToken = 0;
+const SUMMARY_VERSION = 1;
+const reportSummaryKey = y => 'report-summary:' + y;
+const reportSummaryRef = year => db.collection('accountingData').doc(reportSummaryKey(year));
+  let appReady = false;
+const APPROVED_STATES = ['approved','paid','confirmed'];
+  
 function stopLedgerWatcher(){
   if(ledgerUnsubscribe){ ledgerUnsubscribe(); ledgerUnsubscribe = null; }
+  if(pendingUnsubscribe){ pendingUnsubscribe(); pendingUnsubscribe = null; }
 }
 
 function scheduleLedgerRender(){
   clearTimeout(ledgerRenderTimer);
-  ledgerRenderTimer = setTimeout(()=>{ renderReport(); renderEntryView(); },150);
+  ledgerRenderTimer = setTimeout(()=>{ renderEntryView(); },150);   // 보고서는 실시간 갱신하지 않음
 }
+
+function rebuildLedger(){
+  const map = new Map();
+  [ledgerSources.older, ledgerSources.pending, ledgerSources.recent]
+    .forEach(source=>source.forEach((entry,id)=>map.set(id,entry)));
+  ledger = [...map.values()].sort(compareEntries);
+}
+
+function watchLedgerQuery(query, year, onData){
+  let first = true, unsub = null;
+  const ready = new Promise((resolve,reject)=>{
+    unsub = query.onSnapshot(snapshot=>{
+      if(year!==currentYear) return;
+      onData(snapshot);
+      if(first){ first = false; resolve(); return; }
+      setFooter('실시간 동기화');
+      scheduleLedgerRender();
+    },error=>{
+      if(first){ first = false; reject(error); return; }
+      document.getElementById('auth-status').textContent = `장부 실시간 동기화 오류: ${error.message}`;
+    });
+  });
+  return {unsub:()=>unsub(), ready};
+}
+
 
 // Firestore returns docs sorted by id ("imp_1","imp_10","imp_100"...), so restore the natural order.
 function entryOrder(entry){
@@ -1776,32 +1819,217 @@ list.forEach(entry=>{
 async function loadLedger(){
   stopLedgerWatcher();
   const year = currentYear;
+reportSummary = null; reportMonthCache = {}; reportLoading = false; reportLoadToken++;
+  ledgerSources = {recent:new Map(), pending:new Map(), older:new Map()};
+  olderCursor = null; cursorSet = false; olderHasMore = false; olderLoading = false;
   await ensureLedgerMigrated(year);
-  await new Promise((resolve,reject)=>{
-    let first = true;
-    ledgerUnsubscribe = entriesRef(year).onSnapshot(snapshot=>{
-      if(year!==currentYear) return;
-      ledger = snapshot.docs.map(doc=>doc.data()).sort(compareEntries);
-      if(first){ first = false; resolve(); return; }
-      setFooter('실시간 동기화');
-      scheduleLedgerRender();
-    },error=>{
-      if(first){ first = false; reject(error); return; }
-      document.getElementById('auth-status').textContent = `장부 실시간 동기화 오류: ${error.message}`;
-    });
+  const col = entriesRef(year);
+
+  const recent = watchLedgerQuery(col.orderBy('date','desc').limit(ENTRY_PAGE_SIZE), year, snapshot=>{
+    ledgerSources.recent = new Map(snapshot.docs.map(doc=>[doc.id,doc.data()]));
+    if(!cursorSet){
+      cursorSet = true;
+      olderCursor = snapshot.docs.length ? snapshot.docs[snapshot.docs.length-1] : null;
+      olderHasMore = snapshot.size>=ENTRY_PAGE_SIZE;
+    }
+    rebuildLedger();
   });
-  setFooter('Firestore에서 불러옴');
+  const pending = watchLedgerQuery(col.where('status','in',['input-complete','submitted','rejected']), year, snapshot=>{
+    ledgerSources.pending = new Map(snapshot.docs.map(doc=>[doc.id,doc.data()]));
+    rebuildLedger();
+  });
+  ledgerUnsubscribe = recent.unsub;
+  pendingUnsubscribe = pending.unsub;
+  await Promise.all([recent.ready, pending.ready]);
+  setFooter('최근 내역만 불러옴');
 }
 
+async function loadMoreEntries(){
+  if(olderLoading || !olderHasMore || !olderCursor) return;
+  const year = currentYear;
+  olderLoading = true;
+  updateLoadMoreButton();
+  try{
+    const snapshot = await entriesRef(year).orderBy('date','desc').startAfter(olderCursor).limit(ENTRY_PAGE_SIZE).get();
+    if(year!==currentYear) return;
+    snapshot.docs.forEach(doc=>ledgerSources.older.set(doc.id,doc.data()));
+    if(snapshot.docs.length) olderCursor = snapshot.docs[snapshot.docs.length-1];
+    olderHasMore = snapshot.size>=ENTRY_PAGE_SIZE;
+    rebuildLedger();
+    setFooter('이전 내역 추가 로드');
+  }catch(error){
+    setStatus(`이전 내역을 불러오지 못했습니다: ${error.message || String(error)}`,true);
+  }finally{
+    if(year===currentYear){ olderLoading = false; renderEntryView(); }
+  }
+}
+
+function updateLoadMoreButton(){
+  const button = document.getElementById('btn-load-more-entries');
+  button.classList.toggle('hidden',!olderHasMore);
+  button.disabled = olderLoading;
+  button.textContent = olderLoading ? '불러오는 중…' : `이전 내역 ${ENTRY_PAGE_SIZE}건 더 보기`;
+}
+
+function setReportNote(text){
+  document.getElementById('report-data-text').textContent = text;
+}
+
+function parseSummary(raw){
+  try{
+    const data = JSON.parse(raw);
+    if(data && data.version===SUMMARY_VERSION && data.cells && typeof data.cells==='object') return data;
+  }catch(e){}
+  return null;
+}
+
+function emptySummary(){ return {version:SUMMARY_VERSION, cells:{}}; }
+
+function cellKey(entry){
+  return JSON.stringify([entry.month||'기타', entry.gubun, entry.gwan||'', entry.hang||'', entry.category||'']);
+}
+
+function applyToSummary(summary, entry, sign){
+  const key = cellKey(entry);
+  const cell = summary.cells[key] || {a:0,n:0};
+  cell.a += sign*Number(entry.amount||0);
+  cell.n += sign;
+  if(cell.n===0 && cell.a===0) delete summary.cells[key];
+  else summary.cells[key] = cell;
+}
+
+// 집계 문서의 각 칸을 aggregates()·renderBudgetSection()이 읽을 수 있는 형태로 변환
+function summaryToEntries(summary){
+  return Object.entries(summary.cells).map(([key,cell])=>{
+    const [month,gubun,gwan,hang,category] = JSON.parse(key);
+    return {month,gubun,gwan,hang,category,amount:cell.a,_count:cell.n};
+  });
+}
+
+async function rebuildReportSummary(year){
+  const snapshot = await entriesRef(year).where('status','in',APPROVED_STATES).get();
+  const summary = emptySummary();
+  snapshot.docs.forEach(doc=>applyToSummary(summary,doc.data(),1));
+  summary.rebuiltAt = new Date().toISOString();
+  try{
+    await reportSummaryRef(year).set({value:JSON.stringify(summary),...writeMeta()});
+  }catch(error){
+    summary.unsaved = true;          // 저장은 실패했지만 화면에는 표시
+    console.error(error);
+  }
+  return summary;
+}
+
+async function loadReportSummary(force=false){
+  if(reportLoading) return;
+  reportLoading = true;
+  const token = ++reportLoadToken;
+  const year = currentYear;
+  let rebuilt = false;
+  try{
+    let summary = null;
+    if(!force){
+      setReportNote('보고서 집계를 불러오는 중…');
+      const snapshot = await reportSummaryRef(year).get();
+      if(snapshot.exists) summary = parseSummary(snapshot.data().value);
+    }
+    if(!summary){
+      setReportNote('집계 문서를 새로 만드는 중입니다. 승인된 내역 전체를 한 번 읽습니다…');
+      summary = await rebuildReportSummary(year);
+      rebuilt = true;
+    }
+    if(token!==reportLoadToken) return;
+    reportSummary = summary;
+    reportMonthCache = {};
+    const total = Object.values(summary.cells).reduce((sum,cell)=>sum+cell.n,0);
+    setReportNote(
+      `승인된 ${total.toLocaleString('ko-KR')}건 기준 집계입니다.` +
+      (rebuilt ? ' (집계를 새로 계산했습니다.)' : '') +
+      (summary.unsaved ? ' ⚠ 집계 문서 저장에 실패해 다음에도 다시 계산합니다.' : '') +
+      ' 다른 담당자의 승인은 새로고침 후 반영됩니다.'
+    );
+  }catch(error){
+    if(token===reportLoadToken) setReportNote(`보고서 데이터를 불러오지 못했습니다: ${error.message || String(error)}`);
+    return;
+  }finally{
+    if(token===reportLoadToken) reportLoading = false;
+  }
+  renderReport();
+}
+
+// ---------- 세부 거래 내역: 선택한 월만 읽기 ----------
+async function loadReportMonth(month){
+  if(reportMonthCache[month]) return;
+  const year = currentYear;
+  const snapshot = await entriesRef(year)
+    .where('status','in',APPROVED_STATES)
+    .where('month','==',month)
+    .get();
+  if(year!==currentYear) return;
+  reportMonthCache[month] = snapshot.docs.map(doc=>doc.data());
+}
+
+function renderReportMonthFilters(approved){
+  const el = document.getElementById('month-filters-report');
+  el.innerHTML = '';
+  const months = monthList.filter(m=>approved.some(t=>t.month===m));
+  if(!months.includes(currentMonthReport)) currentMonthReport = months[months.length-1] || '';
+  months.forEach(m=>{
+    const btn = document.createElement('button');
+    btn.className = 'filter-btn' + (m===currentMonthReport ? ' active' : '');
+    btn.textContent = m;
+    btn.addEventListener('click',()=>{
+      currentMonthReport = m;
+      renderReportMonthFilters(approved);
+      renderReportDetail();
+    });
+    el.appendChild(btn);
+  });
+}
+
+async function renderReportDetail(){
+  if(!document.getElementById('view-report').classList.contains('active')) return;
+  const body = document.getElementById('tx-body-report');
+  const total = document.getElementById('tx-report-total');
+  const note = document.getElementById('tx-count-report');
+  const month = currentMonthReport;
+  if(!reportSummary || !month){
+    body.innerHTML = ''; total.innerHTML = '';
+    note.textContent = '승인된 내역이 없습니다.';
+    return;
+  }
+  if(!reportMonthCache[month]){
+    note.textContent = `${month} 내역을 불러오는 중…`;
+    try{ await loadReportMonth(month); }
+    catch(error){ note.textContent = `${month} 내역을 불러오지 못했습니다: ${error.message || String(error)}`; return; }
+    if(month!==currentMonthReport || !reportMonthCache[month]) return;
+  }
+  const list = reportMonthCache[month].slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  body.innerHTML = '';
+  list.forEach(t=>{
+    const tr = document.createElement('tr');
+    tr.className = t.gubun==='수입' ? 'income-row' : 'expense-row';
+    tr.innerHTML = `
+      <td>${escapeHTML(formatEntryDate(t.date))}</td>
+      <td>${escapeHTML(t.desc||'')}</td>
+      <td>${escapeHTML(t.category||'-')}</td>
+      <td>${escapeHTML(t.payee||t.spender||'-')}</td>
+      <td class="num" style="color:#3F72AF">${t.gubun==='수입'?fmtShort(t.amount):''}</td>
+      <td class="num" style="color:#112D4E">${t.gubun==='지출'?fmtShort(t.amount):''}</td>`;
+    body.appendChild(tr);
+  });
+  const income = list.reduce((sum,t)=>sum+(t.gubun==='수입'?Number(t.amount||0):0),0);
+  const expense = list.reduce((sum,t)=>sum+(t.gubun==='지출'?Number(t.amount||0):0),0);
+  total.innerHTML = `<tr class="report-total-row"><th colspan="4">${month} 합계 · ${list.length}건</th><td class="num">${fmtShort(income)}</td><td class="num">${fmtShort(expense)}</td></tr>`;
+  note.textContent = `${month} 승인 거래 ${list.length.toLocaleString('ko-KR')}건 (선택한 월만 불러옵니다)`;
+}
 // ---------- per-entry transactions ----------
 function applyLocalChanges(upserts,deletes){
-  const map = new Map(ledger.map(entry=>[entry.id,entry]));
-  upserts.forEach((entry,id)=>map.set(id,entry));
-  deletes.forEach(id=>map.delete(id));
-  ledger = [...map.values()].sort(compareEntries);
+  upserts.forEach((entry,id)=>ledgerSources.older.set(id,entry));
+  deletes.forEach(id=>Object.values(ledgerSources).forEach(source=>source.delete(id)));
+  rebuildLedger();
   setFooter('저장됨');
 }
-
 // Locks the given entry ids, hands the latest data to work(found, api).
 // In work(): do any extra api.tx.get(...) reads FIRST, then api.set / api.remove.
 async function entryTransaction(ids,work){
@@ -1809,10 +2037,18 @@ async function entryTransaction(ids,work){
   if(ids.length>450) throw new Error('한 번에 처리할 수 있는 내역은 450건까지입니다.');
   const year = currentYear;
   const col = entriesRef(year);
+  const sumRef = reportSummaryRef(year);
   let upserts = new Map(), deletes = new Set();
+  let committedSummary = null, touchedMonths = new Set();
   await db.runTransaction(async tx=>{
     upserts = new Map(); deletes = new Set();            // reset if Firestore retries
-    const snapshots = await Promise.all(ids.map(id=>tx.get(col.doc(id))));
+    committedSummary = null; touchedMonths = new Set();
+    // 모든 읽기를 쓰기보다 먼저 수행
+    const [snapshots,sumSnapshot] = await Promise.all([
+      Promise.all(ids.map(id=>tx.get(col.doc(id)))),
+      tx.get(sumRef)
+    ]);
+    const summary = sumSnapshot.exists ? parseSummary(sumSnapshot.data().value) : null;
     const found = new Map();
     snapshots.forEach((snapshot,index)=>{ if(snapshot.exists) found.set(ids[index],snapshot.data()); });
     await work(found,{
@@ -1820,8 +2056,29 @@ async function entryTransaction(ids,work){
       set:entry=>{ tx.set(col.doc(entry.id),entry); upserts.set(entry.id,entry); deletes.delete(entry.id); },
       remove:id=>{ tx.delete(col.doc(id)); deletes.add(id); upserts.delete(id); }
     });
+    // 승인 상태가 바뀐 내역만 집계 문서에 반영 (집계 문서가 있을 때만)
+    if(!summary) return;
+    let changed = false;
+    const track = (before,after)=>{
+      const was = before && APPROVED_STATES.includes(before.status);
+      const will = after && APPROVED_STATES.includes(after.status);
+      if(was){ applyToSummary(summary,before,-1); touchedMonths.add(before.month||'기타'); changed = true; }
+      if(will){ applyToSummary(summary,after,+1); touchedMonths.add(after.month||'기타'); changed = true; }
+    };
+    upserts.forEach((entry,id)=>track(found.get(id),entry));
+    deletes.forEach(id=>track(found.get(id),null));
+    if(changed){
+      tx.set(sumRef,{value:JSON.stringify(summary),...writeMeta()});
+      committedSummary = summary;
+    }
   });
-  if(year===currentYear) applyLocalChanges(upserts,deletes);
+  if(year===currentYear){
+    applyLocalChanges(upserts,deletes);
+    if(committedSummary){
+      reportSummary = committedSummary;
+      touchedMonths.forEach(month=>{ delete reportMonthCache[month]; });
+    }
+  }
 }
 
 // ---------- load-time repair: writes only the fields that actually changed ----------
@@ -1854,15 +2111,24 @@ async function repairLedger(){
     patches.slice(i,i+400).forEach(({id,patch})=>batch.update(col.doc(id),patch));
     await batch.commit();
   }
+   if(patches.some(({id,patch})=>APPROVED_STATES.includes(originals.get(id).status) || APPROVED_STATES.includes(patch.status))){
+    try{ await reportSummaryRef(year).set({value:JSON.stringify({version:0}),...writeMeta()}); }catch(e){ console.error(e); }
+    if(year===currentYear) reportSummary = null;
+  }
   if(year===currentYear) ledger = draft.sort(compareEntries);
   return patches.length;
 }
 
-function exportLedgerBackup(){
-  downloadBlob(
-    new Blob([JSON.stringify(ledger,null,2)],{type:'application/json'}),
-    `ledger-${currentYear}-${paymentDateKey(new Date())}.json`
-  );
+async function exportLedgerBackup(){
+  if(!window.confirm('백업을 위해 이 회계연도의 모든 내역을 서버에서 읽습니다. 계속할까요?')) return;
+  try{
+    const snapshot = await entriesRef(currentYear).get();
+    const all = snapshot.docs.map(doc=>doc.data()).sort(compareEntries);
+    downloadBlob(new Blob([JSON.stringify(all,null,2)],{type:'application/json'}),
+      `ledger-${currentYear}-${paymentDateKey(new Date())}.json`);
+  }catch(error){
+    setStatus(`백업 실패: ${error.message || String(error)}`,true);
+  }
 }
 
 // ---------- derived aggregates ----------
@@ -1911,13 +2177,18 @@ const hangColors = ['#112D4E','#3F72AF','#DBE2EF'];
 function destroy(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } }
 
 function renderReport(){
-  const approved = ledger.filter(t => t.status === 'approved' || t.status === 'paid' || t.status === 'confirmed');
+ if(reportSummary===null){
+    if(appReady && document.getElementById('view-report').classList.contains('active')) loadReportSummary();
+    return;
+  }
+  const approved = summaryToEntries(reportSummary);
+  const approvedCount = approved.reduce((sum,t)=>sum+t._count,0);
   const ag = aggregates(approved);
 
   document.getElementById('r-income').textContent = fmt(ag.totalIncome);
   document.getElementById('r-expense').textContent = fmt(ag.totalExpense);
-document.getElementById('r-count').textContent = `승인된 ${approved.length.toLocaleString('ko-KR')}건 거래`; 
-document.getElementById('r-balance').textContent = fmt(ag.totalIncome - ag.totalExpense);
+document.getElementById('r-count').textContent = `승인된 ${approvedCount.toLocaleString('ko-KR')}건 거래`;
+  document.getElementById('r-balance').textContent = fmt(ag.totalIncome - ag.totalExpense);
   renderAccountBalanceCheck(ag.totalIncome - ag.totalExpense);
 
   destroy('monthly');
@@ -1964,8 +2235,8 @@ data:{ labels: ag.gwanLabels, datasets:[{data: ag.gwanValues.map(v=>Math.max(0,v
     }
   });
 
-  renderMonthFilters('month-filters-report', approved, currentMonthReport, m=>{ currentMonthReport=m; renderTxTable('report'); });
-  renderTxTable('report');
+   renderReportMonthFilters(approved);
+  renderReportDetail();
   renderBudgetSection(approved);
 }
 
@@ -2297,8 +2568,7 @@ function renderTxTable(mode){
   const body = document.getElementById(bodyId);
   body.innerHTML = '';
 
-  const source = isReport ? ledger.filter(t=>t.status==='approved' || t.status==='paid' || t.status==='confirmed') : ledger;
-
+const source = ledger;
   const filtered = source
     .filter(t => monthSel==='전체' || t.month===monthSel)
     .filter(t => isReport || currentStatusEntry==='전체' || t.status===currentStatusEntry)
@@ -2341,10 +2611,10 @@ function renderTxTable(mode){
       `<tr class="report-total-row"><th colspan="4">합계 · ${filtered.length}건</th><td class="num">${fmtShort(totalIncome)}</td><td class="num">${fmtShort(totalExpense)}</td></tr>`;
   }
 
-  document.getElementById(countId).textContent = filtered.length > shown.length
-    ? `${monthSel} 거래 ${filtered.length.toLocaleString('ko-KR')}건 중 최근 ${shown.length}건 표시`
-    : `${monthSel} 거래 ${filtered.length.toLocaleString('ko-KR')}건`;
-
+  let countText = `${monthSel} 거래 ${filtered.length.toLocaleString('ko-KR')}건`;
+  if(!isReport && olderHasMore) countText += ' · 최근 내역만 불러온 상태입니다. 이전 내역은 아래 "더 보기"로 불러오세요.';
+  document.getElementById(countId).textContent = countText;
+  
   if(!isReport){
     bindRowActions(body);
   }
@@ -3059,6 +3329,7 @@ function renderEntryView(){
   renderRecentEntryOptions();
   refreshMokOptions();
   renderTxTable('entry');
+    updateLoadMoreButton();
 }
 
 function renderStatusFilters(){
@@ -3348,6 +3619,7 @@ function activateTab(view){
 
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b===button));
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v===panel));
+    if(view==='report' && appReady) renderReport();
   return true;
 }
 
@@ -3582,8 +3854,14 @@ document.getElementById('btn-import-previous-budget').addEventListener('click', 
     button.disabled = false;
   }
 });
-
-// ---------- init ----------
+document.getElementById('btn-load-more-entries').addEventListener('click',loadMoreEntries);
+document.getElementById('btn-reload-report').addEventListener('click',()=>{ reportSummary = null; reportMonthCache = {}; renderReport(); });
+document.getElementById('btn-rebuild-report').addEventListener('click',async ()=>{
+  if(!window.confirm('승인된 내역 전체를 읽어 집계를 다시 계산합니다. 읽기가 승인 건수만큼 발생합니다. 계속할까요?')) return;
+  reportSummary = null; reportMonthCache = {};
+  await loadReportSummary(true);
+});
+  // ---------- init ----------
 connectFirebase();
 </script>
 
