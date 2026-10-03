@@ -73,16 +73,13 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .balance-check-result.match{background:var(--paper);color:var(--income);}
   .balance-check-result.mismatch{background:#b42318;border:1px solid #7a271a;border-left:6px solid #7a271a;color:#fff;}
   .balance-check-result.unset{background:var(--paper-2);color:var(--ink-soft);}
-  .staff-table-scroll{overflow-x:auto;border:1px solid var(--line);background:var(--paper-2);}
-  .staff-table{width:100%;min-width:560px;border-collapse:collapse;font-size:14px;}
-  .staff-table th{background:var(--navy);color:var(--paper-2);font-weight:700;text-align:center;padding:10px 8px;}
-  .staff-table td{padding:6px 8px;vertical-align:middle;border-bottom:1px solid var(--line);}
-  .staff-table td+td{border-left:1px solid var(--line);}
-  .staff-table tbody tr:hover{background:var(--paper);}
-  .staff-table input[type=text]{width:100%;box-sizing:border-box;border:1px solid var(--line);padding:7px 8px;font:inherit;background:var(--paper-2);}
-  .staff-table .staff-name-cell{font-weight:700;white-space:nowrap;}
-  .staff-table .staff-actions{white-space:nowrap;text-align:center;}
-  .staff-table .btn-primary{padding:6px 12px;font-size:13px;}
+  .staff-name-list{display:flex;flex-direction:column;gap:8px;}
+  .staff-name-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background:var(--paper-2);border:1px solid var(--line);font-size:14px;}
+  .staff-profile-item{display:flex;flex-direction:column;gap:12px;padding:14px;background:var(--paper-2);border:1px solid var(--line);}
+  .staff-profile-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;font-weight:700;}
+  .staff-profile-fields{display:grid;grid-template-columns:1fr 1.5fr auto;gap:12px;align-items:end;}
+  .staff-profile-fields .field{min-width:0;}
+  @media (max-width:760px){.staff-profile-fields{grid-template-columns:1fr 1fr;}.staff-profile-fields .btn-primary{grid-column:1/-1;}}
   @media (max-width:760px){.balance-check{grid-template-columns:1fr;}}
 
   section{margin-top:56px;}
@@ -513,7 +510,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
           </div>
           <button class="btn-primary" id="btn-add-staff-name" type="button">이름 추가</button>
         </div>
-        <div id="staff-name-list" class="staff-table-scroll" style="margin-top:16px;"></div>
+        <div id="staff-name-list" class="staff-name-list"></div>
         <p id="staff-name-status" role="status"></p>
       </div>
     </section>
@@ -1192,30 +1189,64 @@ function renderStaffNames(){
     list.appendChild(empty);
     return;
   }
-  const table = document.createElement('table');
-  table.className = 'staff-table';
-  table.innerHTML = `<thead><tr>
-    <th style="width:18%">이름</th>
-    <th style="width:22%">은행</th>
-    <th style="width:32%">계좌번호</th>
-    <th style="width:14%">저장</th>
-    <th style="width:14%">삭제</th>
-  </tr></thead>`;
-  const tbody = document.createElement('tbody');
   staffNames.forEach((name,index)=>{
+    const item = document.createElement('div');
+    item.className = 'staff-profile-item';
+    const heading = document.createElement('div');
+    heading.className = 'staff-profile-heading';
+    const label = document.createElement('span');
+    label.textContent = name;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'del-btn';
+    remove.dataset.staffName = name;
+    remove.textContent = '삭제';
+    heading.append(label,remove);
+
     const details = staffBankDetails.find(detail=>detail.name===name) || {bank:'',accountNumber:''};
-    const tr = document.createElement('tr');
-    tr.dataset.staffRow = name;
-    tr.innerHTML = `
-      <td class="staff-name-cell">${escapeHTML(name)}</td>
-      <td><input type="text" data-staff-field="bank" data-staff-name="${escapeHTML(name)}" value="${escapeHTML(details.bank)}" placeholder="은행명" autocomplete="off" aria-label="${escapeHTML(name)} 은행"></td>
-      <td><input type="text" data-staff-field="accountNumber" data-staff-name="${escapeHTML(name)}" value="${escapeHTML(details.accountNumber)}" placeholder="계좌번호" inputmode="numeric" autocomplete="off" aria-label="${escapeHTML(name)} 계좌번호"></td>
-      <td class="staff-actions"><button type="button" class="btn-primary" data-save-staff-profile="${escapeHTML(name)}">저장</button></td>
-      <td class="staff-actions"><button type="button" class="del-btn" data-staff-name="${escapeHTML(name)}">삭제</button></td>`;
-    tbody.appendChild(tr);
+    const fields = document.createElement('div');
+    fields.className = 'staff-profile-fields';
+
+    const bankField = document.createElement('div');
+    bankField.className = 'field';
+    const bankLabel = document.createElement('label');
+    bankLabel.htmlFor = `staff-bank-${index}`;
+    bankLabel.textContent = '은행';
+    const bankInput = document.createElement('input');
+    bankInput.id = `staff-bank-${index}`;
+    bankInput.type = 'text';
+    bankInput.autocomplete = 'off';
+    bankInput.placeholder = '예: 은행명';
+    bankInput.value = details.bank;
+    bankInput.setAttribute('aria-label',`${name} 은행`);
+    bankInput.dataset.staffField = 'bank';
+
+    const accountField = document.createElement('div');
+    accountField.className = 'field';
+    const accountLabel = document.createElement('label');
+    accountLabel.htmlFor = `staff-account-${index}`;
+    accountLabel.textContent = '계좌번호';
+    const accountInput = document.createElement('input');
+    accountInput.id = `staff-account-${index}`;
+    accountInput.type = 'text';
+    accountInput.inputMode = 'numeric';
+    accountInput.autocomplete = 'off';
+    accountInput.placeholder = '계좌번호 입력';
+    accountInput.value = details.accountNumber;
+    accountInput.setAttribute('aria-label',`${name} 계좌번호`);
+    accountInput.dataset.staffField = 'accountNumber';
+
+    bankField.append(bankLabel,bankInput);
+    accountField.append(accountLabel,accountInput);
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'btn-primary';
+    save.dataset.saveStaffProfile = name;
+    save.textContent = '계좌 정보 저장';
+    fields.append(bankField,accountField,save);
+    item.append(heading,fields);
+    list.appendChild(item);
   });
-  table.appendChild(tbody);
-  list.appendChild(table);
 }
 
 async function saveStaffNames(){
@@ -1275,10 +1306,12 @@ async function removeStaffName(name){
 
 async function saveStaffBankDetails(name){
   const status = document.getElementById('staff-name-status');
-  const row = [...document.querySelectorAll('tr[data-staff-row]')].find(r=>r.dataset.staffRow===name);
-  if(!row) return;
-  const bank = row.querySelector('[data-staff-field="bank"]')?.value.trim() || '';
-  const accountNumber = row.querySelector('[data-staff-field="accountNumber"]')?.value.trim() || '';
+  const item = [...document.querySelectorAll('.staff-profile-item')].find(row=>
+    row.querySelector('[data-save-staff-profile]')?.dataset.saveStaffProfile===name
+  );
+  if(!item) return;
+  const bank = item.querySelector('[data-staff-field="bank"]').value.trim();
+  const accountNumber = item.querySelector('[data-staff-field="accountNumber"]').value.trim();
   const previousDetails = staffBankDetails;
   staffBankDetails = staffBankDetails.filter(detail=>detail.name!==name);
   if(bank || accountNumber) staffBankDetails = normalizeStaffBankDetails([...staffBankDetails,{name,bank,accountNumber}]);
@@ -3367,7 +3400,7 @@ document.addEventListener('keydown',event=>{
   } else if(input.id==='staff-name-input'){
     actionButton = document.getElementById('btn-add-staff-name');
   } else if(input.matches('[data-staff-field]')){
-    actionButton = input.closest('tr[data-staff-row]')?.querySelector('[data-save-staff-profile]');
+    actionButton = input.closest('.staff-profile-item')?.querySelector('[data-save-staff-profile]');
   } else if(input.matches('#f-date, #f-amount, #f-spender, #f-desc, #f-payee')){
     actionButton = document.getElementById('btn-add');
   } else if(input.closest('.hierarchy-item-row')){
