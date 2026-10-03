@@ -274,6 +274,8 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .workflow-index{text-align:center!important;width:56px;}
 .workflow-summary{margin:12px 0 0;padding:10px 14px;background:var(--paper);color:var(--navy);font-weight:700;font-size:14px;}
 .workflow-summary.warn{background:#f8e1df;color:var(--expense);}
+  .submitted-group-row:hover{background:var(--paper);}
+  .submitted-group-detail td{border-bottom:1px solid var(--line);}
   #save-status.status-error{display:inline-block;margin:8px 0 0;padding:8px 12px;background:#b42318;border:1px solid #7a271a;border-left:5px solid #7a271a;color:#fff;font-weight:700;}
   dialog.payment-report-dialog{width:min(900px,calc(100% - 32px));max-height:90vh;padding:0;border:1px solid var(--line);color:var(--ink);}
   dialog.payment-report-dialog::backdrop{background:rgba(17,45,78,.55);}
@@ -1637,7 +1639,7 @@ function renderYearSelect(){
   document.getElementById('budget-year-label').textContent = `${currentYear}년`;
   document.getElementById('budget-year-column').textContent = currentYear;
   const datePicker = document.getElementById('f-date-picker');
-  datePicker.min = fyStart(currentYear);
+  datePicker.min = fyStart(currentYear - 1);
   datePicker.max = fyEnd(currentYear);
   document.getElementById('f-date').value = '';
   datePicker.value = '';
@@ -2416,10 +2418,76 @@ function workflowTable(entries,status,checkedIds=new Set()){
   </div>`;
 }
 
+function groupSubmittedEntries(entries){
+  const groups = new Map();
+  entries.forEach(t=>{
+    const key = String(t.managementNo || t.submissionSequence || t.id);
+    if(!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(t);
+  });
+  return [...groups.entries()].map(([key, list])=>{
+    list.sort((a,b)=>(a.date||'').localeCompare(b.date||'') || String(a.id).localeCompare(String(b.id)));
+    const sum = list.reduce((s,e)=>s+Number(e.amount||0),0);
+    const spender = (list[0].spender || '').trim() || '미지정';
+    const dates = list.map(e=>e.date).filter(Boolean).sort();
+    const dateLabel = dates.length
+      ? (dates[0]===dates[dates.length-1] ? formatEntryDate(dates[0]) : `${formatEntryDate(dates[0])} ~ ${formatEntryDate(dates[dates.length-1])}`)
+      : '-';
+    return {key, list, sum, spender, count:list.length, managementNo:key, dateLabel};
+  }).sort((a,b)=>String(b.managementNo).localeCompare(String(a.managementNo),'ko') || (b.list[0]?.date||'').localeCompare(a.list[0]?.date||''));
+}
+
+function submittedGroupsTable(groups, checkedIds=new Set()){
+  if(!groups.length) return '<p class="pending-empty">해당 상태의 내역이 없습니다.</p>';
+  const rows = groups.map((g,index)=>{
+    const ids = g.list.map(e=>e.id);
+    const allChecked = ids.every(id=>checkedIds.has(id));
+    const idsAttr = ids.map(id=>escapeHTML(id)).join(',');
+    return `
+    <tr class="submitted-group-row" data-group-key="${escapeHTML(g.key)}" style="cursor:pointer;">
+      <td class="workflow-select"><input type="checkbox" data-workflow-group="${escapeHTML(g.key)}" data-workflow-ids="${idsAttr}" data-workflow-status="submitted" aria-label="관리번호 ${escapeHTML(String(g.managementNo))} 선택"${allChecked?' checked':''}></td>
+      <td class="workflow-index">${index+1}</td>
+      <td>${escapeHTML(g.dateLabel)}</td>
+      <td colspan="2"><strong>관리번호 ${escapeHTML(String(g.managementNo))}</strong> · ${g.count}건</td>
+      <td colspan="2">${escapeHTML(g.spender)}</td>
+      <td class="num">${fmtShort(g.sum)}</td>
+    </tr>
+    <tr class="submitted-group-detail hidden" data-group-detail="${escapeHTML(g.key)}">
+      <td colspan="8" style="padding:0;background:var(--paper);">
+        <div class="table-scroll" style="max-height:240px;">
+          <table class="transaction-table pending-transaction-table" style="min-width:0;">
+            <thead><tr><th>결제일</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th class="num">금액</th></tr></thead>
+            <tbody>
+              ${g.list.map(t=>`
+                <tr class="${t.gubun==='수입'?'income-row':'expense-row'}">
+                  <td>${escapeHTML(formatEntryDate(t.date))}</td>
+                  <td>${escapeHTML(t.gubun||'')}</td>
+                  <td>${escapeHTML(t.desc||'')}</td>
+                  <td>${escapeHTML(t.category||'-')}</td>
+                  <td>${escapeHTML(t.payee||'-')}</td>
+                  <td class="num">${fmtShort(t.amount)}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+  return `<div class="table-scroll transaction-table-scroll">
+    <table class="transaction-table pending-transaction-table">
+      <thead><tr>
+        <th class="workflow-select"><input type="checkbox" data-workflow-all="submitted" aria-label="전체 선택"></th>
+        <th class="workflow-index">순번</th><th>결제일</th><th colspan="2">제출 묶음</th><th colspan="2">담당자</th><th class="num">합계 금액</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
 function updateWorkflowSummary(status){
   const box = document.querySelector(`[data-workflow-summary="${status}"]`);
   if(!box) return;
-  const boxes = [...document.querySelectorAll(`[data-workflow-id][data-workflow-status="${status}"]`)];
+  const boxes = [...document.querySelectorAll(`[data-workflow-id][data-workflow-status="${status}"], [data-workflow-group][data-workflow-status="${status}"]`)];
   const all = document.querySelector(`[data-workflow-all="${status}"]`);
   if(all) all.checked = boxes.length>0 && boxes.every(input=>input.checked);
   const entries = selectedWorkflowEntries(status);
@@ -2437,10 +2505,14 @@ function updateWorkflowSummary(status){
 }
 
 function renderPendingBox(){
-  const checkedIds = new Set([...document.querySelectorAll('[data-workflow-id]:checked')].map(input=>input.dataset.workflowId));
+  const checkedIds = new Set([
+    ...[...document.querySelectorAll('[data-workflow-id]:checked')].map(input=>input.dataset.workflowId),
+    ...[...document.querySelectorAll('[data-workflow-group]:checked')].flatMap(input=>(input.dataset.workflowIds||'').split(',').filter(Boolean))
+  ]);
   const byDate = (a,b)=>(b.date||'').localeCompare(a.date||'');
   const inputComplete = ledger.filter(t=>t.status==='input-complete' && !t.locked).sort(byDate);
   const submitted = ledger.filter(t=>t.status==='submitted' && !t.locked).sort(byDate);
+  const submittedGroups = groupSubmittedEntries(submitted);
   document.getElementById('pending-count').textContent = inputComplete.length + submitted.length;
   const list = document.getElementById('pending-list');
   list.innerHTML = `
@@ -2456,8 +2528,8 @@ function renderPendingBox(){
       </div>
     </div>
     <div class="workflow-stage">
-      <h3>제출완료 · 지급 대기 (${submitted.length}건)</h3>
-      ${workflowTable(submitted,'submitted',checkedIds)}
+      <h3>제출완료 · 지급 대기 (${submittedGroups.length}묶음 / ${submitted.length}건)</h3>
+      ${submittedGroupsTable(submittedGroups, checkedIds)}
       <p class="workflow-summary" data-workflow-summary="submitted" role="status"></p>
       <div class="workflow-actions">
         <button class="btn-primary" type="button" data-workflow-action="preview">선택 내역 보고서 열람</button>
@@ -2465,7 +2537,7 @@ function renderPendingBox(){
         <button class="btn-reject" type="button" data-workflow-action="reject-submitted">선택 내역 반려</button>
       </div>
     </div>
-    <p class="count-note">한 번에 처리하는 선택 내역은 담당자가 모두 같아야 합니다.</p>`;
+    <p class="count-note">한 번에 처리하는 선택 내역은 담당자가 모두 같아야 합니다. 제출완료 묶음을 클릭하면 상세 내역을 확인할 수 있습니다.</p>`;
   bindRowActions(list);
   list.querySelectorAll('[data-workflow-action]').forEach(button=>{
     button.addEventListener('click',()=>{
@@ -2478,23 +2550,37 @@ function renderPendingBox(){
       else openPaymentReport('submitted');
     });
   });
-  list.querySelectorAll('[data-workflow-id]').forEach(input=>
+  list.querySelectorAll('[data-workflow-id], [data-workflow-group]').forEach(input=>
     input.addEventListener('change',()=>updateWorkflowSummary(input.dataset.workflowStatus)));
   list.querySelectorAll('[data-workflow-all]').forEach(input=>
     input.addEventListener('change',()=>{
       const status = input.dataset.workflowAll;
-      list.querySelectorAll(`[data-workflow-id][data-workflow-status="${status}"]`).forEach(box=>box.checked = input.checked);
+      list.querySelectorAll(`[data-workflow-id][data-workflow-status="${status}"], [data-workflow-group][data-workflow-status="${status}"]`)
+        .forEach(box=>box.checked = input.checked);
       updateWorkflowSummary(status);
     }));
+  list.querySelectorAll('.submitted-group-row').forEach(row=>{
+    row.addEventListener('click',event=>{
+      if(event.target.closest('input[type="checkbox"]')) return;
+      const key = row.dataset.groupKey;
+      const detail = list.querySelector(`[data-group-detail="${key}"]`);
+      if(detail) detail.classList.toggle('hidden');
+    });
+  });
   ['input-complete','submitted'].forEach(updateWorkflowSummary);
 }
 
 
 
 function selectedWorkflowEntries(status){
-  const ids = [...document.querySelectorAll(`[data-workflow-id][data-workflow-status="${status}"]:checked`)]
-    .map(input=>input.dataset.workflowId);
-  return ids.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
+  const ids = new Set();
+  document.querySelectorAll(`[data-workflow-id][data-workflow-status="${status}"]:checked`).forEach(input=>{
+    ids.add(input.dataset.workflowId);
+  });
+  document.querySelectorAll(`[data-workflow-group][data-workflow-status="${status}"]:checked`).forEach(input=>{
+    (input.dataset.workflowIds || '').split(',').filter(Boolean).forEach(id=>ids.add(id));
+  });
+  return [...ids].map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
 }
 
 function editSelectedInputEntry(){
@@ -2962,11 +3048,17 @@ function renderEntryView(){
 function renderStatusFilters(){
   const el = document.getElementById('status-filters-entry');
   el.innerHTML = '';
+  const plainLabels = {
+    'input-complete':'입력완료',
+    submitted:'제출완료',
+    approved:'승인',
+    rejected:'반려됨'
+  };
   const options = ['전체','input-complete','submitted','approved','rejected'];
   options.forEach(s=>{
     const btn = document.createElement('button');
     btn.className = 'filter-btn' + (s===currentStatusEntry ? ' active' : '');
-    btn.textContent = s==='전체' ? '전체' : STATUS_LABEL[s];
+    btn.textContent = s==='전체' ? '전체' : (plainLabels[s] || s);
     btn.addEventListener('click', ()=>{ currentStatusEntry=s; renderEntryView(); });
     el.appendChild(btn);
   });
@@ -3153,9 +3245,10 @@ async function addEntry(){
     setStatus('금액과 내용은 필수입니다.');
     return;
   }
-  if(date < fyStart(currentYear) || date > fyEnd(currentYear)){
-  setStatus(`${currentYear} 회계연도(1/1~12/31) 날짜만 입력할 수 있습니다.`);
-  return;
+  // 회계연도와 다른 연도(전년도 등) 날짜도 입력 가능하도록 허용
+  if(date > fyEnd(currentYear)){
+    setStatus(`${currentYear} 회계연도 이후 날짜는 입력할 수 없습니다.`);
+    return;
   }
 const amount = Number(amountRaw);
 if(!Number.isFinite(amount) || !Number.isInteger(amount) || amount===0){
