@@ -2570,8 +2570,6 @@ function renderPendingBox(){
   ['input-complete','submitted'].forEach(updateWorkflowSummary);
 }
 
-
-
 function selectedWorkflowEntries(status){
   const ids = new Set();
   document.querySelectorAll(`[data-workflow-id][data-workflow-status="${status}"]:checked`).forEach(input=>{
