@@ -2777,7 +2777,6 @@ function renderPaymentReport(entries,spender,approval=null,managementNoOverride=
   const ordered = entries.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'') || String(a.id).localeCompare(String(b.id)));
   const total = entries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
   const today = new Date();
-  const total = entries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
   const todayKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
   const requestDate = entries.map(entry=>entry.submittedAt).filter(Boolean).sort()[0]?.slice(0,10) || todayKey;
   const existingManagementNumbers = [...new Set(entries.map(entry=>entry.managementNo).filter(Boolean).map(String))];
