@@ -274,6 +274,9 @@ body { background-color:var(--paper-2); color:var(--ink); }
   .workflow-stage h3{font-size:16px;margin:0 0 12px;}
   .workflow-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
   .workflow-select{text-align:center!important;width:44px;}
+  .workflow-index{text-align:center!important;width:56px;}
+.workflow-summary{margin:12px 0 0;padding:10px 14px;background:var(--paper);color:var(--navy);font-weight:700;font-size:14px;}
+.workflow-summary.warn{background:#f8e1df;color:var(--expense);}
   #save-status.status-error{display:inline-block;margin:8px 0 0;padding:8px 12px;background:#b42318;border:1px solid #7a271a;border-left:5px solid #7a271a;color:#fff;font-weight:700;}
   dialog.payment-report-dialog{width:min(900px,calc(100% - 32px));max-height:90vh;padding:0;border:1px solid var(--line);color:var(--ink);}
   dialog.payment-report-dialog::backdrop{background:rgba(17,45,78,.55);}
@@ -588,8 +591,9 @@ body { background-color:var(--paper-2); color:var(--ink); }
       <p id="payment-report-status" role="status"></p>
     </div>
     <div class="payment-dialog-actions">
-      <button class="btn-primary" id="btn-approve-payment-report" type="button">선택 건 승인 및 PDF 저장</button>
-    </div>
+  <button class="btn-revert" id="btn-download-payment-report" type="button">PDF 다운로드</button>
+  <button class="btn-primary" id="btn-approve-payment-report" type="button">선택 건 승인 및 PDF 저장</button>
+</div>
   </dialog>
 
   <footer>
@@ -718,19 +722,31 @@ function hasSharedStorage(){
 
 async function storageGet(key){
   if(!hasSharedStorage()) throw new Error('Firebase에 로그인한 뒤 다시 시도해주세요.');
-  const ref = db.collection('accountingData').doc(key);
-  const snapshot = await ref.get();
+  const snapshot = await db.collection('accountingData').doc(key).get();
   if(snapshot.exists) return {value:snapshot.data().value};
-
-  const legacyValue = window.localStorage.getItem(key);
-  if(legacyValue !== null){
-    await storageSet(key, legacyValue);
-    return {value:legacyValue};
-  }
   const error = new Error(`Firestore 문서가 없습니다: ${key}`);
   error.code = 'accounting/not-found';
   throw error;
 }
+
+function stateChangedError(message){
+  const error = new Error(message);
+  error.code = 'accounting/state-changed';
+  return error;
+}
+
+function writeMeta(){
+  return {
+    updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy:currentUser.uid,
+    updatedByEmail:currentUser.email || ''
+  };
+}
+
+// Re-reads the LATEST ledger inside a transaction, applies the change, writes it back.
+// mutator(list) must be synchronous. Return false to skip the write. Throw to abort.
+// Firestore may re-run it on contention, so don't accumulate state outside it.
+
 
 async function storageSet(key, value){
   lastStorageError = '';
@@ -785,7 +801,7 @@ function stopSharedDataWatchers(){
 
 function watchSharedData(){
   stopSharedDataWatchers();
-  const watchedKeys = [YEARS_KEY,ledgerKey(currentYear),budgetKey(currentYear),accountBalanceKey(currentYear),STAFF_NAMES_KEY,STAFF_BANK_DETAILS_KEY,categoryKey(currentYear)];
+  const watchedKeys = [YEARS_KEY,budgetKey(currentYear),accountBalanceKey(currentYear),STAFF_NAMES_KEY,STAFF_BANK_DETAILS_KEY,categoryKey(currentYear)];
   watchedKeys.forEach(key=>{
     const unsubscribe = db.collection('accountingData').doc(key).onSnapshot(snapshot=>{
       if(!snapshot.exists) return;
@@ -798,7 +814,6 @@ function watchSharedData(){
             years = data;
             renderYearSelect();
           }
-        } else if(key===ledgerKey(currentYear)){
           if(JSON.stringify(ledger)!==JSON.stringify(data)){
             ledger = data;
             renderReport();
@@ -852,6 +867,7 @@ async function initializeApplicationData(){
 
 async function handleAuthState(user){
   stopSharedDataWatchers();
+  stopLedgerWatcher();
   currentUser = user;
   document.getElementById('btn-sign-in').classList.toggle('hidden', !!user);
   document.getElementById('btn-sign-out').classList.toggle('hidden', !user);
@@ -881,6 +897,7 @@ async function handleAuthState(user){
     await initializeApplicationData();
   }catch(e){
     stopSharedDataWatchers();
+    stopLedgerWatcher();
     showAuthGate(
       'Firebase 접근 확인 실패',
       `Firestore 연결 또는 보안 규칙을 확인해 주세요. ${e.message}`,
@@ -972,27 +989,110 @@ function setFooter(msg){
     `${currentYear}년 · ${msg} · ${ledger.length}건` + (out ? ` · ⚠ 회계연도 밖 날짜 ${out}건` : '');
 }
 
-async function loadLedger(){
-  const key = ledgerKey(currentYear);
-  try{
-    const res = await storageGet(key);
-    ledger = JSON.parse(res.value);
-    if(applyFixes(ledger) && !await persist()){
-      throw new Error(`기존 회계내역 보정 저장 실패: ${lastStorageError}`);
+const entriesRef = year => db.collection('accountingData').doc(ledgerKey(year)).collection('entries');
+const ledgerMetaRef = year => db.collection('accountingData').doc('ledger-meta:' + year);
+const MIGRATION_LOCK_MS = 120000;
+let ledgerUnsubscribe = null;
+let ledgerRenderTimer = null;
+
+function stopLedgerWatcher(){
+  if(ledgerUnsubscribe){ ledgerUnsubscribe(); ledgerUnsubscribe = null; }
+}
+
+function scheduleLedgerRender(){
+  clearTimeout(ledgerRenderTimer);
+  ledgerRenderTimer = setTimeout(()=>{ renderReport(); renderEntryView(); },150);
+}
+
+// Firestore returns docs sorted by id ("imp_1","imp_10","imp_100"...), so restore the natural order.
+function entryOrder(entry){
+  const match = /^imp_(\d+)$/.exec(entry.id || '');
+  if(match) return [0,Number(match[1]),''];
+  return [1,Date.parse(entry.createdAt || '') || 0,entry.id || ''];
+}
+function compareEntries(a,b){
+  const x = entryOrder(a), y = entryOrder(b);
+  return x[0]-y[0] || x[1]-y[1] || String(x[2]).localeCompare(String(y[2]));
+}
+
+// ---------- one-time migration: legacy single document -> one document per entry ----------
+async function claimMigration(year){
+  const ref = ledgerMetaRef(year);
+  return db.runTransaction(async transaction=>{
+    const snapshot = await transaction.get(ref);
+    if(snapshot.exists){
+      let meta = {};
+      try{ meta = JSON.parse(snapshot.data().value); }catch(e){}
+      if(meta.status==='done') return 'done';
+      if(meta.status==='migrating' && Date.now()-(meta.startedAtMs||0) < MIGRATION_LOCK_MS) return 'busy';
     }
-    setFooter('Firestore에서 불러옴');
-  }catch(e){
-    if(e.code !== 'accounting/not-found') throw e;
-    ledger = currentYear === 2026 ? BASE_LEDGER.slice() : [];
-    applyFixes(ledger);
-    try{
-      await storageSet(key, JSON.stringify(ledger));
-      setFooter('Firestore에 초기 데이터를 저장함');
-    }catch(e2){
-      lastStorageError = e2.message || String(e2);
-      throw new Error(`초기 회계내역 저장 실패: ${lastStorageError}`);
-    }
+    transaction.set(ref,{value:JSON.stringify({status:'migrating',startedAtMs:Date.now()}),...writeMeta()});
+    return 'claimed';
+  });
+}
+
+async function readLegacyLedger(year){
+  const snapshot = await db.collection('accountingData').doc(ledgerKey(year)).get();
+  if(snapshot.exists){
+    const list = JSON.parse(snapshot.data().value);
+    if(!Array.isArray(list)) throw new Error(`${year}년 기존 장부 형식이 올바르지 않습니다.`);
+    return {list,source:'legacy'};
   }
+  if(year===2026) return {list:BASE_LEDGER.map(entry=>({...entry})),source:'base'};
+  return {list:[],source:'empty'};
+}
+
+async function ensureLedgerMigrated(year){
+  for(let attempt=0; attempt<40; attempt++){
+    const state = await claimMigration(year);
+    if(state==='done') return;
+    if(state==='claimed'){
+      try{
+        const {list,source} = await readLegacyLedger(year);
+        const seen = new Set();
+        list.forEach(entry=>{
+          if(!entry || typeof entry.id!=='string' || !entry.id || entry.id.includes('/')){
+            throw new Error('장부에 올바르지 않은 id가 있어 이전을 중단했습니다.');
+          }
+          if(seen.has(entry.id)) throw new Error(`장부에 중복된 id가 있어 이전을 중단했습니다: ${entry.id}`);
+          seen.add(entry.id);
+        });
+        const col = entriesRef(year);
+        for(let i=0;i<list.length;i+=400){            // batch limit is 500 writes
+          const batch = db.batch();
+          list.slice(i,i+400).forEach(entry=>batch.set(col.doc(entry.id),entry));
+          await batch.commit();
+        }
+        const check = await col.get();
+        if(check.size!==list.length){
+          throw new Error(`이전 검증 실패: 원본 ${list.length}건, 이전된 문서 ${check.size}건`);
+        }
+        await ledgerMetaRef(year).set({
+          value:JSON.stringify({status:'done',count:list.length,source,migratedAt:new Date().toISOString()}),
+          ...writeMeta()
+        });
+        return;
+      }catch(error){
+        await ledgerMetaRef(year).set({
+          value:JSON.stringify({status:'failed',message:error.message || String(error)}),...writeMeta()
+        }).catch(()=>{});
+        throw error;
+      }
+    }
+    document.getElementById('auth-status').textContent = '다른 담당자가 장부를 이전하는 중입니다…';
+    await new Promise(resolve=>setTimeout(resolve,3000));
+  }
+  throw new Error('장부 이전이 오래 걸리고 있습니다. 잠시 후 새로고침해 주세요.');
+}
+
+
+function setFooter(msg){
+  const out = ledger.filter(t => !(t.date||'').startsWith(currentYear + '-')).length;
+  const kb = Math.round(new Blob([JSON.stringify(ledger)]).size/1024);
+  document.getElementById('footer-sync').textContent =
+    `${currentYear}년 · ${msg} · ${ledger.length}건 · 장부 ${kb.toLocaleString('ko-KR')}KB / 1,024KB`
+    + (kb>700 ? ' · ⚠ 용량 한도 임박' : '')
+    + (out ? ` · ⚠ 회계연도 밖 날짜 ${out}건` : '');
 }
 
 async function persist(){
@@ -1022,6 +1122,16 @@ async function loadAccountBalance(){
     if(e.code !== 'accounting/not-found') throw e;
     accountBalance = null;
   }
+}
+
+function normalizeLedgerSuffixes(list=ledger){
+  let changed = false;
+  list.forEach(entry=>{
+    const gwan = typeof entry.gwan==='string' ? normalizeCategoryName(entry.gwan,'_관') : entry.gwan;
+    const hang = typeof entry.hang==='string' ? normalizeCategoryName(entry.hang,'_항') : entry.hang;
+    if(gwan!==entry.gwan || hang!==entry.hang){ entry.gwan=gwan; entry.hang=hang; changed=true; }
+  });
+  return changed;
 }
 
 function normalizeStaffNames(names){
@@ -1563,18 +1673,19 @@ async function loadYearData(){
   await loadStaffNames();
   await loadStaffBankDetails();
   await loadAccountCategories();
-  const ledgerCategoriesChanged = reconcileLedgerClassifications();
   if(migrateBudgetToMok() && !await persistBudget()){
     throw new Error(`목별 예산을 Firestore로 이전하지 못했습니다: ${lastStorageError}`);
   }
-  if(migrateLedgerClassifications() && !await persist()){
-    throw new Error(`관·항·목 분류 이전 실패: ${lastStorageError}`);
-  }
   const normalized = normalizeHierarchySuffixes();
+  const ledgerSaved = repairLedger().then(()=>true,error=>{ lastStorageError = error.message || String(error); return false; });    let changed = reconcileLedgerClassifications(list);
+    changed = migrateLedgerClassifications(list) || changed;
+    changed = normalizeLedgerSuffixes(list) || changed;
+    return changed;
+  }).then(()=>true,error=>{ lastStorageError = error.message || String(error); return false; });
   const saves = await Promise.all([
     categoriesNeedMigration || normalized.categoriesChanged ? persistAccountCategories() : true,
     budgetNeedsMigration || normalized.budgetChanged ? persistBudget() : true,
-    ledgerCategoriesChanged || normalized.ledgerChanged ? persist() : true
+    ledgerSaved
   ]);
   if(saves.some(saved=>!saved)){
     throw new Error(`관·항 명칭 정리 저장 실패: ${lastStorageError}`);
@@ -1591,23 +1702,37 @@ function renderAll(){
   renderStaffNames();
 }
 
-async function setYear(v){
-  const token = ++yearToken;
-  if(v === '__add__'){
-    const y = parseInt(prompt('추가할 회계연도를 입력하세요 (예: 2028)'), 10);
-    if(!(y >= 2000 && y <= 2100)){ renderYearSelect(); return; }
-    if(!years.includes(y)){ years.push(y); years.sort((a,b)=>a-b); await persistYears(); }
-    currentYear = y;
-  } else {
-    currentYear = parseInt(v, 10);
-  }
-  currentMonthReport = currentMonthEntry = currentStatusEntry = '전체';
-  await loadYearData();
-  if(token !== yearToken) return;
-  renderAll();
-  watchSharedData();
-}
+let yearSwitching = false;
 
+async function setYear(v){
+  if(yearSwitching){ renderYearSelect(); return; }
+  yearSwitching = true;
+  const select = document.getElementById('year-select');
+  select.disabled = true;
+  const previousYear = currentYear;
+  try{
+    if(v === '__add__'){
+      const y = parseInt(prompt('추가할 회계연도를 입력하세요 (예: 2028)'), 10);
+      if(!(y >= 2000 && y <= 2100)){ renderYearSelect(); return; }
+      if(!years.includes(y)){ years.push(y); years.sort((a,b)=>a-b); await persistYears(); }
+      currentYear = y;
+    }else{
+      currentYear = parseInt(v, 10);
+    }
+    currentMonthReport = currentMonthEntry = currentStatusEntry = '전체';
+    await loadYearData();
+    renderAll();
+    watchSharedData();
+  }catch(error){
+    document.getElementById('auth-status').textContent = `${currentYear}년 데이터를 불러오지 못했습니다: ${error.message || error}`;
+    currentYear = previousYear;
+    try{ await loadYearData(); renderAll(); watchSharedData(); }
+    catch(restoreError){ document.getElementById('auth-status').textContent = `이전 연도 복원도 실패했습니다. 새로고침해 주세요: ${restoreError.message || restoreError}`; }
+  }finally{
+    select.disabled = false;
+    yearSwitching = false;
+  }
+}
 function findAccount(type, mokName){
   for(const gwan of accountCategories[type] || []){
     for(const hang of gwan.accounts || []){
@@ -1664,6 +1789,98 @@ function migrateLedgerClassifications(){
   return changed;
 }
 
+async function loadLedger(){
+  stopLedgerWatcher();
+  const year = currentYear;
+  await ensureLedgerMigrated(year);
+  await new Promise((resolve,reject)=>{
+    let first = true;
+    ledgerUnsubscribe = entriesRef(year).onSnapshot(snapshot=>{
+      if(year!==currentYear) return;
+      ledger = snapshot.docs.map(doc=>doc.data()).sort(compareEntries);
+      if(first){ first = false; resolve(); return; }
+      setFooter('실시간 동기화');
+      scheduleLedgerRender();
+    },error=>{
+      if(first){ first = false; reject(error); return; }
+      document.getElementById('auth-status').textContent = `장부 실시간 동기화 오류: ${error.message}`;
+    });
+  });
+  setFooter('Firestore에서 불러옴');
+}
+
+// ---------- per-entry transactions ----------
+function applyLocalChanges(upserts,deletes){
+  const map = new Map(ledger.map(entry=>[entry.id,entry]));
+  upserts.forEach((entry,id)=>map.set(id,entry));
+  deletes.forEach(id=>map.delete(id));
+  ledger = [...map.values()].sort(compareEntries);
+  setFooter('저장됨');
+}
+
+// Locks the given entry ids, hands the latest data to work(found, api).
+// In work(): do any extra api.tx.get(...) reads FIRST, then api.set / api.remove.
+async function entryTransaction(ids,work){
+  if(!hasSharedStorage()) throw new Error('Firebase에 로그인한 뒤 다시 시도해주세요.');
+  if(ids.length>450) throw new Error('한 번에 처리할 수 있는 내역은 450건까지입니다.');
+  const year = currentYear;
+  const col = entriesRef(year);
+  let upserts = new Map(), deletes = new Set();
+  await db.runTransaction(async tx=>{
+    upserts = new Map(); deletes = new Set();            // reset if Firestore retries
+    const snapshots = await Promise.all(ids.map(id=>tx.get(col.doc(id))));
+    const found = new Map();
+    snapshots.forEach((snapshot,index)=>{ if(snapshot.exists) found.set(ids[index],snapshot.data()); });
+    await work(found,{
+      tx,
+      set:entry=>{ tx.set(col.doc(entry.id),entry); upserts.set(entry.id,entry); deletes.delete(entry.id); },
+      remove:id=>{ tx.delete(col.doc(id)); deletes.add(id); upserts.delete(id); }
+    });
+  });
+  if(year===currentYear) applyLocalChanges(upserts,deletes);
+}
+
+// ---------- load-time repair: writes only the fields that actually changed ----------
+function diffPatch(before,after){
+  const patch = {};
+  Object.keys(after).forEach(key=>{
+    if(JSON.stringify(after[key])!==JSON.stringify(before[key])) patch[key] = after[key];
+  });
+  Object.keys(before).forEach(key=>{
+    if(!(key in after)) patch[key] = firebase.firestore.FieldValue.delete();
+  });
+  return patch;
+}
+
+async function repairLedger(){
+  const year = currentYear;
+  const originals = new Map(ledger.map(entry=>[entry.id,entry]));
+  const draft = ledger.map(entry=>JSON.parse(JSON.stringify(entry)));
+  applyFixes(draft);
+  reconcileLedgerClassifications(draft);
+  migrateLedgerClassifications(draft);
+  normalizeLedgerSuffixes(draft);
+  const patches = draft
+    .map(entry=>({id:entry.id,patch:diffPatch(originals.get(entry.id),entry)}))
+    .filter(item=>Object.keys(item.patch).length);
+  if(!patches.length) return 0;
+  const col = entriesRef(year);
+  for(let i=0;i<patches.length;i+=400){
+    const batch = db.batch();
+    patches.slice(i,i+400).forEach(({id,patch})=>batch.update(col.doc(id),patch));
+    await batch.commit();
+  }
+  if(year===currentYear) ledger = draft.sort(compareEntries);
+  return patches.length;
+}
+
+function exportLedgerBackup(){
+  downloadBlob(
+    new Blob([JSON.stringify(ledger,null,2)],{type:'application/json'}),
+    `ledger-${currentYear}-${paymentDateKey(new Date())}.json`
+  );
+}
+
 // ---------- derived aggregates ----------
 function aggregates(list){
   const monthlyIncome = {}, monthlyExpense = {};
@@ -1715,8 +1932,7 @@ function renderReport(){
 
   document.getElementById('r-income').textContent = fmt(ag.totalIncome);
   document.getElementById('r-expense').textContent = fmt(ag.totalExpense);
-  document.getElementById('r-count').textContent = `총 ${ledger.length.toLocaleString('ko-KR')}건 거래`;
-  document.getElementById('r-balance').textContent = fmt(ag.totalIncome - ag.totalExpense);
+document.getElementById('r-count').textContent = `승인된 ${approved.length.toLocaleString('ko-KR')}건 거래`;  document.getElementById('r-balance').textContent = fmt(ag.totalIncome - ag.totalExpense);
   renderAccountBalanceCheck(ag.totalIncome - ag.totalExpense);
 
   destroy('monthly');
@@ -1835,7 +2051,7 @@ function renderBudgetSection(approvedList){
     document.getElementById('budget-note').textContent = '';
   }
 
-  const appendBudgetRow = (type, gwan, hang, mok, b, s)=>{
+const appendBudgetRow = (type, gwan, hang, mok, b, s, detail='')=>{
     totalBudget += b;
     totalSettled += s;
     if(type==='income'){
@@ -1849,7 +2065,8 @@ function renderBudgetSection(approvedList){
     const remain = b - s;
     const pctText = b > 0 ? pct.toFixed(1) + '%' : (s>0 ? '예산 없음' : '-');
     const tr = document.createElement('tr');
-    tr.className = `budget-report-row ${type==='income'?'income-row':'expense-row'}`;
+  tr.className = `budget-report-row ${type==='income'?'income-row':'expense-row'}`;
+  if(detail){ tr.title = detail; tr.classList.add('budget-orphan-row'); }
     [type==='income'?'수입':'지출',gwan,hang,mok].forEach(value=>{
       const cell = document.createElement('td');
       cell.textContent = value;
@@ -1875,18 +2092,35 @@ function renderBudgetSection(approvedList){
     tr.appendChild(remainCell);
     tbody.appendChild(tr);
   };
-  let rowCount = 0;
-  ['income','expense'].forEach(type=>{
-    accountCategories[type].forEach(gwan=>{
-      gwan.accounts.forEach(hang=>{
-        hang.items.forEach(mok=>{
-          const key = mokBudgetKey(type,gwan.name,hang.name,mok);
-          appendBudgetRow(type,gwan.name,hang.name,mok,Number(budget[key])||0,spentByMok[key]||0);
-          rowCount++;
-        });
+let rowCount = 0;
+const shownKeys = new Set();
+['income','expense'].forEach(type=>{
+  accountCategories[type].forEach(gwan=>{
+    gwan.accounts.forEach(hang=>{
+      hang.items.forEach(mok=>{
+        const key = mokBudgetKey(type,gwan.name,hang.name,mok);
+        shownKeys.add(key);
+        appendBudgetRow(type,gwan.name,hang.name,mok,Number(budget[key])||0,spentByMok[key]||0);
+        rowCount++;
       });
     });
   });
+});
+
+// Approved entries whose 관·항·목 no longer exists in the current categories
+const orphans = {income:{amount:0,paths:[]}, expense:{amount:0,paths:[]}};
+Object.entries(spentByMok).forEach(([key,amount])=>{
+  if(shownKeys.has(key)) return;
+  const [type,gwan,hang,mok] = JSON.parse(key.slice(4));
+  orphans[type].amount += amount;
+  orphans[type].paths.push(`${gwan} > ${hang} > ${mok}: ${fmtShort(amount)}`);
+});
+['income','expense'].forEach(type=>{
+  const o = orphans[type];
+  if(!o.paths.length) return;
+  appendBudgetRow(type,'미분류/삭제된 항목','-',`${o.paths.length}개 분류`,0,o.amount,o.paths.join('\n'));
+  rowCount++;
+});
   document.getElementById('report-income-budget-total').textContent = fmtShort(incomeBudget);
   document.getElementById('report-income-settled-total').textContent = fmtShort(incomeSettled);
   document.getElementById('report-expense-budget-total').textContent = fmtShort(expenseBudget);
@@ -1898,9 +2132,10 @@ function renderBudgetSection(approvedList){
   const totalRate = totalBudget>0 ? `${(totalSettled/totalBudget*100).toFixed(1)}%` : '-';
   document.getElementById('tbl-budget-total').innerHTML =
     `<tr class="report-total-row"><th colspan="4">전체 합계</th><td class="num">${fmtShort(totalBudget)}</td><td class="num">${fmtShort(totalSettled)}</td><td class="num">${totalRate}</td><td class="num">${fmtShort(totalBudget-totalSettled)}</td></tr>`;
-  document.getElementById('budget-note').textContent = rowCount
-    ? '예산 관리에 등록된 목 순서로 표시합니다.'
-    : '등록된 예산 항목이 없습니다.';
+document.getElementById('budget-note').textContent = rowCount
+  ? '예산 관리에 등록된 목 순서로 표시합니다. 삭제·변경된 분류의 거래는 "미분류/삭제된 항목"에 합산됩니다.'
+  : '등록된 예산 항목이 없습니다.';
+  .budget-orphan-row td{color:var(--expense);font-weight:700;}
 }
 
 function createHierarchyInput(className, value, placeholder, ariaLabel){
@@ -2132,64 +2367,63 @@ function renderTxTable(mode){
 }
 
 function rowActions(t){
-  if(t.status==='approved' || t.status==='paid' || t.status==='confirmed'){
-    return `<button class="btn-revert" data-act="unapprove" data-id="${escapeHTML(t.id)}">승인 취소</button>`;
-  }
   if(t.locked){
     return '<span class="locked-note">가져온 내역</span>';
   }
+  if(['approved','paid','confirmed'].includes(t.status)){
+    return `<button class="btn-revert" data-act="unapprove" data-id="${escapeHTML(t.id)}">승인 취소</button>`;
+  }
   const parts = [];
   if(t.status==='rejected') parts.push(`<button class="btn-revert" data-act="input-complete" data-id="${escapeHTML(t.id)}">입력완료로 복원</button>`);
-  parts.push(`<button class="del-btn" data-act="delete" data-id="${t.id}">삭제</button>`);
+  parts.push(`<button class="del-btn" data-act="delete" data-id="${escapeHTML(t.id)}">삭제</button>`);
   return `<div class="action-row">${parts.join('')}</div>`;
 }
-
 function bindRowActions(container){
   container.querySelectorAll('[data-act]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const id = btn.getAttribute('data-id');
       const act = btn.getAttribute('data-act');
       if(act==='unapprove' && !window.confirm('승인을 취소하고 선택 내역을 제출완료 대기 목록으로 되돌리시겠습니까?')) return;
-      const entry = ledger.find(t=>t.id===id);
-      const previousEntry = entry ? {...entry} : null;
-      if(act === 'delete'){
-        ledger = ledger.filter(t=>t.id!==id);
-      } else {
-        if(entry && act==='input-complete') entry.status = 'input-complete';
-        if(entry && act==='unapprove' && ['approved','paid','confirmed'].includes(entry.status)){
-          entry.status='submitted';
-          entry.locked=false;
-          entry.approvalCancelledAt=new Date().toISOString();
-          entry.approvalCancelledBy=currentUser?.email || currentUser?.displayName || '';
-          ['approvedAt','approvedBy','paidAt','paidBy','confirmedAt','confirmedBy','managementNo','submissionSequence']
-            .forEach(key=>delete entry[key]);
-        }
+      const approvedStates = ['approved','paid','confirmed'];
+      try{
+        await entryTransaction([id],(found,api)=>{
+          const entry = found.get(id);
+          if(!entry) throw stateChangedError('내역을 찾을 수 없습니다. 다른 담당자가 이미 삭제했을 수 있습니다.');
+          if(entry.locked) throw stateChangedError('가져온 내역은 변경할 수 없습니다.');
+          if(act==='delete'){
+            if(approvedStates.includes(entry.status)) throw stateChangedError('승인된 내역은 삭제할 수 없습니다.');
+            api.remove(id);
+          }else if(act==='input-complete'){
+            if(entry.status!=='rejected') throw stateChangedError('반려된 내역만 복원할 수 있습니다.');
+            api.set({...entry,status:'input-complete'});
+          }else if(act==='unapprove'){
+            if(!approvedStates.includes(entry.status)) throw stateChangedError('이미 승인 상태가 아닙니다.');
+            const next = {
+              ...entry, status:'submitted', locked:false,
+              approvalCancelledAt:new Date().toISOString(),
+              approvalCancelledBy:currentUser?.email || currentUser?.displayName || ''
+            };
+            ['approvedAt','approvedBy','paidAt','paidBy','confirmedAt','confirmedBy','managementNo','submissionSequence']
+              .forEach(key=>delete next[key]);
+            api.set(next);
+          }
+        });
+        setStatus(act==='unapprove' ? '승인을 취소해 제출완료 대기 목록으로 되돌렸습니다.' : '반영되어 공유 저장소에 저장됨');
+      }catch(error){
+        setStatus(`변경에 실패했습니다: ${error.message || String(error)}`,true);
       }
-      const ok = await persist();
-      if(!ok){
-        if(act==='delete'){
-          if(previousEntry) ledger.push(previousEntry);
-        }else if(previousEntry){
-          const index=ledger.findIndex(item=>item.id===id);
-          if(index>=0) ledger[index]=previousEntry;
-        }
-      }
-      setStatus(!ok
-        ? `변경됐지만 저장에 실패했습니다: ${lastStorageError || '저장소 오류'}`
-        : act==='unapprove'
-          ? '승인을 취소해 제출완료 대기 목록으로 되돌렸습니다.'
-          : hasSharedStorage() ? '반영되어 공유 저장소에 저장됨' : '이 브라우저에 저장됨 (다른 담당자와 공유되지 않음)');
       renderReport();
       renderEntryView();
     });
   });
 }
 
-function workflowTable(entries,status){
+function workflowTable(entries,status,checkedIds=new Set()){
   if(!entries.length) return '<p class="pending-empty">해당 상태의 내역이 없습니다.</p>';
-  const rows = entries.map(t=>`
+  const rows = entries.map((t,index)=>`
     <tr class="${t.gubun==='수입'?'income-row':'expense-row'}">
-      <td class="workflow-select"><input type="checkbox" data-workflow-id="${escapeHTML(t.id)}" data-workflow-status="${status}" aria-label="${escapeHTML(t.desc||t.id)} 선택"></td>
+      <td class="workflow-select"><input type="checkbox" data-workflow-id="${escapeHTML(t.id)}" data-workflow-status="${status}" aria-label="${escapeHTML(t.desc||t.id)} 선택"${checkedIds.has(t.id)?' checked':''}></td>
+      <td class="workflow-index">${index+1}</td>
       <td>${escapeHTML(formatEntryDate(t.date))}</td>
       <td>${escapeHTML(t.gubun||'')}</td>
       <td>${escapeHTML(t.desc||'')}</td>
@@ -2200,31 +2434,58 @@ function workflowTable(entries,status){
     </tr>`).join('');
   return `<div class="table-scroll transaction-table-scroll">
     <table class="transaction-table pending-transaction-table">
-      <thead><tr><th>선택</th><th>결제일</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th>담당자</th><th class="num">금액</th></tr></thead>
+      <thead><tr>
+        <th class="workflow-select"><input type="checkbox" data-workflow-all="${status}" aria-label="전체 선택"></th>
+        <th class="workflow-index">순번</th><th>결제일</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th>담당자</th><th class="num">금액</th>
+      </tr></thead>
       <tbody>${rows}</tbody>
     </table>
   </div>`;
 }
 
+function updateWorkflowSummary(status){
+  const box = document.querySelector(`[data-workflow-summary="${status}"]`);
+  if(!box) return;
+  const boxes = [...document.querySelectorAll(`[data-workflow-id][data-workflow-status="${status}"]`)];
+  const all = document.querySelector(`[data-workflow-all="${status}"]`);
+  if(all) all.checked = boxes.length>0 && boxes.every(input=>input.checked);
+  const entries = selectedWorkflowEntries(status);
+  box.classList.remove('warn');
+  if(!entries.length){ box.textContent = '선택한 내역이 없습니다.'; return; }
+  const sum = list=>list.reduce((total,entry)=>total+Number(entry.amount||0),0);
+  const expenses = entries.filter(entry=>entry.gubun==='지출');
+  const incomes = entries.filter(entry=>entry.gubun==='수입');
+  let text = `선택 ${entries.length}건 · 합계 ${fmt(sum(entries))}`;
+  if(expenses.length && incomes.length) text += ` (지출 ${fmt(sum(expenses))} / 수입 ${fmt(sum(incomes))})`;
+  const spenders = [...new Set(entries.map(entry=>(entry.spender||'').trim()))];
+  if(spenders.length===1 && spenders[0]) text += ` · 담당자 ${spenders[0]}`;
+  else{ text += ' · ⚠ 담당자가 한 사람이 아니어서 한 번에 처리할 수 없습니다'; box.classList.add('warn'); }
+  box.textContent = text;
+}
+
 function renderPendingBox(){
-  const inputComplete = ledger.filter(t=>t.status==='input-complete' && !t.locked).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  const submitted = ledger.filter(t=>t.status==='submitted' && !t.locked).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const checkedIds = new Set([...document.querySelectorAll('[data-workflow-id]:checked')].map(input=>input.dataset.workflowId));
+  const byDate = (a,b)=>(b.date||'').localeCompare(a.date||'');
+  const inputComplete = ledger.filter(t=>t.status==='input-complete' && !t.locked).sort(byDate);
+  const submitted = ledger.filter(t=>t.status==='submitted' && !t.locked).sort(byDate);
   document.getElementById('pending-count').textContent = inputComplete.length + submitted.length;
   const list = document.getElementById('pending-list');
   list.innerHTML = `
     <div class="workflow-stage">
       <h3>입력완료 · 제출 대기 (${inputComplete.length}건)</h3>
-      ${workflowTable(inputComplete,'input-complete')}
+      ${workflowTable(inputComplete,'input-complete',checkedIds)}
+      <p class="workflow-summary" data-workflow-summary="input-complete" role="status"></p>
       <div class="workflow-actions">
         <button class="btn-primary" type="button" data-workflow-action="preview-input">선택 내역 보고서 열람</button>
-        <button class="btn-primary" type="button" data-workflow-action="submit">선택 내역 제출</button>
+        <button class="btn-primary" type="button" data-workflow-action="submit">선택 내역 제출 및 PDF 저장</button>
         <button class="btn-revert" type="button" data-workflow-action="edit-input">선택 내용 수정</button>
         <button class="btn-reject" type="button" data-workflow-action="delete-input">선택 내역 삭제</button>
       </div>
     </div>
     <div class="workflow-stage">
       <h3>제출완료 · 지급 대기 (${submitted.length}건)</h3>
-      ${workflowTable(submitted,'submitted')}
+      ${workflowTable(submitted,'submitted',checkedIds)}
+      <p class="workflow-summary" data-workflow-summary="submitted" role="status"></p>
       <div class="workflow-actions">
         <button class="btn-primary" type="button" data-workflow-action="preview">선택 내역 보고서 열람</button>
         <button class="btn-primary" type="button" data-workflow-action="payment">선택 건 승인 및 PDF 저장</button>
@@ -2241,11 +2502,21 @@ function renderPendingBox(){
       else if(action==='delete-input') deleteSelectedInputEntries();
       else if(action==='reject-submitted') updateSelectedWorkflow('submitted','rejected');
       else if(action==='preview-input') openPaymentReport('input-complete');
-      else if(action==='preview') openPaymentReport('submitted');
-      else if(action==='payment') openPaymentReport('submitted');
+      else openPaymentReport('submitted');
     });
   });
+  list.querySelectorAll('[data-workflow-id]').forEach(input=>
+    input.addEventListener('change',()=>updateWorkflowSummary(input.dataset.workflowStatus)));
+  list.querySelectorAll('[data-workflow-all]').forEach(input=>
+    input.addEventListener('change',()=>{
+      const status = input.dataset.workflowAll;
+      list.querySelectorAll(`[data-workflow-id][data-workflow-status="${status}"]`).forEach(box=>box.checked = input.checked);
+      updateWorkflowSummary(status);
+    }));
+  ['input-complete','submitted'].forEach(updateWorkflowSummary);
 }
+
+
 
 function selectedWorkflowEntries(status){
   const ids = [...document.querySelectorAll(`[data-workflow-id][data-workflow-status="${status}"]:checked`)]
@@ -2284,19 +2555,19 @@ function editSelectedInputEntry(){
 
 async function deleteSelectedInputEntries(){
   const entries = selectedWorkflowEntries('input-complete');
-  if(!entries.length){
-    setStatus('삭제할 내역을 체크해 주세요.');
-    return;
-  }
+  if(!entries.length){ setStatus('삭제할 내역을 체크해 주세요.'); return; }
   if(!window.confirm(`입력완료 내역 ${entries.length}건을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) return;
-  const previousLedger = ledger;
-  const ids = new Set(entries.map(entry=>entry.id));
-  ledger = ledger.filter(entry=>!ids.has(entry.id));
-  if(!await persist()){
-    ledger = previousLedger;
-    setStatus(`내역 삭제에 실패했습니다: ${lastStorageError || '저장소 오류'}`);
-  }else{
+    const ids = new Set(entries.map(entry=>entry.id));
+  try{
+    await entryTransaction([...ids],(found,api)=>{
+      if(found.size!==ids.size || [...found.values()].some(entry=>entry.status!=='input-complete' || entry.locked)){
+        throw stateChangedError('선택한 내역의 상태가 바뀌었습니다. 목록을 새로 확인해 주세요.');
+      }
+      ids.forEach(id=>api.remove(id));
+    });
     setStatus(`${entries.length}건을 삭제했습니다.`);
+  }catch(error){
+    setStatus(`내역 삭제에 실패했습니다: ${error.message || String(error)}`,true);
   }
   renderReport();
   renderEntryView();
@@ -2315,13 +2586,31 @@ function requireSingleSpender(entries){
 function highestSubmissionSequence(sourceLedger=ledger){
   return sourceLedger.reduce((max,entry)=>{
     const saved = Number(entry.submissionSequence);
-    const legacy = /^\d+$/.test(String(entry.managementNo||'')) ? Number(entry.managementNo) : 0;
-    return Math.max(max,Number.isSafeInteger(saved)?saved:0,Number.isSafeInteger(legacy)?legacy:0);
+const legacy = /^\d{1,8}$/.test(String(entry.managementNo||'')) ? Number(entry.managementNo) : 0;    return Math.max(max,Number.isSafeInteger(saved)?saved:0,Number.isSafeInteger(legacy)?legacy:0);
   },0);
 }
 
 async function persistSubmissionBatch(entries,submittedAt,submittedBy){
-  if(!hasSharedStorage()) throw new Error('관리번호를 발급하려면 공유 저장소에 로그인해야 합니다.');
+  const ids = entries.map(entry=>entry.id);
+  const sequenceRef = db.collection('accountingData').doc(SUBMISSION_SEQUENCE_KEY);
+  let assigned = 0;
+  await entryTransaction(ids,async (found,api)=>{
+    const targets = ids.map(id=>found.get(id)).filter(Boolean);
+    if(targets.length!==ids.length || targets.some(entry=>entry.status!=='input-complete' || entry.locked)){
+      throw stateChangedError('선택한 내역의 상태가 바뀌었거나 찾을 수 없습니다. 목록을 새로고침한 뒤 다시 선택해 주세요.');
+    }
+    requireSingleSpender(targets);
+    const sequenceSnapshot = await api.tx.get(sequenceRef);                       // read before any write
+    const stored = sequenceSnapshot.exists ? Number(sequenceSnapshot.data().value) : highestSubmissionSequence(ledger);
+    assigned = checkSequence(stored,'관리번호')+1;
+    targets.forEach(entry=>api.set({
+      ...entry, status:'submitted', submittedAt, submittedBy,
+      submissionSequence:assigned, managementNo:String(assigned)
+    }));
+    api.tx.set(sequenceRef,{value:String(assigned),...writeMeta()});
+  });
+  return assigned;
+}  if(!hasSharedStorage()) throw new Error('관리번호를 발급하려면 공유 저장소에 로그인해야 합니다.');
   const sequenceRef = db.collection('accountingData').doc(SUBMISSION_SEQUENCE_KEY);
   const ledgerRef = db.collection('accountingData').doc(ledgerKey(currentYear));
   const selectedIds = new Set(entries.map(entry=>entry.id));
@@ -2363,79 +2652,168 @@ async function persistSubmissionBatch(entries,submittedAt,submittedBy){
   return assignedSequence;
 }
 
-async function allocatePaymentManagementNumber(date){
-  if(!hasSharedStorage()) throw new Error('관리번호를 발급하려면 공유 저장소에 로그인해야 합니다.');
-  const dateKey = `${date.getFullYear()}${String(date.getMonth()+1).padStart(2,'0')}${String(date.getDate()).padStart(2,'0')}`;
-  const prefix = new RegExp(`^${dateKey}(\\d+)$`);
-  const initialSequence = ledger.reduce((max,entry)=>{
-    const match = prefix.exec(String(entry.managementNo||''));
-    if(!match) return max;
-    const sequence = Number(match[1]);
-    return Number.isSafeInteger(sequence)?Math.max(max,sequence):max;
-  },0);
-  const sequenceRef = db.collection('accountingData').doc(`management-sequence:payment:${dateKey}`);
-  let assignedSequence = 0;
-  await db.runTransaction(async transaction=>{
-    const snapshot = await transaction.get(sequenceRef);
-    const storedSequence = snapshot.exists ? Number(snapshot.data().value) : initialSequence;
-    if(!Number.isSafeInteger(storedSequence) || storedSequence<0 || storedSequence>=Number.MAX_SAFE_INTEGER){
-      throw new Error('저장된 지급 관리번호 일련번호가 올바르지 않습니다.');
-    }
-    assignedSequence = storedSequence+1;
-    transaction.set(sequenceRef,{
-      value:String(assignedSequence),
-      updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
-      updatedBy:currentUser.uid,
-      updatedByEmail:currentUser.email || ''
-    });
-  });
-  return `${dateKey}${String(assignedSequence).padStart(3,'0')}`;
+unction checkSequence(value,label){
+  if(!Number.isSafeInteger(value) || value<0 || value>=Number.MAX_SAFE_INTEGER){
+    throw new Error(`저장된 ${label} 일련번호가 올바르지 않습니다.`);
+  }
+  return value;
 }
+function paymentDateKey(date){
+  return `${date.getFullYear()}${String(date.getMonth()+1).padStart(2,'0')}${String(date.getDate()).padStart(2,'0')}`;
+}
+function highestPaymentSequence(list,dateKey){
+  const prefix = new RegExp(`^${dateKey}(\\d+)$`);
+  return list.reduce((max,entry)=>{
+    const match = prefix.exec(String(entry.managementNo||''));
+    const sequence = match ? Number(match[1]) : 0;
+    return Number.isSafeInteger(sequence) ? Math.max(max,sequence) : max;
+  },0);
+}
+
+async function peekPaymentNumber(date){
+  const dateKey = paymentDateKey(date);
+  const snapshot = await db.collection('accountingData').doc(`management-sequence:payment:${dateKey}`).get();
+  const stored = snapshot.exists ? Number(snapshot.data().value) : highestPaymentSequence(ledger,dateKey);
+  const sequence = checkSequence(stored,'지급 관리번호')+1;
+  return {dateKey,sequence,managementNo:`${dateKey}${String(sequence).padStart(3,'0')}`};
+}
+
+async function commitPaymentApproval({ids,dateKey,sequence,approvalTime,uploadedFile}){
+  const sequenceRef = db.collection('accountingData').doc(`management-sequence:payment:${dateKey}`);
+  const managementNo = `${dateKey}${String(sequence).padStart(3,'0')}`;
+  const approvedBy = currentUser.email || currentUser.displayName || '';
+  await entryTransaction(ids,async (found,api)=>{
+    const sequenceSnapshot = await api.tx.get(sequenceRef);                       // read before any write
+    const stored = checkSequence(
+      sequenceSnapshot.exists ? Number(sequenceSnapshot.data().value) : highestPaymentSequence(ledger,dateKey),
+      '지급 관리번호');
+    if(stored+1!==sequence){
+      const error = new Error('다른 담당자가 먼저 같은 관리번호를 사용했습니다.');
+      error.code = 'accounting/sequence-conflict';
+      throw error;
+    }
+    const targets = ids.map(id=>found.get(id)).filter(Boolean);
+    if(targets.length!==ids.length || targets.some(entry=>entry.status!=='submitted')){
+      throw stateChangedError('선택 내역의 상태가 바뀌었습니다. 보고서를 닫고 목록을 새로 확인해 주세요.');
+    }
+    requireSingleSpender(targets);
+    const at = approvalTime.toISOString();
+    targets.forEach(entry=>{
+      const next = {
+        ...entry, status:'approved', approvedAt:at, approvedBy,
+        managementNo, paymentReportFileId:uploadedFile.id, paymentReportUrl:uploadedFile.webViewLink || ''
+      };
+      if(entry.gubun==='수입'){ next.confirmedAt = at; next.confirmedBy = approvedBy; }
+      else{ next.paidAt = at; next.paidBy = approvedBy; }
+      api.set(next);
+    });
+    api.tx.set(sequenceRef,{value:String(sequence),...writeMeta()});
+  });
+  return managementNo;
+}
+const PDF_OPTIONS = {
+  margin:8,
+  image:{type:'jpeg',quality:0.98},
+  html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff'},
+  jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
+  pagebreak:{mode:['css','legacy']}
+};
+
+function safeFileName(text){ return String(text).replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').trim(); }
+
+async function buildReportPdfBlob(entries,spender,approval=null,managementNo=null){
+  const host = document.createElement('div');
+  host.className = 'payment-report-sheet';
+  host.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;background:#fff;';
+  document.body.appendChild(host);
+  try{
+    renderPaymentReport(entries,spender,approval,managementNo,host);
+    if(document.fonts?.ready) await document.fonts.ready;
+    return await window.html2pdf().set(PDF_OPTIONS).from(host).outputPdf('blob');
+  }finally{
+    host.remove();
+  }
+}
+
+function downloadBlob(blob,fileName){
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url; link.download = fileName;
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),10000);
+}
+
+async function downloadReportPdf(ids,spender,prefix){
+  if(typeof window.html2pdf!=='function'){
+    throw new Error('PDF 생성 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침해 주세요.');
+  }
+  const entries = ids.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
+  if(!entries.length) throw new Error('내역을 찾을 수 없습니다.');
+  const total = entries.reduce((sum,entry)=>sum+Number(entry.amount||0),0);
+  const fileName = `${prefix}_${paymentDateKey(new Date())}_${safeFileName(spender)}_${total}원.pdf`;
+  downloadBlob(await buildReportPdfBlob(entries,spender),fileName);
+  return fileName;
+}
+
+async function downloadReportFromDialog(){
+  const status = document.getElementById('payment-report-status');
+  try{
+    const entries = paymentReportEntryIds.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
+    const spender = requireSingleSpender(entries);
+    status.textContent = 'PDF를 만드는 중입니다…';
+    const fileName = await downloadReportPdf(paymentReportEntryIds,spender,'보고서');
+    status.textContent = `PDF를 저장했습니다: ${fileName}`;
+  }catch(error){
+    status.textContent = `PDF 생성 실패: ${error.message || String(error)}`;
+  }
+}
+document.getElementById('btn-download-payment-report').addEventListener('click',downloadReportFromDialog);
 
 async function updateSelectedWorkflow(fromStatus,toStatus){
   const entries = selectedWorkflowEntries(fromStatus);
-  if(!entries.length){
-    setStatus('처리할 내역을 체크해 주세요.');
-    return;
-  }
+  if(!entries.length){ setStatus('처리할 내역을 체크해 주세요.'); return; }
+  const ids = entries.map(entry=>entry.id);
+  const actor = currentUser?.email || currentUser?.displayName || '';
+  const buttons = [...document.querySelectorAll('[data-workflow-action]')];
   try{
     const spender = requireSingleSpender(entries);
-    const previous = entries.map(entry=>({...entry}));
-    const now = new Date().toISOString();
-    let submissionSequence = 0;
-    const submitButton = [...document.querySelectorAll('[data-workflow-action="submit"]')]
-      .find(button=>button.closest('.workflow-stage')?.querySelector(`[data-workflow-id][data-workflow-status="${fromStatus}"]:checked`));
-    if(submitButton) submitButton.disabled = true;
-    try{
-      if(toStatus==='submitted'){
-        submissionSequence = await persistSubmissionBatch(entries,now,currentUser?.email || currentUser?.displayName || '');
-      }else{
-        entries.forEach(entry=>{
-          entry.status = toStatus;
-          if(toStatus==='rejected'){
-            entry.rejectedAt = now;
-            entry.rejectedBy = currentUser?.email || currentUser?.displayName || '';
-            delete entry.managementNo;
-          }
-        });
-        if(!await persist()) throw new Error(lastStorageError || '공유 저장소에 저장하지 못했습니다.');
+    buttons.forEach(button=>button.disabled = true);
+    if(toStatus==='submitted'){
+      const sequence = await persistSubmissionBatch(entries,new Date().toISOString(),actor);
+      renderReport();
+      renderEntryView();
+      const message = `${spender} 담당자의 ${ids.length}건을 관리번호 ${sequence}로 제출했습니다.`;
+      setStatus(`${message} PDF 보고서를 만드는 중…`);
+      try{
+        const fileName = await downloadReportPdf(ids,spender,'제출');
+        setStatus(`${message} PDF 저장: ${fileName}`);
+      }catch(pdfError){
+        setStatus(`${message} 다만 PDF 생성에 실패했습니다(${pdfError.message}). '선택 내역 보고서 열람'에서 다시 저장할 수 있습니다.`,true);
       }
-    }catch(error){
-      entries.forEach((entry,index)=>Object.assign(entry,previous[index]));
-      throw error;
-    }finally{
-      if(submitButton) submitButton.disabled = false;
+      return;
     }
-    setStatus(toStatus==='submitted'
-      ? `${spender} 담당자의 ${entries.length}건을 관리번호 ${submissionSequence}로 제출했습니다.`
-      : `${spender} 담당자의 ${entries.length}건을 반려했습니다.`);
+    const now = new Date().toISOString();
+        await entryTransaction(ids,(found,api)=>{
+      const targets = ids.map(id=>found.get(id)).filter(Boolean);
+      if(targets.length!==ids.length || targets.some(entry=>entry.status!==fromStatus || entry.locked)){
+        throw stateChangedError('선택한 내역의 상태가 바뀌었습니다. 목록을 새로 확인해 주세요.');
+      }
+      targets.forEach(entry=>{
+        const next = {...entry,status:toStatus};
+        if(toStatus==='rejected'){ next.rejectedAt = now; next.rejectedBy = actor; delete next.managementNo; }
+        api.set(next);
+      });
+    });
+    setStatus(`${spender} 담당자의 ${ids.length}건을 반려했습니다.`);
     renderReport();
     renderEntryView();
   }catch(error){
-    const message = toStatus==='submitted' && error.code==='permission-denied'
-      ? '공유 저장소 권한이 제출을 거부했습니다. 승인된 계정으로 로그인했는지, Firestore 규칙이 관리번호 발급과 장부 저장을 허용하는지 확인해 주세요.'
+    const message = error.code==='permission-denied'
+      ? '공유 저장소 권한이 요청을 거부했습니다. 승인된 계정인지, Firestore 규칙이 허용하는지 확인해 주세요.'
       : error.message || String(error);
-    setStatus(message,toStatus==='submitted' || error.code==='accounting/spender-mismatch');
+    setStatus(message,true);
+  }finally{
+    buttons.forEach(button=>button.disabled = false);
   }
 }
 
@@ -2572,12 +2950,13 @@ async function deletePaymentReport(token,fileId){
 async function approvePaymentReport(){
   const button = document.getElementById('btn-approve-payment-report');
   const status = document.getElementById('payment-report-status');
-  const entries = paymentReportEntryIds.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
+  const ids = paymentReportEntryIds.slice();
+  const entries = ids.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
   if(paymentReportSourceStatus!=='submitted'){
     status.textContent = '선택 내역 승인과 PDF 저장은 제출완료된 내역만 가능합니다.';
     return;
   }
-  if(!entries.length || entries.length!==paymentReportEntryIds.length || entries.some(entry=>entry.status!=='submitted')){
+  if(!entries.length || entries.length!==ids.length || entries.some(entry=>entry.status!=='submitted')){
     status.textContent = '선택 내역 상태가 바뀌었습니다. 보고서를 닫고 목록을 새로 확인해 주세요.';
     return;
   }
@@ -2590,71 +2969,48 @@ async function approvePaymentReport(){
   }
   button.disabled = true;
   status.textContent = 'Google Drive 권한을 확인하고 PDF를 저장하는 중입니다…';
-  let token = '';
   let uploadedFile = null;
-  const previousEntries = entries.map(entry=>({...entry}));
   try{
-    token = await getDriveAccessToken();
+    const token = await getDriveAccessToken();
     const approvalTime = new Date();
-    const managementNo = await allocatePaymentManagementNumber(approvalTime);
-    const approvalDate = `${approvalTime.getFullYear()}-${String(approvalTime.getMonth()+1).padStart(2,'0')}-${String(approvalTime.getDate()).padStart(2,'0')}`;
     const approver = currentUser.displayName || currentUser.email || '로그인 사용자';
-    const approvalAction = '승인 완료';
-    const approvalLabel = `${formatEntryDate(approvalDate)} ${approvalTime.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}`;
-    renderPaymentReport(entries,spender,{date:approvalLabel,approver,label:approvalAction},managementNo);
-    if(document.fonts?.ready) await document.fonts.ready;
-    const blob = await window.html2pdf().set({
-      margin:8,
-      image:{type:'jpeg',quality:0.98},
-      html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff'},
-      jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
-      pagebreak:{mode:['css','legacy']}
-    }).from(document.getElementById('payment-report-sheet')).outputPdf('blob');
+    const approvalDate = `${approvalTime.getFullYear()}-${String(approvalTime.getMonth()+1).padStart(2,'0')}-${String(approvalTime.getDate()).padStart(2,'0')}`;
+    const approval = {
+      date:`${formatEntryDate(approvalDate)} ${approvalTime.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}`,
+      approver, label:'승인 완료'
+    };
     const total = entries.reduce((sum,entry)=>sum+Number(entry.amount||0),0);
-    const dateKey = `${approvalTime.getFullYear()}${String(approvalTime.getMonth()+1).padStart(2,'0')}${String(approvalTime.getDate()).padStart(2,'0')}`;
-    const safeSpender = spender.replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').trim();
-    const fileName = `${dateKey}_${safeSpender}_${total}원.pdf`;
-    uploadedFile = await uploadPaymentReport(token,blob,fileName);
-
-    entries.forEach(entry=>{
-      entry.status = 'approved';
-      entry.approvedAt = approvalTime.toISOString();
-      entry.approvedBy = currentUser.email || currentUser.displayName || '';
-      if(entry.gubun==='수입'){
-        entry.confirmedAt = approvalTime.toISOString();
-        entry.confirmedBy = currentUser.email || currentUser.displayName || '';
-      }else{
-        entry.paidAt = approvalTime.toISOString();
-        entry.paidBy = currentUser.email || currentUser.displayName || '';
-      }
-      entry.managementNo = managementNo;
-      entry.paymentReportFileId = uploadedFile.id;
-      entry.paymentReportUrl = uploadedFile.webViewLink || '';
-    });
-    if(!await persist()){
-      entries.forEach((entry,index)=>Object.assign(entry,previousEntries[index]));
+    const fileName = `${paymentDateKey(approvalTime)}_${safeFileName(spender)}_${total}원.pdf`;
+    let managementNo = '';
+    for(let attempt=1;;attempt++){
+      const next = await peekPaymentNumber(approvalTime);
+      const blob = await buildReportPdfBlob(entries,spender,approval,next.managementNo);
+      uploadedFile = await uploadPaymentReport(token,blob,fileName);
       try{
-        await deletePaymentReport(token,uploadedFile.id);
+        managementNo = await commitPaymentApproval({ids,dateKey:next.dateKey,sequence:next.sequence,approvalTime,uploadedFile});
+        break;
+      }catch(error){
+        const failedFile = uploadedFile;
         uploadedFile = null;
-        throw new Error(lastStorageError || '상태 저장에 실패하여 Drive PDF를 제거했습니다.');
-      }catch(cleanupError){
-        if(uploadedFile) throw new Error(`지급 상태 저장 실패 (${lastStorageError}) 및 Drive 임시 파일 정리 실패: ${cleanupError.message}`);
-        throw cleanupError;
+        try{ await deletePaymentReport(token,failedFile.id); }
+        catch(cleanupError){ throw new Error(`${error.message} (Drive 임시 파일 정리 실패: ${cleanupError.message})`); }
+        if(error.code!=='accounting/sequence-conflict' || attempt>=3) throw error;
+        status.textContent = '다른 담당자와 관리번호가 겹쳐 PDF를 다시 만드는 중입니다…';
       }
     }
-    status.textContent = `선택 내역 승인 및 PDF 저장을 마쳤습니다: ${fileName}`;
+    const approvedEntries = ids.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
+    renderPaymentReport(approvedEntries,spender,approval,managementNo);
+    status.textContent = `선택 내역 승인 및 PDF 저장을 마쳤습니다: ${fileName} (관리번호 ${managementNo})`;
     if(uploadedFile.webViewLink){
       const link = document.createElement('a');
-      link.href = uploadedFile.webViewLink;
-      link.target = '_blank';
-      link.rel = 'noopener';
+      link.href = uploadedFile.webViewLink; link.target = '_blank'; link.rel = 'noopener';
       link.textContent = 'Google Drive에서 PDF 열기';
       status.append(' ',link);
     }
+    button.classList.add('hidden');
     renderReport();
     renderEntryView();
   }catch(error){
-    if(entries.every(entry=>entry.status==='submitted')) renderPaymentReport(entries,spender);
     status.textContent = `선택 내역 처리 실패: ${error.message || String(error)}`;
   }finally{
     button.disabled = false;
@@ -2868,49 +3224,55 @@ async function addEntry(){
   setStatus(`${currentYear} 회계연도(1/1~12/31) 날짜만 입력할 수 있습니다.`);
   return;
   }
-  const amount = Number(amountRaw);
-  if(!amount || amount <= 0){
-    setStatus('금액을 올바르게 입력해주세요.');
-    return;
-  }
+const amount = Number(amountRaw);
+if(!Number.isFinite(amount) || !Number.isInteger(amount) || amount===0){
+  setStatus('금액은 0이 아닌 정수로 입력해주세요. 환불·반환은 음수로 입력합니다.');
+  return;
+}
   if(!classification || !hasAccount(currentGubun==='수입' ? 'income' : 'expense',classification)){
     setStatus('예산 관리에서 등록된 목을 선택해주세요.');
     return;
   }
-  const month = (parseInt(date.split('-')[1],10)) + '월';
-
+   const month = (parseInt(date.split('-')[1],10)) + '월';
   const values = {
     date, month, gubun:currentGubun, desc, payee, spender, amount,
     gwan:classification.gwan, hang:classification.hang, category:classification.mok
   };
+
   if(editingEntryId){
-    const entry = ledger.find(item=>item.id===editingEntryId);
-    if(!entry || entry.status!=='input-complete' || entry.locked){
-      setStatus('선택한 내역은 더 이상 수정할 수 없습니다. 목록을 새로 확인해 주세요.');
-      cancelEntryEdit();
-      return;
-    }
-    const previous = {...entry};
-    Object.assign(entry,values);
-    if(!await persist()){
-      Object.assign(entry,previous);
-      setStatus(`수정한 내역을 저장하지 못했습니다: ${lastStorageError || '저장소 오류'}`);
+    const editId = editingEntryId;
+    try{
+     await entryTransaction([editId],(found,api)=>{
+        const entry = found.get(editId);
+        if(!entry || entry.status!=='input-complete' || entry.locked){
+          throw stateChangedError('선택한 내역은 더 이상 수정할 수 없습니다. 목록을 새로 확인해 주세요.');
+        }
+        api.set({...entry,...values});
+      }
+      await entryTransaction([entry.id],(found,api)=>{
+        if(found.has(entry.id)) throw stateChangedError('같은 id의 내역이 이미 있습니다. 다시 시도해 주세요.');
+        api.set(entry);
+      });
+    }catch(error){
+      if(error.code==='accounting/state-changed') cancelEntryEdit();
+      setStatus(`수정한 내역을 저장하지 못했습니다: ${error.message || String(error)}`,true);
+      renderEntryView();
       return;
     }
     cancelEntryEdit();
     setStatus('내역을 수정했습니다.');
   }else{
     const entry = {
-      id: 'usr_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+      id:'usr_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
       ...values,
       createdAt:new Date().toISOString(),
       locked:false,
       status:'input-complete'
     };
-    ledger.push(entry);
-    if(!await persist()){
-      ledger.pop();
-      setStatus(`내역 저장에 실패했습니다: ${lastStorageError || '저장소 오류'}`);
+    try{
+      await mutateLedger(list=>{ list.push(entry); });
+    }catch(error){
+      setStatus(`내역 저장에 실패했습니다: ${error.message || String(error)}`,true);
       renderEntryView();
       return;
     }
