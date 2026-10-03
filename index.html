@@ -346,6 +346,9 @@ body { background-color:var(--paper-2); color:var(--ink); }
 .usage-fill{height:100%;width:0;background:var(--paper);transition:width .4s,background .4s;}
 .usage-fill.warn{background:#f2c14e;}
 .usage-fill.danger{background:#e5484d;}
+  #quota-countdown{margin:16px 0;padding:14px 16px;background:var(--paper);border-left:5px solid var(--navy);color:var(--navy);font-weight:700;line-height:1.7;}
+#quota-countdown .quota-time{display:block;font-size:26px;font-variant-numeric:tabular-nums;margin:4px 0;}
+#quota-countdown small{font-weight:400;color:var(--ink-soft);}
 </style>
 </head>
 <body>
@@ -395,6 +398,7 @@ body { background-color:var(--paper-2); color:var(--ink); }
   <h2 id="auth-gate-title">로그인이 필요합니다</h2>
   <p id="auth-gate-message">허가된 담당자 Google 계정으로 로그인해 주세요.</p>
   <p id="auth-user-id" class="hidden"></p>
+  <p id="quota-countdown" class="hidden"></p>   <!-- ← 추가 -->
   <button class="btn-primary" id="gate-sign-in" type="button">Google 로그인</button>
 </div>
 
@@ -806,6 +810,7 @@ function renderStorageNotice(){
 }
 
 function showAuthGate(title, message, uid=''){
+  stopQuotaCountdown();
   document.getElementById('auth-gate-title').textContent = title;
   document.getElementById('auth-gate-message').textContent = message;
   const userId = document.getElementById('auth-user-id');
@@ -817,6 +822,62 @@ function showAuthGate(title, message, uid=''){
   document.getElementById('app-content').classList.add('hidden');
 }
 
+  // ---------- Firestore 일일 한도 초과 안내 ----------
+let quotaTimer = null;
+
+function isQuotaError(error){
+  return error?.code === 'resource-exhausted' || /quota/i.test(error?.message || '');
+}
+
+// 다음 초기화 시각 = 미국 태평양시 다음 자정 (서머타임 때문에 하루가 23/25시간일 수 있어 25시간 뒤 날짜의 자정을 구함)
+function quotaResetTime(now=new Date()){
+  const pacificMidnightOf = date=>{
+    const parts = new Intl.DateTimeFormat('en-US',{
+      timeZone:'America/Los_Angeles',hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'
+    }).formatToParts(date);
+    const get = type=>Number(parts.find(p=>p.type===type).value);
+    const elapsed = ((get('hour')%24)*3600 + get('minute')*60 + get('second'))*1000 + date.getMilliseconds();
+    return new Date(date.getTime() - elapsed);
+  };
+  const todayStart = pacificMidnightOf(now);
+  return pacificMidnightOf(new Date(todayStart.getTime() + 25*3600*1000));
+}
+
+function stopQuotaCountdown(){
+  if(quotaTimer){ clearInterval(quotaTimer); quotaTimer = null; }
+  const box = document.getElementById('quota-countdown');
+  if(box){ box.classList.add('hidden'); box.innerHTML = ''; }
+}
+
+function showQuotaGate(){
+  showAuthGate(
+    '오늘 사용량 한도를 모두 사용했습니다',
+    '로그인에 실패한 원인은 Firestore 무료 일일 읽기 한도 초과입니다. 계정이나 비밀번호 문제가 아니므로, 한도가 초기화된 뒤 다시 접속해 주세요.'
+  );
+  const box = document.getElementById('quota-countdown');
+  const reset = quotaResetTime();
+  const resetLabel = reset.toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  const pad = n=>String(n).padStart(2,'0');
+  const tick = ()=>{
+    const left = reset.getTime() - Date.now();
+    if(left <= 0){
+      box.innerHTML = '한도가 초기화되었을 시간입니다. 페이지를 새로고침한 뒤 다시 로그인해 주세요.';
+      clearInterval(quotaTimer); quotaTimer = null;
+      return;
+    }
+    const h = Math.floor(left/3600000);
+    const m = Math.floor(left%3600000/60000);
+    const s = Math.floor(left%60000/1000);
+    box.innerHTML =
+      `한도 초기화까지 남은 시간
+       <span class="quota-time">${pad(h)}:${pad(m)}:${pad(s)}</span>
+       <small>초기화 예정: ${resetLabel} (내 컴퓨터 시간 기준)</small>`;
+  };
+  box.classList.remove('hidden');
+  tick();
+  quotaTimer = setInterval(tick,1000);
+}
+  
 function stopSharedDataWatchers(){
   dataUnsubscribers.forEach(unsubscribe=>unsubscribe());
   dataUnsubscribers = [];
@@ -915,10 +976,15 @@ async function handleAuthState(user){
     document.getElementById('app-content').classList.remove('hidden');
     document.getElementById('auth-status').textContent = user.email || '로그인됨';
     await initializeApplicationData();
-  }catch(e){
-    console.error(e);  
+    }catch(e){
+    console.error(e);
     stopSharedDataWatchers();
     stopLedgerWatcher();
+    if(isQuotaError(e)){
+      showQuotaGate();
+      document.getElementById('auth-status').textContent = '일일 사용량 한도 초과';
+      return;
+    }
     showAuthGate(
       'Firebase 접근 확인 실패',
       `Firestore 연결 또는 보안 규칙을 확인해 주세요. ${e.message}`,
