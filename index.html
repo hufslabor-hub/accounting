@@ -2790,20 +2790,17 @@ function bindRowActions(container){
           }else if(act==='input-complete'){
             if(entry.status!=='rejected') throw stateChangedError('반려된 내역만 복원할 수 있습니다.');
             api.set({...entry,status:'input-complete'});
-}else if(act==='unapprove'){
-  if(!approvedStates.includes(entry.status)) throw stateChangedError('이미 승인 상태가 아닙니다.');
-  if(entry.acctMonth && monthNo(entry.acctMonth)<=closedThrough) throw stateChangedError(`${entry.acctMonth}월은 마감되어 승인 취소할 수 없습니다. 마감을 취소한 뒤 시도해 주세요.`);
-  ...
-  ['approvedAt','approvedBy','paidAt','paidBy','confirmedAt','confirmedBy','managementNo','submissionSequence','acctMonth','acctYear']
-    .forEach(key=>delete next[key]);
-
-            
+ }else if(act==='unapprove'){
+            if(!approvedStates.includes(entry.status)) throw stateChangedError('이미 승인 상태가 아닙니다.');
+            if(entry.acctMonth && monthNo(entry.acctMonth)<=closedThrough){
+              throw stateChangedError(`${entry.acctMonth}월은 마감되어 승인 취소할 수 없습니다. 마감을 취소한 뒤 시도해 주세요.`);
+            }
             const next = {
               ...entry, status:'submitted', locked:false,
               approvalCancelledAt:new Date().toISOString(),
               approvalCancelledBy:currentUser?.email || currentUser?.displayName || ''
             };
-            ['approvedAt','approvedBy','paidAt','paidBy','confirmedAt','confirmedBy','managementNo','submissionSequence']
+            ['approvedAt','approvedBy','paidAt','paidBy','confirmedAt','confirmedBy','managementNo','submissionSequence','acctMonth','acctYear']
               .forEach(key=>delete next[key]);
             api.set(next);
           }
