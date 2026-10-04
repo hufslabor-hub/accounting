@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ko">
+v1.4
 <head>
-v1.3
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title> 쇼미더머니 — 한국외국어대학교 노동조합 회계프로그램</title>
@@ -488,7 +488,7 @@ body {
 <header class="masthead">
     <div class="masthead-inner">
     <p class="org">한국외국어대학교 노동조합 회계 프로그램</p>
-    <h1 class="title">쇼미더머니() <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
+    <h1 class="title">쇼미더머니<span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
     
     <div class="auth-bar">
       <span id="auth-status">Firebase 연결 확인 중...</span>
@@ -3219,11 +3219,18 @@ async function renderReportDetail(){
 // ---------- per-entry transactions ----------
 function applyLocalChanges(upserts,deletes){
   // recent/pending 스냅샷이 나중에 도착해도, 방금 저장한 상태가 유지되도록 localOverrides에 둔다.
+  // 승인 건은 pending 쿼리에서 빠지므로 recent·older에 반드시 넣어 결의 내역에 남긴다.
   upserts.forEach((entry,id)=>{
     localOverrides.set(id, entry);
-    if(ledgerSources.recent.has(id)) ledgerSources.recent.set(id, entry);
-    if(ledgerSources.pending.has(id)) ledgerSources.pending.set(id, entry);
+    ledgerSources.recent.set(id, entry);
     ledgerSources.older.set(id, entry);
+    if(APPROVED_STATES.includes(entry.status)){
+      ledgerSources.pending.delete(id);
+    }else if(['input-complete','submitted','rejected'].includes(entry.status)){
+      ledgerSources.pending.set(id, entry);
+    }else if(ledgerSources.pending.has(id)){
+      ledgerSources.pending.set(id, entry);
+    }
   });
   deletes.forEach(id=>{
     localOverrides.delete(id);
@@ -4751,13 +4758,15 @@ async function approvePaymentReport(){
       }
     }
 
-    // 화면 즉시 갱신: 결의완료 목록에서 사라지고 전체 내역이 승인으로 바뀜
+    // 화면 즉시 갱신: 지급 대기에서 사라지고 결의 내역에 승인으로 남음 (마감 전)
     paymentReportSourceStatus = 'approved';
+    currentStatusEntry = '전체';
+    currentMonthEntry = '전체';
     renderReport();
     renderEntryView();
     const approvedEntries = ids.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
     renderPaymentReport(approvedEntries,spender,approval,managementNo);
-    status.textContent = `승인 완료 (관리번호 ${managementNo}). PDF 저장을 시도합니다…`;
+    status.textContent = `승인 완료 (관리번호 ${managementNo}). 결의 내역에 승인으로 표시됩니다. PDF 저장을 시도합니다…`;
     button.classList.add('hidden');
 
     // 2) PDF·Drive는 실패해도 승인 상태는 유지
