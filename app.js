@@ -14,6 +14,7 @@ const closureKey = y => 'month-closure:' + y;
 const monthNo = m => parseInt(m,10) || 0;
 let staffNames = [];
 let staffBankDetails = [];
+let staffGroups = {};   // { 이름: '집행부' | '대의원' }
 let paymentReportEntryIds = [];
 let paymentReportSourceStatus = '';
 let editingEntryId = '';
@@ -102,6 +103,8 @@ const budgetKey = y => 'budget:' + y;
 const accountBalanceKey = y => 'account-balance:' + y;
 const STAFF_NAMES_KEY = 'staff-names:list';
 const STAFF_BANK_DETAILS_KEY = 'staff-bank-details:list';
+const STAFF_GROUPS_KEY = 'staff-groups:map';
+const STAFF_GROUP_OPTIONS = ['집행부','대의원'];
 const SUBMISSION_SEQUENCE_KEY = 'management-sequence:submission';
 const CATEGORY_SCHEMA_VERSION = 2;
 const categoryKey = y => 'categories:' + y;
@@ -390,7 +393,7 @@ function applyTemplate(key) {
   
 function watchSharedData(){
   stopSharedDataWatchers();
-  const watchedKeys = [YEARS_KEY,budgetKey(currentYear),accountBalanceKey(currentYear),STAFF_NAMES_KEY,STAFF_BANK_DETAILS_KEY,categoryKey(currentYear)];
+  const watchedKeys = [YEARS_KEY,budgetKey(currentYear),accountBalanceKey(currentYear),STAFF_NAMES_KEY,STAFF_BANK_DETAILS_KEY,STAFF_GROUPS_KEY,categoryKey(currentYear)];
   watchedKeys.forEach(key=>{
     const unsubscribe = db.collection('accountingData').doc(key).onSnapshot(snapshot=>{
       if(!snapshot.exists) return;
@@ -422,6 +425,9 @@ function watchSharedData(){
           renderStaffNames();
         } else if(key===STAFF_BANK_DETAILS_KEY){
           staffBankDetails = normalizeStaffBankDetails(data);
+          renderStaffNames();
+        } else if(key===STAFF_GROUPS_KEY){
+          staffGroups = normalizeStaffGroups(data);
           renderStaffNames();
         } else if(key===categoryKey(currentYear)){
           if(JSON.stringify(accountCategories)!==JSON.stringify(data)){
@@ -1237,6 +1243,17 @@ function normalizeStaffBankDetails(details){
   return [...byName.values()].sort((a,b)=>a.name.localeCompare(b.name,'ko'));
 }
 
+function normalizeStaffGroups(map){
+  const result = {};
+  if(map && typeof map==='object' && !Array.isArray(map)){
+    Object.keys(map).forEach(name=>{
+      const key = name.trim();
+      if(key && STAFF_GROUP_OPTIONS.includes(map[name])) result[key] = map[name];
+    });
+  }
+  return result;
+}
+
 /**
  * 1. 담당자 이름 만능 파서
  * JSON 형태든 일반 텍스트(띄어쓰기, 줄바꿈, 쉼표)든 구분하여 배열로 변환
@@ -1365,6 +1382,48 @@ async function loadStaffBankDetails() {
 
 
   
+/**
+ * 담당자 구분(집행부/대의원) 로드
+ * 저장된 구분 데이터가 아직 없으면 data.json의 staffRoster로 한 번만 초기 등록합니다.
+ */
+async function loadStaffGroups() {
+  try {
+    const res = await storageGet(STAFF_GROUPS_KEY);
+    staffGroups = normalizeStaffGroups(JSON.parse(res.value));
+  } catch (e) {
+    if (e.code !== 'accounting/not-found') {
+      console.warn('담당자 구분 불러오기 중 경고:', e);
+      staffGroups = {};
+      return;
+    }
+    staffGroups = {};
+    const roster = APP_DATA.staffRoster || {};
+    STAFF_GROUP_OPTIONS.forEach(group=>{
+      (Array.isArray(roster[group]) ? roster[group] : []).forEach(name=>{
+        const n = String(name).trim();
+        if(n) staffGroups[n] = group;
+      });
+    });
+    if(!Object.keys(staffGroups).length) return;
+    const previousNames = staffNames;
+    staffNames = normalizeStaffNames([...staffNames,...Object.keys(staffGroups)]);
+    try {
+      await storageSetMany([
+        [STAFF_NAMES_KEY,JSON.stringify(staffNames)],
+        [STAFF_GROUPS_KEY,JSON.stringify(staffGroups)]
+      ]);
+    } catch (err) {
+      console.warn('담당자 구분 초기 저장 실패:', err);
+      staffNames = previousNames;
+    }
+  }
+}
+
+function staffGroupRank(name){
+  const i = STAFF_GROUP_OPTIONS.indexOf(staffGroups[name]);
+  return i < 0 ? STAFF_GROUP_OPTIONS.length : i;
+}
+
 function renderStaffNames(){
   const datalist = document.getElementById('staff-name-options');
   const list = document.getElementById('staff-name-list');
@@ -1381,18 +1440,22 @@ function renderStaffNames(){
   const table = document.createElement('table');
   table.className = 'staff-table';
   table.innerHTML = `<thead><tr>
-    <th style="width:18%">이름</th>
-    <th style="width:22%">은행</th>
-    <th style="width:32%">계좌번호</th>
-    <th style="width:14%">저장</th>
-    <th style="width:14%">삭제</th>
+    <th style="width:12%">구분</th>
+    <th style="width:15%">이름</th>
+    <th style="width:19%">은행</th>
+    <th style="width:28%">계좌번호</th>
+    <th style="width:13%">저장</th>
+    <th style="width:13%">삭제</th>
   </tr></thead>`;
   const tbody = document.createElement('tbody');
-  staffNames.forEach((name,index)=>{
+  [...staffNames].sort((x,y)=>staffGroupRank(x)-staffGroupRank(y) || x.localeCompare(y,'ko')).forEach((name,index)=>{
     const details = staffBankDetails.find(detail=>detail.name===name) || {bank:'',accountNumber:''};
     const tr = document.createElement('tr');
     tr.dataset.staffRow = name;
+    const group = staffGroups[name] || '';
+    const groupOptions = ['',...STAFF_GROUP_OPTIONS].map(g=>`<option value="${g}"${g===group?' selected':''}>${g||'미지정'}</option>`).join('');
     tr.innerHTML = `
+      <td><select data-staff-field="group" aria-label="${escapeHTML(name)} 구분">${groupOptions}</select></td>
       <td class="staff-name-cell">${escapeHTML(name)}</td>
       <td><input type="text" data-staff-field="bank" value="${escapeHTML(details.bank)}" placeholder="은행명" autocomplete="off" aria-label="${escapeHTML(name)} 은행"></td>
       <td><input type="text" data-staff-field="accountNumber" value="${escapeHTML(details.accountNumber)}" placeholder="계좌번호" inputmode="numeric" autocomplete="off" aria-label="${escapeHTML(name)} 계좌번호"></td>
@@ -1420,15 +1483,24 @@ async function addStaffName(){
     status.textContent = '이미 등록된 이름입니다.';
     return;
   }
+  const groupSelect = document.getElementById('staff-group-input');
+  const group = groupSelect ? groupSelect.value : '';
   const previousNames = staffNames;
+  const previousGroups = staffGroups;
   staffNames = normalizeStaffNames([...staffNames,name]);
+  staffGroups = {...staffGroups};
+  if(group) staffGroups[name] = group;
   try{
-    await saveStaffNames();
+    await storageSetMany([
+      [STAFF_NAMES_KEY,JSON.stringify(staffNames)],
+      [STAFF_GROUPS_KEY,JSON.stringify(staffGroups)]
+    ]);
     input.value = '';
-    status.textContent = `${name} 담당자를 추가했습니다.`;
+    status.textContent = `${name} 담당자를 추가했습니다.${group ? ' (' + group + ')' : ''}`;
     renderStaffNames();
   }catch(e){
     staffNames = previousNames;
+    staffGroups = previousGroups;
     renderStaffNames();
     status.textContent = `담당자 저장 실패: ${e.message || String(e)}`;
   }
@@ -1438,22 +1510,26 @@ async function removeStaffName(name){
   const status = document.getElementById('staff-name-status');
   const previousNames = staffNames;
   const previousBankDetails = staffBankDetails;
+  const previousGroups = staffGroups;
   staffNames = staffNames.filter(item=>item!==name);
   staffBankDetails = staffBankDetails.filter(detail=>detail.name!==name);
+  staffGroups = {...staffGroups};
+  delete staffGroups[name];
   try{
+    const entries = [
+      [STAFF_NAMES_KEY,JSON.stringify(staffNames)],
+      [STAFF_GROUPS_KEY,JSON.stringify(staffGroups)]
+    ];
     if(previousBankDetails.length!==staffBankDetails.length){
-      await storageSetMany([
-        [STAFF_NAMES_KEY,JSON.stringify(staffNames)],
-        [STAFF_BANK_DETAILS_KEY,JSON.stringify(staffBankDetails)]
-      ]);
-    }else{
-      await saveStaffNames();
+      entries.push([STAFF_BANK_DETAILS_KEY,JSON.stringify(staffBankDetails)]);
     }
+    await storageSetMany(entries);
     status.textContent = `${name} 담당자와 등록된 계좌 정보를 삭제했습니다. 기존 거래 내역은 변경되지 않습니다.`;
     renderStaffNames();
   }catch(e){
     staffNames = previousNames;
     staffBankDetails = previousBankDetails;
+    staffGroups = previousGroups;
     renderStaffNames();
     status.textContent = `담당자 저장 실패: ${e.message || String(e)}`;
   }
@@ -1465,17 +1541,23 @@ async function saveStaffBankDetails(name){
   if(!row) return;
   const bank = row.querySelector('[data-staff-field="bank"]')?.value.trim() || '';
   const accountNumber = row.querySelector('[data-staff-field="accountNumber"]')?.value.trim() || '';
+  const group = row.querySelector('[data-staff-field="group"]')?.value || '';
   const previousDetails = staffBankDetails;
+  const previousGroups = staffGroups;
   staffBankDetails = staffBankDetails.filter(detail=>detail.name!==name);
   if(bank || accountNumber) staffBankDetails = normalizeStaffBankDetails([...staffBankDetails,{name,bank,accountNumber}]);
+  staffGroups = {...staffGroups};
+  if(group) staffGroups[name] = group; else delete staffGroups[name];
   try{
-    await storageSet(STAFF_BANK_DETAILS_KEY,JSON.stringify(staffBankDetails));
-    status.textContent = bank || accountNumber
-      ? `${name} 담당자의 은행 및 계좌번호를 저장했습니다.`
-      : `${name} 담당자의 은행 및 계좌번호를 비웠습니다.`;
+    await storageSetMany([
+      [STAFF_BANK_DETAILS_KEY,JSON.stringify(staffBankDetails)],
+      [STAFF_GROUPS_KEY,JSON.stringify(staffGroups)]
+    ]);
+    status.textContent = `${name} 담당자의 구분(${group || '미지정'})과 은행·계좌 정보를 저장했습니다.`;
     renderStaffNames();
   }catch(e){
     staffBankDetails = previousDetails;
+    staffGroups = previousGroups;
     renderStaffNames();
     status.textContent = `계좌 정보 저장 실패: ${e.message || String(e)}`;
   }
@@ -1813,6 +1895,7 @@ async function loadYearData(){
   await loadAccountBalance();
   await loadStaffNames();
   await loadStaffBankDetails();
+  await loadStaffGroups();
   await loadAccountCategories();
     await loadFund();
   await loadDeposits();   // B 단계에서 만드는 함수
