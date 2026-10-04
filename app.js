@@ -3728,6 +3728,7 @@ async function loadMonthlyBudgetReport(throughMonth, {exact=false}={}) {
   const noteEl = document.getElementById('monthly-budget-note');
   const summaryBox = document.getElementById('monthly-report-summary');
   const scrollBox = document.getElementById('monthly-budget-scroll');
+  const mobileBox = document.getElementById('monthly-budget-mobile');
   const tbody = document.getElementById('monthly-budget-body');
   const tfoot = document.getElementById('monthly-budget-total');
   if (!tbody) return;
@@ -3744,6 +3745,7 @@ async function loadMonthlyBudgetReport(throughMonth, {exact=false}={}) {
   if (noteEl) noteEl.textContent = '승인 내역을 불러오는 중…';
   if (summaryBox) summaryBox.style.display = 'none';
   if (scrollBox) scrollBox.style.display = 'none';
+  if (mobileBox) mobileBox.classList.remove('is-ready');
   tbody.innerHTML = '';
   if (tfoot) tfoot.innerHTML = '';
 
@@ -3760,6 +3762,7 @@ async function loadMonthlyBudgetReport(throughMonth, {exact=false}={}) {
       renderMonthlyBudgetSection(fromSummary, n);
       if (summaryBox) summaryBox.style.display = '';
       if (scrollBox) scrollBox.style.display = '';
+      if (mobileBox) mobileBox.classList.add('is-ready');
       if (noteEl) {
         noteEl.textContent =
           year + '년 1월~' + n + '월 승인 실적 누적 · ' + count.toLocaleString('ko-KR') + '건 (보고서 집계 기준)' +
@@ -3790,6 +3793,7 @@ async function loadMonthlyBudgetReport(throughMonth, {exact=false}={}) {
     renderMonthlyBudgetSection(cumulative, n);
     if (summaryBox) summaryBox.style.display = '';
     if (scrollBox) scrollBox.style.display = '';
+    if (mobileBox) mobileBox.classList.add('is-ready');
     if (noteEl) {
       noteEl.textContent =
         year + '년 1월~' + n + '월 승인 실적 누적 · ' + cumulative.length.toLocaleString('ko-KR') + '건 (전체 내역 직접 조회)' +
@@ -3801,6 +3805,125 @@ async function loadMonthlyBudgetReport(throughMonth, {exact=false}={}) {
     if (noteEl) noteEl.textContent = '조회 실패: ' + (err.message || String(err));
   }
 }
+
+// ===MBR-START
+// ---------- 월별 누적 보고서: 모바일 카드형 보기 (PC 표와 같은 데이터) ----------
+let monthlyMobileRows = [];
+let monthlyMobileThrough = 0;
+let mbrVisibleKeys = [];
+const mbrState = {onlyActive:true, onlyHigh:false, open:new Set()};
+
+function mbrPct(b, s){ return b > 0 ? s / b * 100 : (s > 0 ? Infinity : 0); }
+function mbrPctText(b, s){ return b > 0 ? (s / b * 100).toFixed(1) + '%' : (s > 0 ? '예산 없음' : '-'); }
+function mbrLabel(name){ return String(name == null ? '' : name).replace(/_(관|항)$/, ''); }
+function mbrLevel(type, b, s){
+  if (type !== 'expense') return '';
+  const pct = mbrPct(b, s);
+  return pct >= 100 ? 'over' : (pct >= 80 ? 'warn' : '');
+}
+function mbrBar(type, b, s){
+  const pct = mbrPct(b, s);
+  const width = pct === Infinity ? 100 : Math.min(100, pct);
+  return '<div class="mbr-bar"><i class="' + mbrLevel(type, b, s) + '" style="width:' + width.toFixed(1) + '%"></i></div>';
+}
+function mbrSum(rows){
+  return rows.reduce((acc, r) => ({b: acc.b + r.b, s: acc.s + r.s}), {b: 0, s: 0});
+}
+function mbrRowVisible(r){
+  if (mbrState.onlyActive && !r.s) return false;
+  if (mbrState.onlyHigh){
+    if (r.type !== 'expense') return false;
+    if (!(mbrPct(r.b, r.s) >= 80)) return false;
+  }
+  return true;
+}
+
+function renderMonthlyMobile(){
+  const box = document.getElementById('monthly-budget-mobile');
+  if (!box) return;
+  const list = box.querySelector('[data-mbr-list]');
+  const rows = monthlyMobileRows;
+  mbrVisibleKeys = [];
+  let html = '';
+
+  [['income', '수입'], ['expense', '지출']].forEach(([type, typeName]) => {
+    const typeRows = rows.filter(r => r.type === type);
+    if (!typeRows.length) return;
+    const gwanOrder = [];
+    const byGwan = new Map();
+    typeRows.forEach(r => {
+      if (!byGwan.has(r.gwan)) { byGwan.set(r.gwan, []); gwanOrder.push(r.gwan); }
+      byGwan.get(r.gwan).push(r);
+    });
+
+    let section = '';
+    gwanOrder.forEach(gwan => {
+      const all = byGwan.get(gwan);
+      const shown = all.filter(mbrRowVisible);
+      if (!shown.length) return;
+      const key = type + '|' + gwan;
+      mbrVisibleKeys.push(key);
+      const t = mbrSum(all);
+      const mokCards = shown.map(r => {
+        const level = mbrLevel(r.type, r.b, r.s);
+        const remain = r.b - r.s;
+        const detail = r.detail
+          ? '<div class="mbr-detail">' + r.detail.split(/\\+n|\n/).filter(Boolean).map(escapeHTML).join('<br>') + '</div>'
+          : '';
+        return '<div class="mbr-mok">' +
+          '<div class="mbr-mok-top"><span class="mbr-name">' + escapeHTML(mbrLabel(r.mok)) + '</span>' +
+          '<span class="mbr-pct ' + level + '">' + mbrPctText(r.b, r.s) + '</span></div>' +
+          '<div class="mbr-path">' + escapeHTML(mbrLabel(r.hang)) + '</div>' +
+          mbrBar(r.type, r.b, r.s) +
+          '<div class="mbr-nums3">' +
+          '<span><em>예산</em>' + (r.b ? fmtShort(r.b) : '-') + '</span>' +
+          '<span><em>결산</em>' + fmtShort(r.s) + '</span>' +
+          '<span class="' + (remain < 0 ? 'neg' : '') + '"><em>잔여</em>' + (r.b ? fmtShort(remain) : '-') + '</span>' +
+          '</div>' + detail + '</div>';
+      }).join('');
+      const gLevel = mbrLevel(type, t.b, t.s);
+      section +=
+        '<details class="mbr-gwan ' + type + '" data-mbr-key="' + escapeHTML(key) + '"' + (mbrState.open.has(key) ? ' open' : '') + '>' +
+        '<summary>' +
+        '<div class="mbr-mok-top"><span class="mbr-name">' + escapeHTML(mbrLabel(gwan)) + '</span>' +
+        '<span class="mbr-pct ' + gLevel + '">' + mbrPctText(t.b, t.s) + '</span></div>' +
+        mbrBar(type, t.b, t.s) +
+        '<div class="mbr-nums2"><span>결산 <b>' + fmtShort(t.s) + '</b></span><span>예산 <b>' + (t.b ? fmtShort(t.b) : '-') + '</b></span>' +
+        '<span class="mbr-count">' + shown.length + '개 목</span></div>' +
+        '</summary><div class="mbr-body">' + mokCards + '</div></details>';
+    });
+
+    if (section) {
+      const tt = mbrSum(typeRows);
+      html += '<h4 class="mbr-type ' + type + '"><span>' + typeName + '</span>' +
+        '<small>결산 ' + fmtShort(tt.s) + ' / 예산 ' + (tt.b ? fmtShort(tt.b) : '-') + ' · ' + mbrPctText(tt.b, tt.s) + '</small></h4>' + section;
+    }
+  });
+
+  if (!rows.length) {
+    html = '<p class="mbr-empty">등록된 예산 항목이 없습니다. 예산 탭에서 관·항·목을 등록해 주세요.</p>';
+  } else if (!html) {
+    html = '<p class="mbr-empty">조건에 맞는 항목이 없습니다. 위 필터를 꺼서 전체를 확인해 보세요.</p>';
+  } else {
+    const all = mbrSum(rows);
+    html += '<div class="mbr-total"><span>전체 합계 (1~' + monthlyMobileThrough + '월 누적)</span>' +
+      '<b>결산 ' + fmtShort(all.s) + ' / 예산 ' + fmtShort(all.b) + ' · ' + (all.b > 0 ? (all.s / all.b * 100).toFixed(1) + '%' : '-') + '</b></div>';
+  }
+  list.innerHTML = html;
+
+  box.querySelectorAll('[data-mbr-filter]').forEach(btn => {
+    const on = btn.dataset.mbrFilter === 'active' ? mbrState.onlyActive : mbrState.onlyHigh;
+    btn.classList.toggle('is-on', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  const expandBtn = box.querySelector('[data-mbr-expand]');
+  if (expandBtn){
+    const allOpen = mbrVisibleKeys.length > 0 && mbrVisibleKeys.every(k => mbrState.open.has(k));
+    expandBtn.textContent = allOpen ? '모두 접기' : '모두 펴기';
+    expandBtn.disabled = mbrVisibleKeys.length === 0;
+  }
+}
+// ===MBR-END
 
 function renderMonthlyBudgetSection(approvedList, throughMonth) {
   const spentByMok = {};
@@ -3822,8 +3945,10 @@ function renderMonthlyBudgetSection(approvedList, throughMonth) {
   let incomeBudget = 0, expenseBudget = 0, incomeSettled = 0, expenseSettled = 0;
   let rowCount = 0;
   const shownKeys = new Set();
+  const mobileRows = [];
 
   const appendRow = (type, gwan, hang, mok, b, s, detail) => {
+    mobileRows.push({type, gwan, hang, mok, b, s, detail: detail || ''});
     totalBudget += b;
     totalSettled += s;
     if (type === 'income') { incomeBudget += b; incomeSettled += s; }
@@ -3902,6 +4027,10 @@ function renderMonthlyBudgetSection(approvedList, throughMonth) {
   if (!rowCount) {
     tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">등록된 예산 항목이 없습니다. 예산 탭에서 관·항·목을 등록해 주세요.</td></tr>';
   }
+
+  monthlyMobileRows = mobileRows;
+  monthlyMobileThrough = throughMonth;
+  renderMonthlyMobile();
 }
 
 function openPaymentReport(status){
@@ -4573,6 +4702,36 @@ document.getElementById('btn-transfer-bulk').addEventListener('click',()=>{
   status.textContent = `표시 중인 ${rows.length}명에게 ${fmt(amount)}을 적용했습니다.`;
 });
 document.getElementById('btn-transfer-download').addEventListener('click',downloadTransferFile);
+(function(){
+  const box = document.getElementById('monthly-budget-mobile');
+  if(!box) return;
+  box.addEventListener('click',event=>{
+    const filter = event.target.closest('[data-mbr-filter]');
+    if(filter){
+      if(filter.dataset.mbrFilter==='active') mbrState.onlyActive = !mbrState.onlyActive;
+      else mbrState.onlyHigh = !mbrState.onlyHigh;
+      renderMonthlyMobile();
+      return;
+    }
+    if(event.target.closest('[data-mbr-expand]')){
+      const allOpen = mbrVisibleKeys.length>0 && mbrVisibleKeys.every(k=>mbrState.open.has(k));
+      if(allOpen) mbrVisibleKeys.forEach(k=>mbrState.open.delete(k));
+      else mbrVisibleKeys.forEach(k=>mbrState.open.add(k));
+      renderMonthlyMobile();
+    }
+  });
+  // details의 열림/닫힘 상태를 기억 (필터를 바꿔도 유지)
+  box.addEventListener('toggle',event=>{
+    const d = event.target;
+    if(!d || !d.matches || !d.matches('details[data-mbr-key]')) return;
+    if(d.open) mbrState.open.add(d.dataset.mbrKey); else mbrState.open.delete(d.dataset.mbrKey);
+    const expandBtn = box.querySelector('[data-mbr-expand]');
+    if(expandBtn){
+      const allOpen = mbrVisibleKeys.length>0 && mbrVisibleKeys.every(k=>mbrState.open.has(k));
+      expandBtn.textContent = allOpen ? '모두 접기' : '모두 펴기';
+    }
+  },true);
+})();
 document.getElementById('transfer-list').addEventListener('input',event=>{
   const input = event.target.closest('[data-transfer-amount]');
   if(!input) return;

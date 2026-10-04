@@ -9,12 +9,12 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=2.9">
+<link rel="stylesheet" href="style.css?v=2.10">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <header class="masthead">
-    <span class="version-tag">v2.9</span>
+    <span class="version-tag">v2.10</span>
     <div class="masthead-inner">
 
     <p class="org">한국외국어대학교 노동조합 회계 프로그램</p>
@@ -87,6 +87,15 @@
       <tbody id="monthly-budget-body"></tbody>
       <tfoot id="monthly-budget-total"></tfoot>
     </table>
+  </div>
+  <div class="mbr" id="monthly-budget-mobile">
+    <div class="mbr-toolbar">
+      <button type="button" class="mbr-chip is-on" data-mbr-filter="active" aria-pressed="true">집행 있는 항목만</button>
+      <button type="button" class="mbr-chip" data-mbr-filter="high" aria-pressed="false">지출 80%↑·초과만</button>
+      <button type="button" class="mbr-chip mbr-chip-plain" data-mbr-expand="toggle">모두 펴기</button>
+    </div>
+    <div data-mbr-list></div>
+    <p class="mbr-unit">단위: 원 · 관을 누르면 항·목이 펼쳐집니다.</p>
   </div>
   <p class="count-note" id="monthly-budget-note">상단 월 탭을 눌러 해당 월말 기준 보고서를 조회하세요.</p>
   <button class="btn-text" id="btn-monthly-exact" type="button">정밀 재조회 (전체 승인 내역 직접 읽기)</button>
@@ -484,7 +493,7 @@
 (function(){
   function start(){
     var s = document.createElement('script');
-    s.src = 'app.js?v=2.9';
+    s.src = 'app.js?v=2.10';
     document.body.appendChild(s);
   }
   fetch('data.json', {cache:'no-cache'})
