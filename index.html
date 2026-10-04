@@ -5052,8 +5052,8 @@ function renderUsage(total,start){
     `초기화 ${fmtTime(reset)} · 조회 ${fmtTime(new Date())}`;
 }
 
-document.getElementById('btn-usage-refresh').addEventListener('click',async event=>{
-  const button = event.currentTarget;
+document.getElementById('some-button').addEventListener('click', function() { ... });
+    const button = event.currentTarget;
   const note = document.getElementById('usage-note');
   button.disabled = true;
   note.textContent = '조회 중…';
