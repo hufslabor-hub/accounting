@@ -705,3 +705,34 @@ body {
   .transfer-table input[type="checkbox"]{width:22px;height:22px;}
   .transfer-table input[type="text"]{min-width:0;padding:9px 8px;}
 }
+
+/* 모바일: 담당자 목록을 카드형으로 (이름·구분 / 은행·계좌번호 / 저장·삭제) */
+@media (max-width:600px){
+  #view-staff .card{padding:16px;}
+  #staff-name-list.staff-table-scroll{overflow-x:visible;border:0;background:transparent;}
+  #staff-name-list .staff-table{min-width:0;display:block;}
+  #staff-name-list .staff-table thead{display:none;}
+  #staff-name-list .staff-table tbody{display:block;}
+  #staff-name-list .staff-table tr{
+    display:grid;
+    grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);
+    grid-template-areas:"name group" "bank acct" "save del";
+    gap:8px;
+    margin-bottom:10px;
+    padding:12px;
+    background:var(--paper);
+    border:1px solid var(--line);
+  }
+  #staff-name-list .staff-table td,
+  #staff-name-list .staff-table td+td{display:block;border:0;padding:0;min-width:0;text-align:left;}
+  #staff-name-list .staff-table td:nth-child(1){grid-area:group;}
+  #staff-name-list .staff-table td:nth-child(2){grid-area:name;align-self:center;font-size:16px;}
+  #staff-name-list .staff-table td:nth-child(3){grid-area:bank;}
+  #staff-name-list .staff-table td:nth-child(4){grid-area:acct;}
+  #staff-name-list .staff-table td:nth-child(5){grid-area:save;}
+  #staff-name-list .staff-table td:nth-child(6){grid-area:del;}
+  #staff-name-list .staff-table select{width:100%;min-width:0;min-height:44px;}
+  #staff-name-list .staff-table input[type="text"]{min-width:0;min-height:44px;padding:10px 8px;}
+  #staff-name-list .staff-table .btn-primary,
+  #staff-name-list .staff-table .del-btn{width:100%;min-height:44px;font-size:15px;padding:8px 12px;}
+}
