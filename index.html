@@ -465,7 +465,7 @@ body {
 <header class="masthead">
     <div class="masthead-inner">
     <p class="org">한국외국어대학교 노동조합</p>
-    <h1 class="title">쇼미더머니(노동조합 회계 프로그램) <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
+    <h1 class="title">쇼미더머니 (노동조합 회계 프로그램) <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
     
     <div class="auth-bar">
       <span id="auth-status">Firebase 연결 확인 중...</span>
@@ -4143,6 +4143,95 @@ async function commitPaymentApproval({ids,dateKey,sequence,approvalTime,uploaded
   const sequenceRef = db.collection('accountingData').doc(`management-sequence:payment:${dateKey}`);
   const managementNo = `${dateKey}${String(sequence).padStart(3,'0')}`;
   const approvedBy = currentUser.email || currentUser.displayName || '';
+  const fileId = uploadedFile?.id || '';
+  const fileUrl = uploadedFile?.webViewLink || '';
+  await entryTransaction(ids,async (found,api)=>{
+    const sequenceSnapshot = await api.tx.get(sequenceRef);
+    const stored = checkSequence(
+      sequenceSnapshot.exists ? Number(sequenceSnapshot.data().value) : highestPaymentSequence(ledger,dateKey),
+      '지급 관리번호');
+    if(stored+1!==sequence){
+      const error = new Error('다른 담당자가 먼저 같은 관리번호를 사용했습니다.');
+      error.code = 'accounting/sequence-conflict';
+      throw error;
+    }
+    const targets = ids.map(id=>found.get(id)).filter(Boolean);
+    if(targets.length!==ids.length || targets.some(entry=>entry.status!=='submitted')){
+      throw stateChangedError('선택 내역의 상태가 바뀌었습니다. 보고서를 닫고 목록을 새로 확인해 주세요.');
+    }
+    requireSingleSpender(targets);
+    const ap = acctPeriod(approvalTime);
+    if(ap.year===currentYear && ap.month<=closedThrough){
+      throw stateChangedError(`${ap.month}월은 이미 마감되어 승인할 수 없습니다. 마감을 취소하거나 열린 달에 승인해 주세요.`);
+    }
+
+    const at = approvalTime.toISOString();
+    targets.forEach(entry=>{
+      const next = {
+        ...entry, status:'approved', approvedAt:at, approvedBy,
+        acctYear:acctPeriod(approvalTime).year,
+        acctMonth:acctPeriod(approvalTime).month,
+        managementNo
+      };
+      if(fileId) next.paymentReportFileId = fileId;
+      if(fileUrl) next.paymentReportUrl = fileUrl;
+      if(entry.gubun==='수입'){ next.confirmedAt = at; next.confirmedBy = approvedBy; }
+      else{ next.paidAt = at; next.paidBy = approvedBy; }
+      api.set(next);
+    });
+    api.tx.set(sequenceRef,{value:String(sequence),...writeMeta()});
+  });
+  return managementNo;
+}
+
+
+  const sequenceRef = db.collection('accountingData').doc(`management-sequence:payment:${dateKey}`);
+  const managementNo = `${dateKey}${String(sequence).padStart(3,'0')}`;
+  const approvedBy = currentUser.email || currentUser.displayName || '';
+  const fileId = uploadedFile?.id || '';
+  const fileUrl = uploadedFile?.webViewLink || '';
+  await entryTransaction(ids,async (found,api)=>{
+    const sequenceSnapshot = await api.tx.get(sequenceRef);
+    const stored = checkSequence(
+      sequenceSnapshot.exists ? Number(sequenceSnapshot.data().value) : highestPaymentSequence(ledger,dateKey),
+      '지급 관리번호');
+    if(stored+1!==sequence){
+      const error = new Error('다른 담당자가 먼저 같은 관리번호를 사용했습니다.');
+      error.code = 'accounting/sequence-conflict';
+      throw error;
+    }
+    const targets = ids.map(id=>found.get(id)).filter(Boolean);
+    if(targets.length!==ids.length || targets.some(entry=>entry.status!=='submitted')){
+      throw stateChangedError('선택 내역의 상태가 바뀌었습니다. 보고서를 닫고 목록을 새로 확인해 주세요.');
+    }
+    requireSingleSpender(targets);
+    const ap = acctPeriod(approvalTime);
+    if(ap.year===currentYear && ap.month<=closedThrough){
+      throw stateChangedError(`${ap.month}월은 이미 마감되어 승인할 수 없습니다. 마감을 취소하거나 열린 달에 승인해 주세요.`);
+    }
+
+    const at = approvalTime.toISOString();
+    targets.forEach(entry=>{
+      const next = {
+        ...entry, status:'approved', approvedAt:at, approvedBy,
+        acctYear:acctPeriod(approvalTime).year,
+        acctMonth:acctPeriod(approvalTime).month,
+        managementNo
+      };
+      if(fileId) next.paymentReportFileId = fileId;
+      if(fileUrl) next.paymentReportUrl = fileUrl;
+      if(entry.gubun==='수입'){ next.confirmedAt = at; next.confirmedBy = approvedBy; }
+      else{ next.paidAt = at; next.paidBy = approvedBy; }
+      api.set(next);
+    });
+    api.tx.set(sequenceRef,{value:String(sequence),...writeMeta()});
+  });
+  return managementNo;
+}
+
+  const sequenceRef = db.collection('accountingData').doc(`management-sequence:payment:${dateKey}`);
+  const managementNo = `${dateKey}${String(sequence).padStart(3,'0')}`;
+  const approvedBy = currentUser.email || currentUser.displayName || '';
   await entryTransaction(ids,async (found,api)=>{
     const sequenceSnapshot = await api.tx.get(sequenceRef);                       // read before any write
     const stored = checkSequence(
@@ -4179,6 +4268,9 @@ if(ap.year===currentYear && ap.month<=closedThrough){
   });
   return managementNo;
 }
+
+
+
 const PDF_OPTIONS = {
   margin:8,
   image:{type:'jpeg',quality:0.98},
@@ -4608,7 +4700,105 @@ async function deletePaymentReport(token,fileId){
   }
 }
 
+
 async function approvePaymentReport(){
+  const button = document.getElementById('btn-approve-payment-report');
+  const status = document.getElementById('payment-report-status');
+  const ids = paymentReportEntryIds.slice();
+  const entries = ids.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
+  if(paymentReportSourceStatus!=='submitted'){
+    status.textContent = '선택 내역 승인과 PDF 저장은 결의완료된 내역만 가능합니다.';
+    return;
+  }
+  if(!entries.length || entries.length!==ids.length || entries.some(entry=>entry.status!=='submitted')){
+    status.textContent = '선택 내역 상태가 바뀌었습니다. 보고서를 닫고 목록을 새로 확인해 주세요.';
+    return;
+  }
+  let spender;
+  try{ spender = requireSingleSpender(entries); }
+  catch(error){ status.textContent = error.message; return; }
+
+  button.disabled = true;
+  status.textContent = '승인 처리 중…';
+  try{
+    const approvalTime = new Date();
+    const approver = currentUser.displayName || currentUser.email || '로그인 사용자';
+    const approvalDate = `${approvalTime.getFullYear()}-${String(approvalTime.getMonth()+1).padStart(2,'0')}-${String(approvalTime.getDate()).padStart(2,'0')}`;
+    const approval = {
+      date:`${formatEntryDate(approvalDate)} ${approvalTime.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}`,
+      approver, label:'승인 완료'
+    };
+    const total = entries.reduce((sum,entry)=>sum+Number(entry.amount||0),0);
+    const fileName = `${paymentDateKey(approvalTime)}_${safeFileName(spender)}_${total}원.pdf`;
+
+    // 1) 승인 상태를 먼저 Firestore에 반영 (Drive 실패와 무관하게 상태가 바뀌도록)
+    let managementNo = '';
+    let next = null;
+    for(let attempt=1; attempt<=3; attempt++){
+      next = await peekPaymentNumber(approvalTime);
+      try{
+        managementNo = await commitPaymentApproval({
+          ids,
+          dateKey:next.dateKey,
+          sequence:next.sequence,
+          approvalTime,
+          uploadedFile:null
+        });
+        break;
+      }catch(error){
+        if(error.code!=='accounting/sequence-conflict' || attempt>=3) throw error;
+        status.textContent = '다른 담당자와 관리번호가 겹쳐 다시 시도 중…';
+      }
+    }
+
+    // 화면 즉시 갱신: 결의완료 목록에서 사라지고 전체 내역이 승인으로 바뀜
+    paymentReportSourceStatus = 'approved';
+    renderReport();
+    renderEntryView();
+    const approvedEntries = ids.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
+    renderPaymentReport(approvedEntries,spender,approval,managementNo);
+    status.textContent = `승인 완료 (관리번호 ${managementNo}). PDF 저장을 시도합니다…`;
+    button.classList.add('hidden');
+
+    // 2) PDF·Drive는 실패해도 승인 상태는 유지
+    try{
+      if(typeof window.html2pdf!=='function'){
+        throw new Error('PDF 생성 도구를 불러오지 못했습니다.');
+      }
+      const token = await getDriveAccessToken();
+      const blob = await buildReportPdfBlob(approvedEntries,spender,approval,managementNo);
+      const uploadedFile = await uploadPaymentReport(token,blob,fileName);
+      // Drive 파일 정보만 후속 반영 (상태 변경 없음)
+      try{
+        await entryTransaction(ids,(found,api)=>{
+          ids.forEach(id=>{
+            const entry = found.get(id);
+            if(!entry) return;
+            api.set({
+              ...entry,
+              paymentReportFileId:uploadedFile.id,
+              paymentReportUrl:uploadedFile.webViewLink || ''
+            });
+          });
+        });
+      }catch(_e){ /* 파일 링크 저장 실패는 승인에 영향 없음 */ }
+      status.textContent = `승인 및 PDF 저장 완료: ${fileName} (관리번호 ${managementNo})`;
+      if(uploadedFile.webViewLink){
+        const link = document.createElement('a');
+        link.href = uploadedFile.webViewLink; link.target = '_blank'; link.rel = 'noopener';
+        link.textContent = 'Google Drive에서 PDF 열기';
+        status.append(' ',link);
+      }
+    }catch(pdfError){
+      status.textContent = `승인은 완료되었습니다 (관리번호 ${managementNo}). PDF 저장만 실패: ${pdfError.message || pdfError}`;
+    }
+  }catch(error){
+    status.textContent = `선택 내역 처리 실패: ${error.message || String(error)}`;
+  }finally{
+    button.disabled = false;
+  }
+}
+
   const button = document.getElementById('btn-approve-payment-report');
   const status = document.getElementById('payment-report-status');
   const ids = paymentReportEntryIds.slice();
