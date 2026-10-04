@@ -9,10 +9,10 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=2.4">
+<link rel="stylesheet" href="style.css?v=2.6">
 </head>
 <body>
-    <span class="version-tag">v2.4</span>
+    <span class="version-tag">v2.6</span>
 <header class="masthead">
     <div class="masthead-inner">
 
@@ -43,9 +43,9 @@
     <nav class="tabs">
       <button class="tab-btn" data-view="entry">결산</button>
       <button class="tab-btn active" data-view="report">보고서</button>
+      <button class="tab-btn" data-view="fund">기금</button>
       <button class="tab-btn" data-view="budget">예산</button>
       <button class="tab-btn" data-view="staff">사용자</button>
-<button class="tab-btn" data-view="fund">기금</button>
           </nav>
   </div>
 </div>
@@ -88,6 +88,7 @@
     </table>
   </div>
   <p class="count-note" id="monthly-budget-note">상단 월 탭을 눌러 해당 월말 기준 보고서를 조회하세요.</p>
+  <button class="btn-text" id="btn-monthly-exact" type="button">정밀 재조회 (전체 승인 내역 직접 읽기)</button>
 </div>
 </section>
 
@@ -146,12 +147,12 @@
   <h3 style="font-size:16px;margin:0 0 6px;">단기예치 (활동비 안의 미니 기금계좌)</h3>
   <p class="count-note" style="margin:0 0 10px;">입출금통장에서 1개월 정기예금 등으로 옮겨 둔 돈입니다. 수입·지출이 아니므로 결산에는 넣지 않고, 위 잔액 대조에만 더해집니다. 회수할 때 붙은 이자는 결산 관리에 이자수입으로 따로 입력하세요.</p>
   <div id="deposit-list"></div>
-  <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr 1.4fr auto;align-items:end;margin-top:12px;">
+  <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr 1.4fr;align-items:end;margin-top:12px;">
     <div class="field"><label for="dp-date">예치일</label><input type="text" id="dp-date" placeholder="YYYY-MM-DD"></div>
     <div class="field"><label for="dp-amount">원금(원)</label><input type="text" id="dp-amount" inputmode="numeric"></div>
     <div class="field"><label for="dp-maturity">만기 예정일</label><input type="text" id="dp-maturity" placeholder="YYYY-MM-DD"></div>
     <div class="field"><label for="dp-memo">메모(은행·계좌 등)</label><input type="text" id="dp-memo"></div>
-    <button class="btn-primary" id="btn-add-deposit" type="button">예치 등록</button>
+    <button class="btn-primary btn-wide" id="btn-add-deposit" type="button">예치 등록</button>
   </div>
   <span id="deposit-msg" role="status"></span>
 </div>
@@ -160,7 +161,7 @@
 
     <section>
       <div class="sec-head"><span class="sec-num">04</span><h2>그래프 분석</h2></div>
-      <p class="sec-desc">월별 수입·지출 추이와 수입·지출 구성, 예산 집행 현황을 그래프로 확인합니다.</p>
+      <p class="sec-desc">월별 수입·지출 추이와 수입·지출 구성, 예산 집행 현황을 그래프로 확인합니다. 마지막 그래프는 위 월별 누적 보고서에서 선택한 월에 맞춰 바뀝니다.</p>
       <div class="card"><div class="chart-box"><canvas id="chartMonthly"></canvas></div></div>
       <div class="two-col" style="margin-top:20px;">
         <div class="card"><div class="chart-box tall"><canvas id="chartExpenseHang"></canvas></div></div>
@@ -169,7 +170,7 @@
         </div>
       </div>
       <div class="card" style="margin-top:20px;"><div class="chart-box"><canvas id="chartIncome"></canvas></div></div>
-      <div class="card" style="margin-top:20px;"><div class="chart-box tall"><canvas id="chartBudget"></canvas></div></div>
+      <div class="card" style="margin-top:20px;"><h3 class="chart-title" id="budget-chart-title">관별 예산 대비 집행</h3><div class="chart-box tall"><canvas id="chartBudget"></canvas></div></div>
     </section>
   </div>
 
@@ -407,7 +408,7 @@
     </div>
     <div class="payment-dialog-actions">
   <button class="btn-revert" id="btn-download-payment-report" type="button">PDF 다운로드</button>
-  <button class="btn-primary" id="btn-approve-payment-report" type="button">선택 건 승인 및 PDF 저장</button>
+  <button class="btn-primary" id="btn-approve-payment-report" type="button">승인</button>
 </div>
   </dialog>
 
@@ -428,7 +429,7 @@
 (function(){
   function start(){
     var s = document.createElement('script');
-    s.src = 'app.js?v=2.4';
+    s.src = 'app.js?v=2.6';
     document.body.appendChild(s);
   }
   fetch('data.json', {cache:'no-cache'})

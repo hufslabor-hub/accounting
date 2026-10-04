@@ -2229,8 +2229,8 @@ async function renderReportDetail(){
       <td>${escapeHTML(t.desc||'')}</td>
       <td>${escapeHTML(t.category||'-')}</td>
       <td>${escapeHTML(t.payee||t.spender||'-')}</td>
-      <td class="num" style="color:#3F72AF">${t.gubun==='수입'?fmtShort(t.amount):''}</td>
-      <td class="num" style="color:#112D4E">${t.gubun==='지출'?fmtShort(t.amount):''}</td>
+      <td class="num" style="color:var(--income)">${t.gubun==='수입'?fmtShort(t.amount):''}</td>
+      <td class="num" style="color:var(--expense)">${t.gubun==='지출'?fmtShort(t.amount):''}</td>
       <td>${t.managementNo?escapeHTML(String(t.managementNo)):''}</td>`;
     body.appendChild(tr);
   });
@@ -2310,6 +2310,7 @@ async function entryTransaction(ids,work){
     applyLocalChanges(upserts,deletes);
     if(committedSummary){
       reportSummary = committedSummary;
+      monthlyReportDirty = true;     // 월별 누적 보고서·마지막 그래프는 보고서 탭을 열 때 다시 조회
       touchedMonths.forEach(month=>{ delete reportMonthCache[month]; });
     }
   }
@@ -2405,8 +2406,25 @@ function aggregates(list){
 
 // ---------- charts ----------
 Chart.defaults.font.family = "'Pretendard', sans-serif";
-Chart.defaults.color = '#3F72AF';
-const hangColors = ['#112D4E','#3F72AF','#DBE2EF'];
+// 차트 색은 style.css의 컬러 스킴(:root 변수)에서 읽어옵니다 → 스킴을 바꾸면 차트도 함께 바뀝니다
+function cssVar(name,fallback){
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+function chartPalette(){
+  return {
+    income: cssVar('--income','#5A7863'),
+    expense: cssVar('--expense','#3B4953'),
+    budget: cssVar('--gold','#90AB8B'),
+    ink: cssVar('--ink','#3B4953'),
+    grid: cssVar('--line','#CFDDC3'),
+    surface: cssVar('--paper-2','#F7FAF2'),
+    // 관별 도넛용: 스킴의 4색 + 같은 톤의 보조색
+    slices: [cssVar('--navy','#3B4953'),cssVar('--navy-2','#5A7863'),cssVar('--gold','#90AB8B'),
+             '#6F7F89','#B7CDB0','#A3B1B9','#2F3B33','#7F9C86']
+  };
+}
+Chart.defaults.color = cssVar('--ink','#3B4953');
 
 function destroy(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } delete chartBuilders[id]; }
 
@@ -2520,29 +2538,29 @@ document.getElementById('r-count').textContent = `승인된 ${approvedCount.toLo
   document.getElementById('r-balance').textContent = fmt(ag.totalIncome - ag.totalExpense);
   renderAccountBalanceCheck(ag.totalIncome - ag.totalExpense);
 
-  createResponsiveChart('monthly','chartMonthly','bar',mobile=>({
+  createResponsiveChart('monthly','chartMonthly','bar',mobile=>{ const P = chartPalette(); return {
     type:'bar',
     data:{ labels: ag.months, datasets:[
-      {label:'수입', data: ag.monthlyIncome, backgroundColor:'#3F72AF'},
-      {label:'지출', data: ag.monthlyExpense, backgroundColor:'#112D4E'}
+      {label:'수입', data: ag.monthlyIncome, backgroundColor:P.income},
+      {label:'지출', data: ag.monthlyExpense, backgroundColor:P.expense}
     ]},
     options:{ responsive:true, maintainAspectRatio:false,
       ...(mobile ? {interaction:{mode:'index', intersect:false}} : {}),
       plugins:{ legend:chartLegend(mobile,{position:'top',align:'end',usePointStyle:true}),
         tooltip:chartTooltip(mobile,{label: ctx => `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`})},
-      scales:{ y:{ticks:{callback:v=>mobile?compactWon(v):fmtShort(v), font:{size:mobile?10:12}}, grid:{color:'#DBE2EF'}},
+      scales:{ y:{ticks:{callback:v=>mobile?compactWon(v):fmtShort(v), font:{size:mobile?10:12}}, grid:{color:P.grid}},
                x:{ticks:{font:{size:mobile?10:12}}, grid:{display:false}} }
     }
-  }));
+  }; });
 
-  createResponsiveChart('hang','chartExpenseHang','doughnut',mobile=>({
+  createResponsiveChart('hang','chartExpenseHang','doughnut',mobile=>{ const P = chartPalette(); return {
     type:'doughnut',
-    data:{ labels: ag.gwanLabels, datasets:[{data: ag.gwanValues.map(v=>Math.max(0,v)), backgroundColor: ag.gwanLabels.map((_,i)=>hangColors[i%hangColors.length]), borderColor:'#F9F7F7', borderWidth:2}]},
+    data:{ labels: ag.gwanLabels, datasets:[{data: ag.gwanValues.map(v=>Math.max(0,v)), backgroundColor: ag.gwanLabels.map((_,i)=>P.slices[i%P.slices.length]), borderColor:P.surface, borderWidth:2}]},
     options:{ responsive:true, maintainAspectRatio:false, cutout:'58%',
       plugins:{ legend:chartLegend(mobile,{position:'right',align:'center',kind:'doughnut'}),
         tooltip:chartTooltip(mobile,{label: ctx => mobile ? [...wrapLabel(ctx.label,14), fmt(ctx.parsed)] : `${ctx.label}: ${fmt(ctx.parsed)}`})}
     }
-  }));
+  }; });
 
   const tblTopMok = document.getElementById('tbl-top-mok');
   tblTopMok.innerHTML = '';
@@ -2555,178 +2573,107 @@ document.getElementById('r-count').textContent = `승인된 ${approvedCount.toLo
   document.getElementById('tbl-top-mok-total').innerHTML =
     `<tr class="report-total-row"><th>표시 합계</th><td class="num">${fmtShort(ag.topMok.reduce((sum,[,amount])=>sum+amount,0))}</td></tr>`;
 
-  createResponsiveChart('income','chartIncome','barH',mobile=>({
+  createResponsiveChart('income','chartIncome','barH',mobile=>{ const P = chartPalette(); return {
     type:'bar',
-    data:{ labels: ag.incomeLabels, datasets:[{data: ag.incomeValues, backgroundColor:'#3F72AF'}]},
+    data:{ labels: ag.incomeLabels, datasets:[{data: ag.incomeValues, backgroundColor:P.income}]},
     options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
       plugins:{legend:{display:false}, tooltip:chartTooltip(mobile,{label: ctx => fmt(ctx.parsed.x)},{wrapTitle:true})},
-      scales:{ x:{ticks:{callback:v=>mobile?compactWon(v):fmtShort(v), font:{size:mobile?10:12}, maxTicksLimit:mobile?4:undefined}, grid:{color:'#DBE2EF'}},
+      scales:{ x:{ticks:{callback:v=>mobile?compactWon(v):fmtShort(v), font:{size:mobile?10:12}, maxTicksLimit:mobile?4:undefined}, grid:{color:P.grid}},
                y:{ticks:{font:{size:mobile?10:12}, callback:function(v){ const l=this.getLabelForValue(v); return mobile?truncateLabel(l,9):l; }}, grid:{display:false}} }
     }
-  }));
+  }; });
 
    renderReportMonthFilters(approved);
   renderReportDetail();
+  autoSelectMonthlyReportMonth(approved);   // 월 미선택이면 승인 내역이 있는 가장 최근 월을 자동 선택
   renderBudgetSection(approved);
 }
 
-function renderBudgetSection(approvedList){
-  const budgetByGwan = {};
-  const spentByGwan = {};
-  accountCategories.expense.forEach(gwan=>{
-    gwan.accounts.forEach(hang=>{
-      hang.items.forEach(mok=>{
-        const key = mokBudgetKey('expense',gwan.name,hang.name,mok);
-        budgetByGwan[gwan.name] = (budgetByGwan[gwan.name] || 0) + (Number(budget[key]) || 0);
-      });
-    });
-    if(budgetByGwan[gwan.name] === undefined) budgetByGwan[gwan.name] = 0;
-  });
+// ---- 1) 보고서 탭을 열면 가장 최근 월을 자동 선택 ----
+function autoSelectMonthlyReportMonth(approved){
+  if(currentMonthlyReportMonth!==0) return;
+  const months = reportMonthsFromSummary(approved);
+  if(!months.length) return;
+  currentMonthlyReportMonth = monthNo(months[months.length-1]);
+  renderReportTabs();
+  loadMonthlyBudgetReport(currentMonthlyReportMonth);
+}
 
+// 승인 내역 목록 → 목 단위 집행액 맵 (월별 누적 보고서 표와 같은 계산)
+function spentByMokFromList(list){
   const spentByMok = {};
-  approvedList.forEach(t=>{
+  list.forEach(t=>{
     if(t.gubun!=='수입' && t.gubun!=='지출') return;
     const type = t.gubun==='수입' ? 'income' : 'expense';
     const {gwan, hang, category} = resolveEntryClassification(t);
-    const g = gwan || '미분류', h = hang || '미분류', m = category || '미분류';
-    const mokKey = mokBudgetKey(type,g,h,m);
-    spentByMok[mokKey] = (spentByMok[mokKey] || 0) + Number(t.amount||0);
-    if(type==='expense') spentByGwan[g] = (spentByGwan[g] || 0) + Number(t.amount||0);
+    const key = mokBudgetKey(type, gwan || '미분류', hang || '미분류', category || '미분류');
+    spentByMok[key] = (spentByMok[key] || 0) + Number(t.amount || 0);
   });
+  return spentByMok;
+}
 
-  const categoryGwanOrder = accountCategories.expense.map(gwan=>gwan.name);
-  const unlistedGwans = Object.keys(spentByGwan).filter(gwan=>!categoryGwanOrder.includes(gwan));
-  const allGwans = [...categoryGwanOrder,...unlistedGwans]
-    .filter(gwan=>(budgetByGwan[gwan]||0)>0 || (spentByGwan[gwan]||0)>0);
+// 마지막 그래프: 지출 관별 예산 대비 집행. throughMonth(1~12)가 있으면 월별 누적 보고서 표와 같은 기간·같은 데이터,
+// 0이면 연간 전체(집계 문서 기준)
+function renderBudgetChart(spentByMok, throughMonth){
+  const titleEl = document.getElementById('budget-chart-title');
+  if(titleEl) titleEl.textContent = throughMonth
+    ? `관별 예산 대비 집행 (1~${throughMonth}월 누적)`
+    : '관별 예산 대비 집행 (연간 전체)';
+
+  const budgetByGwan = {}, spentByGwan = {}, shownKeys = new Set();
+  (accountCategories.expense || []).forEach(gwan=>{
+    budgetByGwan[gwan.name] = 0; spentByGwan[gwan.name] = 0;
+    gwan.accounts.forEach(hang=>hang.items.forEach(mok=>{
+      const key = mokBudgetKey('expense',gwan.name,hang.name,mok);
+      shownKeys.add(key);
+      budgetByGwan[gwan.name] += Number(budget[key]) || 0;
+      spentByGwan[gwan.name] += spentByMok[key] || 0;
+    }));
+  });
+  // 표의 '미분류/삭제된 항목' 행과 같은 기준
+  let orphanSpent = 0;
+  Object.entries(spentByMok).forEach(([key,amount])=>{
+    if(shownKeys.has(key)) return;
+    if(JSON.parse(key.slice(4))[0]==='expense') orphanSpent += amount;
+  });
+  const labels = Object.keys(budgetByGwan).filter(g=>budgetByGwan[g]>0 || spentByGwan[g]>0);
+  if(orphanSpent){
+    const name = '미분류/삭제된 항목';
+    labels.push(name); budgetByGwan[name] = 0; spentByGwan[name] = orphanSpent;
+  }
 
   destroy('budget');
-  if(allGwans.length === 0){
-    document.getElementById('chartBudget').getContext('2d').clearRect(0,0,2000,2000);
-  } else {
-    createResponsiveChart('budget','chartBudget','barH',mobile=>({
-      type:'bar',
-      data:{
-        labels: allGwans,
-        datasets:[
-          {label:'예산', data: allGwans.map(g=>budgetByGwan[g]||0), backgroundColor:'#DBE2EF'},
-          {label:'집행액', data: allGwans.map(g=>spentByGwan[g]||0), backgroundColor:'#112D4E'}
-        ]
-      },
-      options:{
-        indexAxis:'y', responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:chartLegend(mobile,{position:'top',align:'end',usePointStyle:true}),
-          tooltip:chartTooltip(mobile,{label: ctx => `${ctx.dataset.label}: ${fmt(ctx.parsed.x)}`},{wrapTitle:true})},
-        scales:{ x:{ticks:{callback:v=>mobile?compactWon(v):fmtShort(v), font:{size:mobile?10:12}, maxTicksLimit:mobile?4:undefined}, grid:{color:'#DBE2EF'}},
-                 y:{ticks:{font:{size:mobile?10:12}, callback:function(v){ const l=this.getLabelForValue(v); return mobile?truncateLabel(l,9):l; }}, grid:{display:false}} }
-      }
-    }));
-  }
-
-  const tbody = document.getElementById('tbl-budget');
-  // 관·항·목 예산 대비 실적 표는 제거됨 — 표 요소가 없으면 차트만 갱신
-  if(!tbody){
+  const canvas = document.getElementById('chartBudget');
+  if(!canvas) return;
+  const box = canvas.parentElement;
+  if(!labels.length){
+    if(box) box.style.height = '';
+    canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);
     return;
   }
-  tbody.innerHTML = '';
-  let totalBudget = 0;
-  let totalSettled = 0;
-  let incomeBudget = 0;
-  let expenseBudget = 0;
-  let incomeSettled = 0;
-  let expenseSettled = 0;
-  if(allGwans.length === 0){
-    const note = document.getElementById('budget-note');
-    if(note) note.textContent = '아직 등록된 지출 관이 없습니다.';
-  } else {
-    const note = document.getElementById('budget-note');
-    if(note) note.textContent = '';
-  }
-
-const appendBudgetRow = (type, gwan, hang, mok, b, s, detail='')=>{
-    totalBudget += b;
-    totalSettled += s;
-    if(type==='income'){
-      incomeBudget += b;
-      incomeSettled += s;
-    }else{
-      expenseBudget += b;
-      expenseSettled += s;
+  createResponsiveChart('budget','chartBudget','barH',mobile=>{ const P = chartPalette(); return {
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'예산', data: labels.map(g=>budgetByGwan[g]||0), backgroundColor:P.budget},
+        {label:'집행액', data: labels.map(g=>spentByGwan[g]||0), backgroundColor:P.expense}
+      ]
+    },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:chartLegend(mobile,{position:'top',align:'end',usePointStyle:true}),
+        tooltip:chartTooltip(mobile,{label: ctx => `${ctx.dataset.label}: ${fmt(ctx.parsed.x)}`},{wrapTitle:true})},
+      scales:{ x:{ticks:{callback:v=>mobile?compactWon(v):fmtShort(v), font:{size:mobile?10:12}, maxTicksLimit:mobile?4:undefined}, grid:{color:P.grid}},
+               y:{ticks:{font:{size:mobile?10:12}, callback:function(v){ const l=this.getLabelForValue(v); return mobile?truncateLabel(l,9):l; }}, grid:{display:false}} }
     }
-    const pct = b > 0 ? (s/b*100) : (s>0 ? Infinity : 0);
-    const remain = b - s;
-    const pctText = b > 0 ? pct.toFixed(1) + '%' : (s>0 ? '예산 없음' : '-');
-    const tr = document.createElement('tr');
-  tr.className = `budget-report-row ${type==='income'?'income-row':'expense-row'}`;
-  if(detail){ tr.title = detail; tr.classList.add('budget-orphan-row'); }
-    [type==='income'?'수입':'지출',gwan,hang,mok].forEach(value=>{
-      const cell = document.createElement('td');
-      cell.textContent = value;
-      tr.appendChild(cell);
-    });
-    const budgetCell = document.createElement('td');
-    budgetCell.className = 'num';
-    budgetCell.textContent = b ? fmtShort(b) : '-';
-    tr.appendChild(budgetCell);
-    const spentCell = document.createElement('td');
-    spentCell.className = 'num';
-    spentCell.textContent = fmtShort(s);
-    tr.appendChild(spentCell);
-    const pctCell = document.createElement('td');
-    pctCell.className = 'num';
-    pctCell.style.color = b>0 && pct>=100 ? 'var(--expense)' : 'inherit';
-    pctCell.textContent = pctText;
-    tr.appendChild(pctCell);
-    const remainCell = document.createElement('td');
-    remainCell.className = 'num';
-    remainCell.style.color = remain<0 ? 'var(--expense)' : 'var(--ink-soft)';
-    remainCell.textContent = b ? fmtShort(remain) : '-';
-    tr.appendChild(remainCell);
-    tbody.appendChild(tr);
-  };
-let rowCount = 0;
-const shownKeys = new Set();
-['income','expense'].forEach(type=>{
-  accountCategories[type].forEach(gwan=>{
-    gwan.accounts.forEach(hang=>{
-      hang.items.forEach(mok=>{
-        const key = mokBudgetKey(type,gwan.name,hang.name,mok);
-        shownKeys.add(key);
-        appendBudgetRow(type,gwan.name,hang.name,mok,Number(budget[key])||0,spentByMok[key]||0);
-        rowCount++;
-      });
-    });
-  });
-});
+  }; });
+}
 
-// Approved entries whose 관·항·목 no longer exists in the current categories
-const orphans = {income:{amount:0,paths:[]}, expense:{amount:0,paths:[]}};
-Object.entries(spentByMok).forEach(([key,amount])=>{
-  if(shownKeys.has(key)) return;
-  const [type,gwan,hang,mok] = JSON.parse(key.slice(4));
-  orphans[type].amount += amount;
-  orphans[type].paths.push(`${gwan} > ${hang} > ${mok}: ${fmtShort(amount)}`);
-});
-['income','expense'].forEach(type=>{
-  const o = orphans[type];
-  if(!o.paths.length) return;
-  appendBudgetRow(type,'미분류/삭제된 항목','-',`${o.paths.length}개 분류`,0,o.amount,o.paths.join('\n'));
-  rowCount++;
-});
-  document.getElementById('report-income-budget-total').textContent = fmtShort(incomeBudget);
-  document.getElementById('report-income-settled-total').textContent = fmtShort(incomeSettled);
-  document.getElementById('report-expense-budget-total').textContent = fmtShort(expenseBudget);
-  document.getElementById('report-expense-settled-total').textContent = fmtShort(expenseSettled);
-  const reportBudgetDifference = incomeBudget-expenseBudget;
-  const reportBudgetDifferenceElement = document.getElementById('report-budget-difference');
-  reportBudgetDifferenceElement.textContent = fmtShort(reportBudgetDifference);
-  reportBudgetDifferenceElement.classList.toggle('mismatch',reportBudgetDifference!==0);
-  const totalRate = totalBudget>0 ? `${(totalSettled/totalBudget*100).toFixed(1)}%` : '-';
-  document.getElementById('tbl-budget-total').innerHTML =
-    `<tr class="report-total-row"><th colspan="4">전체 합계</th><td class="num">${fmtShort(totalBudget)}</td><td class="num">${fmtShort(totalSettled)}</td><td class="num">${totalRate}</td><td class="num">${fmtShort(totalBudget-totalSettled)}</td></tr>`;
-document.getElementById('budget-note').textContent = rowCount
-  ? '예산 관리에 등록된 목 순서로 표시합니다. 삭제·변경된 분류의 거래는 "미분류/삭제된 항목"에 합산됩니다.'
-  : '등록된 예산 항목이 없습니다.';
-
+function renderBudgetSection(approvedList){
+  // 월별 누적 보고서에서 월이 선택된 동안에는 그 표가 차트를 갱신합니다 (표와 항상 같은 숫자)
+  if(currentMonthlyReportMonth>=1 && currentMonthlyReportMonth<=12) return;
+  renderBudgetChart(spentByMokFromList(approvedList), 0);
 }
 
 function createHierarchyInput(className, value, placeholder, ariaLabel){
@@ -2926,14 +2873,14 @@ const source = ledger;
         <td>${escapeHTML(t.desc||'')}</td>
         <td>${escapeHTML(t.category||'-')}</td>
         <td>${escapeHTML(t.payee||t.spender||'-')}</td>
-        <td class="num" style="color:#3F72AF">${t.gubun==='수입'?fmtShort(t.amount):''}</td>
-        <td class="num" style="color:#112D4E">${t.gubun==='지출'?fmtShort(t.amount):''}</td>
+        <td class="num" style="color:var(--income)">${t.gubun==='수입'?fmtShort(t.amount):''}</td>
+        <td class="num" style="color:var(--expense)">${t.gubun==='지출'?fmtShort(t.amount):''}</td>
         <td>${t.managementNo?escapeHTML(String(t.managementNo)):''}</td>
       `;
     } else {
       tr.innerHTML = `
         <td>${escapeHTML(formatEntryDate(t.date))}</td>
-        <td style="color:${t.gubun==='수입'?'#3F72AF':'#112D4E'}">${escapeHTML(t.gubun||'')}</td>
+        <td style="color:${t.gubun==='수입'?'var(--income)':'var(--expense)'}">${escapeHTML(t.gubun||'')}</td>
         <td>${escapeHTML(t.desc||'')}</td>
         <td>${escapeHTML(t.category||'-')}</td>
         <td>${escapeHTML(t.payee||'-')}</td>
@@ -3536,6 +3483,7 @@ async function updateSelectedWorkflow(fromStatus,toStatus){
 
 // ---------- 월별 누적 보고서: 선택 월말 기준 관·항·목 예산 대비 실적 ----------
 let currentMonthlyReportMonth = 0; // 1~12, 0 = 미선택
+let monthlyReportDirty = false;     // 결산 내역이 바뀐 뒤 아직 월별 보고서에 반영 안 됨
 
 function renderReportTabs() {
   const container = document.getElementById('report-tabs-container');
@@ -3563,7 +3511,7 @@ function renderReportTabs() {
  * 선택 월(1~N)까지 승인된 실적을 누적해 연간 예산과 대비 표시.
  * 예산은 연간 예산(동일), 결산액만 1월~선택월 누적.
  */
-async function loadMonthlyBudgetReport(throughMonth) {
+async function loadMonthlyBudgetReport(throughMonth, {exact=false}={}) {
   const titleEl = document.getElementById('report-title');
   const noteEl = document.getElementById('monthly-budget-note');
   const summaryBox = document.getElementById('monthly-report-summary');
@@ -3579,6 +3527,7 @@ async function loadMonthlyBudgetReport(throughMonth) {
     return;
   }
 
+  monthlyReportDirty = false;
   if (titleEl) titleEl.textContent = year + '년 1월 ~ ' + n + '월 말 기준 · 관·항·목 예산 대비 실적';
   if (noteEl) noteEl.textContent = '승인 내역을 불러오는 중…';
   if (summaryBox) summaryBox.style.display = 'none';
@@ -3587,7 +3536,28 @@ async function loadMonthlyBudgetReport(throughMonth) {
   if (tfoot) tfoot.innerHTML = '';
 
   try {
-    // 집계 문서가 아닌 실제 승인 건을 거래 결제일 월 기준으로 합산 (정확도 우선)
+    // 기본: 이미 불러온 보고서 집계(읽기 비용 0). 집계가 없거나 '정밀 재조회'를 누르면 실제 승인 건을 읽음
+    if (!exact && !reportSummary) await loadReportSummary();
+    if (year !== currentYear) return;
+    if (!exact && reportSummary) {
+      const fromSummary = summaryToEntries(reportSummary).filter(c => {
+        const m = monthNo(c.month);
+        return m >= 1 && m <= n;
+      });
+      const count = fromSummary.reduce((s, c) => s + c._count, 0);
+      renderMonthlyBudgetSection(fromSummary, n);
+      if (summaryBox) summaryBox.style.display = '';
+      if (scrollBox) scrollBox.style.display = '';
+      if (noteEl) {
+        noteEl.textContent =
+          year + '년 1월~' + n + '월 승인 실적 누적 · ' + count.toLocaleString('ko-KR') + '건 (보고서 집계 기준)' +
+          (n <= closedThrough ? ' · ' + n + '월까지 마감됨' : '') +
+          ' · 예산은 연간 예산, 결산액은 해당 기간 거래일 기준 승인분 합계입니다.';
+      }
+      return;
+    }
+
+    // 정밀 조회: 집계 문서가 아닌 실제 승인 건을 거래 결제일 월 기준으로 합산
     const snapshot = await entriesRef(year).where('status', 'in', APPROVED_STATES).get();
     if (year !== currentYear) return;
 
@@ -3610,7 +3580,7 @@ async function loadMonthlyBudgetReport(throughMonth) {
     if (scrollBox) scrollBox.style.display = '';
     if (noteEl) {
       noteEl.textContent =
-        year + '년 1월~' + n + '월 승인 실적 누적 · ' + cumulative.length.toLocaleString('ko-KR') + '건' +
+        year + '년 1월~' + n + '월 승인 실적 누적 · ' + cumulative.length.toLocaleString('ko-KR') + '건 (전체 내역 직접 조회)' +
         (n <= closedThrough ? ' · ' + n + '월까지 마감됨' : '') +
         ' · 예산은 연간 예산, 결산액은 해당 기간 거래일 기준 승인분 합계입니다.';
     }
@@ -3634,6 +3604,7 @@ function renderMonthlyBudgetSection(approvedList, throughMonth) {
   const tbody = document.getElementById('monthly-budget-body');
   const tfoot = document.getElementById('monthly-budget-total');
   tbody.innerHTML = '';
+  renderBudgetChart(spentByMok, throughMonth);   // 마지막 그래프도 같은 데이터로 갱신
 
   let totalBudget = 0, totalSettled = 0;
   let incomeBudget = 0, expenseBudget = 0, incomeSettled = 0, expenseSettled = 0;
@@ -4314,7 +4285,12 @@ function activateTab(view){
 
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b===button));
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v===panel));
-    if(view==='report' && appReady) renderReport();
+    if(view==='report' && appReady){
+      renderReport();
+      if(monthlyReportDirty && currentMonthlyReportMonth>=1 && currentMonthlyReportMonth<=12){
+        loadMonthlyBudgetReport(currentMonthlyReportMonth);
+      }
+    }
   return true;
 }
 
@@ -4558,6 +4534,9 @@ document.getElementById('btn-import-previous-budget').addEventListener('click', 
   }
 });
 document.getElementById('btn-load-more-entries').addEventListener('click',loadMoreEntries);
+document.getElementById('btn-monthly-exact').addEventListener('click',()=>{
+  if(currentMonthlyReportMonth>=1 && currentMonthlyReportMonth<=12) loadMonthlyBudgetReport(currentMonthlyReportMonth,{exact:true});
+});
 document.getElementById('btn-reload-report').addEventListener('click',()=>{ reportSummary = null; reportMonthCache = {}; renderReport(); });
 document.getElementById('btn-rebuild-report').addEventListener('click',async ()=>{
   if(!window.confirm('승인된 내역 전체를 읽어 집계를 다시 계산합니다. 읽기가 승인 건수만큼 발생합니다. 계속할까요?')) return;
