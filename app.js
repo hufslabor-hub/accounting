@@ -1353,6 +1353,10 @@ const isClosedOpenItem = t => {
   return txn > 0 && txn <= closedThrough;
 };
 
+// 번호 명칭: 마감된 내역은 '승인번호', 마감되기 전 내역은 '결의번호'
+const mgmtNoLabel = t => isClosedApproved(t) ? '승인번호' : '결의번호';
+const mgmtNoLabelForMonth = m => { const n = monthNo(m); return n>0 && n<=closedThrough ? '승인번호' : '결의번호'; };
+
 async function loadBudget(){
   try{
     const res = await storageGet(budgetKey(currentYear));
@@ -2604,6 +2608,8 @@ async function renderReportDetail(){
   const note = document.getElementById('tx-count-report');
   if(!body || !total || !note) return;
   const month = currentMonthReport;
+  const mgmtTh = document.getElementById('th-report-mgmt');
+  if(mgmtTh) mgmtTh.textContent = mgmtNoLabelForMonth(month);
   if(!month){
     body.innerHTML = ''; total.innerHTML = '';
     note.textContent = '월을 선택해 주세요.';
@@ -3328,7 +3334,7 @@ function bindRowActions(container){
       const act = btn.getAttribute('data-act');
       if(act==='unapprove' && !window.confirm('승인을 취소하고 선택 내역을 결의완료 대기 목록으로 되돌리시겠습니까?')) return;
       if(act==='reject-submitted' && !window.confirm('이 내역을 반려하여 입력 내역으로 되돌리시겠습니까?')) return;
-      if(act==='edit' && !window.confirm('이 내역을 입력 내역으로 되돌려 수정합니다.\n결의·승인 상태와 관리번호는 해제됩니다. 계속하시겠습니까?')) return;
+      if(act==='edit' && !window.confirm('이 내역을 입력 내역으로 되돌려 수정합니다.\n결의·승인 상태와 결의번호는 해제됩니다. 계속하시겠습니까?')) return;
       const approvedStates = ['approved','paid','confirmed'];
       let editedEntry = null;
       try{
@@ -3401,7 +3407,7 @@ function workflowTable(entries,status,checkedIds=new Set()){
       <td>${escapeHTML(t.desc||'')}</td>
       <td>${escapeHTML(t.category||'-')}</td>
       <td>${escapeHTML(t.payee||'-')}</td>
-      <td>${escapeHTML(t.spender||'미지정')}${t.managementNo?`<span class="management-number">관리번호 ${escapeHTML(String(t.managementNo))}</span>`:''}</td>
+      <td>${escapeHTML(t.spender||'미지정')}${t.managementNo?`<span class="management-number">${mgmtNoLabel(t)} ${escapeHTML(String(t.managementNo))}</span>`:''}</td>
       <td class="num">${fmtShort(t.amount)}</td>
     </tr>`).join('');
   return `<div class="table-scroll transaction-table-scroll">
@@ -3442,10 +3448,10 @@ function submittedGroupsTable(groups, checkedIds=new Set()){
     const idsAttr = ids.map(id=>escapeHTML(id)).join(',');
     return `
     <tr class="submitted-group-row" data-group-key="${escapeHTML(g.key)}" style="cursor:pointer;">
-      <td class="workflow-select"><input type="checkbox" data-workflow-group="${escapeHTML(g.key)}" data-workflow-ids="${idsAttr}" data-workflow-status="submitted" aria-label="관리번호 ${escapeHTML(String(g.managementNo))} 선택"${allChecked?' checked':''}></td>
+      <td class="workflow-select"><input type="checkbox" data-workflow-group="${escapeHTML(g.key)}" data-workflow-ids="${idsAttr}" data-workflow-status="submitted" aria-label="${mgmtNoLabel(g.list[0])} ${escapeHTML(String(g.managementNo))} 선택"${allChecked?' checked':''}></td>
       <td class="workflow-index">${index+1}</td>
       <td>${escapeHTML(g.dateLabel)}</td>
-      <td colspan="2"><strong>관리번호 ${escapeHTML(String(g.managementNo))}</strong> · ${g.count}건</td>
+      <td colspan="2"><strong>${mgmtNoLabel(g.list[0])} ${escapeHTML(String(g.managementNo))}</strong> · ${g.count}건</td>
       <td colspan="2">${escapeHTML(g.spender)}</td>
       <td class="num">${fmtShort(g.sum)}</td>
     </tr>
@@ -3680,7 +3686,7 @@ async function persistSubmissionBatch(entries,submittedAt,submittedBy){
     requireSingleSpender(targets);
     const sequenceSnapshot = await api.tx.get(sequenceRef);
     const stored = sequenceSnapshot.exists ? Number(sequenceSnapshot.data().value) : highestSubmissionSequence(ledger);
-    assigned = checkSequence(stored,'관리번호')+1;
+    assigned = checkSequence(stored,'결의번호')+1;
     targets.forEach(entry=>api.set({
       ...entry, status:'submitted', submittedAt, submittedBy,
       submissionSequence:assigned, managementNo:String(assigned)
@@ -3712,7 +3718,7 @@ async function peekPaymentNumber(date){
   const dateKey = paymentDateKey(date);
   const snapshot = await db.collection('accountingData').doc(`management-sequence:payment:${dateKey}`).get();
   const stored = snapshot.exists ? Number(snapshot.data().value) : highestPaymentSequence(ledger,dateKey);
-  const sequence = checkSequence(stored,'지급 관리번호')+1;
+  const sequence = checkSequence(stored,'지급 결의번호')+1;
   return {dateKey,sequence,managementNo:`${dateKey}${String(sequence).padStart(3,'0')}`};
 }
 
@@ -3724,9 +3730,9 @@ async function commitPaymentApproval({ids,dateKey,sequence,approvalTime}){
     const sequenceSnapshot = await api.tx.get(sequenceRef);                       // read before any write
     const stored = checkSequence(
       sequenceSnapshot.exists ? Number(sequenceSnapshot.data().value) : highestPaymentSequence(ledger,dateKey),
-      '지급 관리번호');
+      '지급 결의번호');
     if(stored+1!==sequence){
-      const error = new Error('다른 담당자가 먼저 같은 관리번호를 사용했습니다.');
+      const error = new Error('다른 담당자가 먼저 같은 결의번호를 사용했습니다.');
       error.code = 'accounting/sequence-conflict';
       throw error;
     }
@@ -3837,7 +3843,7 @@ async function updateSelectedWorkflow(fromStatus,toStatus){
       const sequence = await persistSubmissionBatch(entries,new Date().toISOString(),actor);
       renderReport();
       renderEntryView();
-      setStatus(`${spender} 담당자의 ${ids.length}건을 관리번호 ${sequence}로 결의했습니다.`);
+      setStatus(`${spender} 담당자의 ${ids.length}건을 결의번호 ${sequence}로 결의했습니다.`);
       return;
     }
     const now = new Date().toISOString();
@@ -4277,6 +4283,7 @@ function renderPaymentReport(entries,spender,approval=null,managementNoOverride=
   const managementNo = managementNoOverride || (existingManagementNumbers.length===1
     ? existingManagementNumbers[0]
     : existingManagementNumbers.length>1 ? `복수 (${existingManagementNumbers.length}개)` : '결의 후 부여');
+  const mgmtLabel = entries.length && entries.every(entry=>isClosedApproved(entry)) ? '승인번호' : '결의번호';
   const bankDetails = staffBankDetails.find(detail=>detail.name===spender) || {bank:'',accountNumber:''};
   const sheet = target;                     
 const rows = ordered.map((entry,index)=>`
@@ -4298,7 +4305,7 @@ const rows = ordered.map((entry,index)=>`
         <col style="width:10%"><col style="width:10%"><col class="report-amount"><col class="report-note">
       </colgroup>
       <tbody>
-        <tr><td class="payment-report-management-cell" colspan="8"><div class="payment-report-management"><strong>관리번호</strong><span>${escapeHTML(String(managementNo))}</span></div></td></tr>
+        <tr><td class="payment-report-management-cell" colspan="8"><div class="payment-report-management"><strong>${mgmtLabel}</strong><span>${escapeHTML(String(managementNo))}</span></div></td></tr>
         <tr><td class="payment-report-title-cell" colspan="8"><div class="payment-report-header">
           <h1>${entries.every(entry=>entry.gubun==='지출')?'지출내역보고 / 지급신청서':'거래내역 보고서'}</h1>
           <div class="payment-approval-grid" aria-label="결재란">
@@ -4367,7 +4374,7 @@ async function approvePaymentReport(){
         break;
       }catch(error){
         if(error.code!=='accounting/sequence-conflict' || attempt>=3) throw error;
-        status.textContent = '다른 담당자와 관리번호가 겹쳐 다시 시도 중…';
+        status.textContent = '다른 담당자와 결의번호가 겹쳐 다시 시도 중…';
       }
     }
 
@@ -4380,7 +4387,7 @@ async function approvePaymentReport(){
     const approvedEntries = ids.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
     renderPaymentReport(approvedEntries,spender,approval,managementNo);
     paymentReportApproval = {approval, managementNo};   // PDF 다운로드 시 승인 도장 포함
-    status.textContent = `승인 완료 (관리번호 ${managementNo}). 결의 내역에 승인으로 표시됩니다. 도장이 찍힌 PDF는 ‘PDF 다운로드’ 버튼으로 저장할 수 있습니다.`;
+    status.textContent = `승인 완료 (${mgmtNoLabel(approvedEntries[0] || {})} ${managementNo}). 결의 내역에 승인으로 표시됩니다. 도장이 찍힌 PDF는 ‘PDF 다운로드’ 버튼으로 저장할 수 있습니다.`;
     button.classList.add('hidden');
   }catch(error){
     status.textContent = `선택 내역 처리 실패: ${error.message || String(error)}`;

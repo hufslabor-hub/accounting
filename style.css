@@ -54,7 +54,7 @@ body { background-color:var(--paper); color:var(--ink); }
     margin: 0;
     background: var(--navy);
     border-bottom: 4px solid var(--gold);
-    box-shadow: 0 4px 12px rgba(17,45,78,.12);
+    box-shadow: 0 4px 12px rgba(59,73,83,.12);
   }
   .tabs-inner{max-width:1040px;margin:0 auto;padding:0 16px;}
   nav.tabs{
@@ -64,7 +64,7 @@ body { background-color:var(--paper); color:var(--ink); }
   }
   nav.tabs::-webkit-scrollbar{display:none;}
   .tab-btn{
-    background:rgba(249,247,247,.08); border:none; color:var(--paper);
+    background:rgba(247,250,242,.08); border:none; color:var(--paper);
     font-family:'Pretendard',sans-serif; font-size:14.5px; font-weight:500;
     padding:12px 18px; cursor:pointer; border-radius:6px 6px 0 0;
     flex:0 0 auto; white-space:nowrap;
@@ -125,7 +125,7 @@ body { background-color:var(--paper); color:var(--ink); }
     background:var(--navy);color:var(--paper-2);font-weight:700;text-align:center;
     border-top:1px solid var(--navy-2);border-bottom:3px solid var(--navy-2);
   }
-  .table-scroll thead th{position:sticky;top:0;z-index:2;box-shadow:0 2px 5px rgba(17,45,78,.14);}
+  .table-scroll thead th{position:sticky;top:0;z-index:2;box-shadow:0 2px 5px rgba(59,73,83,.14);}
   .transaction-table-scroll{overflow-x:auto;}
   .entry-table-container{position:relative;}
  
@@ -164,10 +164,10 @@ body { background-color:var(--paper); color:var(--ink); }
   .entry-table td.col-actions-cell .action-row{
     justify-content:center;
   }
-  tfoot tr{background:#e9eef4;font-weight:700;}
+  tfoot tr{background:var(--gold-soft);color:var(--navy);font-weight:700;}
   tfoot th,tfoot td{border-top:2px solid var(--navy-2);vertical-align:middle;}
-  .report-total-row{background:#e9eef4;font-weight:700;}
-  .hierarchy-total-row{font-weight:700;background:#e9eef4;}
+  .report-total-row{background:var(--gold-soft);color:var(--navy);font-weight:700;}
+  .hierarchy-total-row{font-weight:700;background:var(--gold-soft);color:var(--navy);}
   .hierarchy-total-label{text-align:center;font-weight:700;}
   .hierarchy-total-value{text-align:right;font-weight:700;white-space:nowrap;}
   .hierarchy-total-message{text-align:center;font-weight:700;}
@@ -225,7 +225,7 @@ body { background-color:var(--paper); color:var(--ink); }
   }
   th,td{text-align:center;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
   th+th,td+td{border-left:1px solid var(--line);}
-  thead th+th{border-left-color:rgba(219,226,239,.42);}
+  thead th+th{border-left-color:rgba(247,250,242,.35);}
   th{color:var(--ink-soft);font-weight:500;font-size:14px;text-align:center;}
   .field label{font-size:14px;color:var(--ink-soft);}
   .date-entry-control{position:relative;display:flex;gap:8px;align-items:stretch;width:100%;min-width:0;}
@@ -366,7 +366,7 @@ body { background-color:var(--paper); color:var(--ink); }
   .submitted-group-detail td{border-bottom:1px solid var(--line);}
   #save-status.status-error{display:inline-block;margin:8px 0 0;padding:8px 12px;background:#b42318;border:1px solid #7a271a;border-left:5px solid #7a271a;color:#fff;font-weight:700;}
   dialog.payment-report-dialog{width:min(900px,calc(100% - 32px));max-height:90vh;padding:0;border:1px solid var(--line);color:var(--ink);}
-  dialog.payment-report-dialog::backdrop{background:rgba(17,45,78,.55);}
+  dialog.payment-report-dialog::backdrop{background:rgba(59,73,83,.55);}
   .payment-dialog-header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:var(--navy);color:var(--paper-2);}
   .payment-dialog-header h2{font-size:18px;}
   .payment-dialog-body{padding:24px;overflow:auto;max-height:65vh;}
@@ -405,7 +405,7 @@ body { background-color:var(--paper); color:var(--ink); }
   .payment-report-document .report-note{width:13%;}
   .payment-report-document .report-row td{text-align:center;overflow-wrap:anywhere;}
   .payment-report-document .report-row td.report-amount,.payment-report-document .report-total-amount{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
-  .payment-report-document tfoot td{font-weight:700;background:#faf8f2;}
+  .payment-report-document tfoot td{font-weight:700;background:var(--gold-soft);}
   .payment-report-document .report-total-label{text-align:center!important;}
   .payment-report-receipts{margin-top:12px;page-break-inside:avoid;break-inside:avoid;}
   .payment-report-receipts strong{display:block;margin-bottom:6px;}
@@ -424,10 +424,10 @@ body { background-color:var(--paper); color:var(--ink); }
 
   footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-soft);display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;}
   @media (max-width:600px){.hierarchy-table-scroll{max-height:70vh;}}
-  .usage-box{margin-top:14px;padding:12px 14px;background:rgba(249,247,247,.10);border:1px solid rgba(219,226,239,.35);}
+  .usage-box{margin-top:14px;padding:12px 14px;background:rgba(247,250,242,.10);border:1px solid rgba(247,250,242,.35);}
 .usage-head,.usage-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--paper);}
 .usage-head strong{color:var(--paper-2);font-weight:700;}
-.usage-track{height:12px;background:rgba(249,247,247,.2);margin:8px 0;overflow:hidden;}
+.usage-track{height:12px;background:rgba(247,250,242,.2);margin:8px 0;overflow:hidden;}
 .usage-fill{height:100%;width:0;background:var(--paper);transition:width .4s,background .4s;}
 .usage-fill.warn{background:#f2c14e;}
 .usage-fill.danger{background:#e5484d;}
@@ -544,7 +544,7 @@ body {
     border-radius:14px;
     margin:0 0 10px;
     padding:12px 14px;
-    box-shadow:0 1px 3px rgba(17,45,78,.06);
+    box-shadow:0 1px 3px rgba(59,73,83,.06);
   }
   #view-entry .entry-table td{
     display:none !important;
@@ -865,3 +865,45 @@ table:not(.payment-report-document) thead th{
   .entry-table-card .table-scroll{max-height:none;}
   .sec-head-entry .qt-bar{justify-content:flex-start;flex-basis:100%;}
 }
+
+/* 5) 모든 표: 표가 바깥 테두리에 여백 없이 맞닿도록 */
+.table-scroll{border:1px solid var(--line);background:var(--paper-2);}
+.card.flush .table-scroll,
+.pending-box .table-scroll{border:none;}
+.card-toolbar{padding:12px 14px;border-bottom:1px solid var(--line);}
+.card-toolbar .filter-row{margin-bottom:0;}
+.card-toolbar .filter-row + .filter-row{margin-top:8px;}
+.card-toolbar .filter-row:empty{display:none;}
+.card-toolbar .filter-row:empty + .filter-row{margin-top:0;}
+#fund-summary table{max-width:none !important;}
+#fund-summary .count-note{margin:0;padding:10px 14px;border-top:1px solid var(--line);}
+#fund-compare table{border:1px solid var(--line);}
+@media (max-width:767px){
+  .entry-table-card .card-toolbar{padding:0 0 12px;border-bottom:none;}
+}
+.two-col > .card.flush{align-self:start;}
+
+/* 6) 예산 관·항·목 분류 표 — 엑셀처럼 셀 사이 공백 없이 */
+.hierarchy-table{border-collapse:collapse;}
+.hierarchy-table th:first-child{width:112px;}
+.hierarchy-table th:last-child{width:76px;}
+.hierarchy-table tbody td{padding:0;border:1px solid var(--line);}
+.hierarchy-table tbody td input,
+.hierarchy-table tbody td select{
+  display:block;width:100%;height:40px;margin:0;border:none;border-radius:0;
+  background:transparent;box-shadow:none;padding:0 10px;font-size:var(--fs-base);color:var(--ink);
+}
+.hierarchy-table tbody td input:focus,
+.hierarchy-table tbody td select:focus{
+  outline:2px solid var(--navy-2);outline-offset:-2px;background:var(--paper-2);
+}
+.hierarchy-table .hierarchy-item-budget{text-align:right;padding-right:12px;}
+.hierarchy-table .hierarchy-category-type{
+  padding:0 30px 0 12px;text-align:left;text-align-last:left;cursor:pointer;
+  background-position:calc(100% - 15px) 50%,calc(100% - 10px) 50%;
+}
+.hierarchy-table tbody td:first-child select{text-align:left;text-align-last:left;}
+.hierarchy-table .hierarchy-row-delete{display:block;width:100%;height:40px;margin:0;padding:0;}
+.hierarchy-total-message{white-space:nowrap;}
+/* 합계 행 글자: 머리글용 연한 th 색이 남아 있던 부분 */
+tfoot th,tfoot td,.report-total-row th,.report-total-row td,.hierarchy-total-row th,.hierarchy-total-row td{color:var(--navy);font-weight:700;}

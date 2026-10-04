@@ -9,12 +9,12 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=2.13">
+<link rel="stylesheet" href="style.css?v=2.14">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <header class="masthead">
-    <span class="version-tag">v2.13</span>
+    <span class="version-tag">v2.14</span>
     <div class="masthead-inner">
 
     <p class="org">한국외국어대학교 노동조합 회계 프로그램</p>
@@ -104,21 +104,21 @@
 
     <section>
       <div class="sec-head"><span class="sec-num">02</span><h2>세부 거래 내역</h2></div>
-      <div class="card">
-        <div class="filter-row" id="month-filters-report"></div>
+      <div class="card flush">
+        <div class="card-toolbar"><div class="filter-row" id="month-filters-report"></div></div>
         <div class="table-scroll transaction-table-scroll">
           <table class="transaction-table report-transaction-table">
             <colgroup>
               <col class="col-date"><col class="col-description"><col class="col-mok">
               <col class="col-payee"><col class="col-amount"><col class="col-amount"><col class="col-mgmt">
             </colgroup>
-            <thead><tr><th>결제일</th><th>내용</th><th>목</th><th>지급처</th><th class="num">수입</th><th class="num">지출</th><th>관리번호</th></tr></thead>
+            <thead><tr><th>결제일</th><th>내용</th><th>목</th><th>지급처</th><th class="num">수입</th><th class="num">지출</th><th id="th-report-mgmt">결의번호</th></tr></thead>
             <tbody id="tx-body-report"></tbody>
             <tfoot id="tx-report-total"></tfoot>
           </table>
         </div>
-        <p class="count-note" id="tx-count-report"></p>
       </div>
+      <p class="count-note" id="tx-count-report"></p>
     </section>
 
     <section>
@@ -169,7 +169,7 @@
       <div class="card"><div class="chart-box"><canvas id="chartMonthly"></canvas></div></div>
       <div class="two-col" style="margin-top:20px;">
         <div class="card"><div class="chart-box tall"><canvas id="chartExpenseHang"></canvas></div></div>
-        <div class="card">
+        <div class="card flush">
           <table><thead><tr><th>관·항·목</th><th class="num">지출액</th></tr></thead><tbody id="tbl-top-mok"></tbody><tfoot id="tbl-top-mok-total"></tfoot></table>
         </div>
       </div>
@@ -372,18 +372,17 @@
       <div class="pending-box" id="pending-box"><div id="pending-list"></div></div>
     </section>
 
-    <section>
+    <section class="pending-section">
       <div class="sec-head"><span class="sec-num">03</span><h2>결의 내역</h2></div>
-      <div class="filter-row" id="status-filters-entry"></div>
-      <div class="filter-row" id="month-filters-entry"></div>
       <div class="card flush entry-table-card">
+        <div class="card-toolbar"><div class="filter-row" id="status-filters-entry"></div><div class="filter-row" id="month-filters-entry"></div></div>
         <div class="table-scroll transaction-table-scroll entry-table-container">
           <table class="transaction-table entry-table">
             <colgroup>
               <col class="col-date"><col class="col-type"><col class="col-description"><col class="col-mok">
               <col class="col-payee"><col class="col-spender"><col class="col-amount"><col class="col-status"><col class="col-mgmt"><col class="col-actions">
             </colgroup>
-            <thead><tr><th>결제일</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th>담당자</th><th class="num">금액</th><th>상태</th><th>관리번호</th><th class="col-actions-head">추가 작업</th></tr></thead>
+            <thead><tr><th>결제일</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th>담당자</th><th class="num">금액</th><th>상태</th><th>결의번호</th><th class="col-actions-head">추가 작업</th></tr></thead>
             <tbody id="tx-body-entry"></tbody>
           </table>
         </div>
@@ -416,7 +415,7 @@
 
   <section>
     <div class="sec-head"><span class="sec-num">01</span><h2>기금 요약</h2></div>
-    <div class="card" id="fund-summary"></div>
+    <div class="card flush" id="fund-summary"></div>
   </section>
 
   <section>
@@ -455,7 +454,7 @@
 
   <section>
     <div class="sec-head"><span class="sec-num">04</span><h2>거래 내역</h2></div>
-    <div class="card">
+    <div class="card flush">
       <div class="table-scroll"><table class="transaction-table" style="min-width:640px;table-layout:auto;">
         <thead><tr><th>날짜</th><th>유형</th><th>계좌</th><th class="num">금액</th><th>메모</th><th></th></tr></thead>
         <tbody id="fund-events"></tbody>
@@ -504,7 +503,7 @@
 (function(){
   function start(){
     var s = document.createElement('script');
-    s.src = 'app.js?v=2.13';
+    s.src = 'app.js?v=2.14';
     document.body.appendChild(s);
   }
   fetch('data.json', {cache:'no-cache'})
