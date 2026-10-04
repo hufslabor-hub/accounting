@@ -1609,6 +1609,8 @@ let ledgerRenderTimer = null;
   const ENTRY_PAGE_SIZE = 70;
 let pendingUnsubscribe = null;
 let ledgerSources = {recent:new Map(), pending:new Map(), older:new Map()};
+// 방금 저장한 로컬 변경(승인 등). 실시간 스냅샷이 예전 상태로 덮어쓰지 못하게 한다.
+let localOverrides = new Map();
 let olderCursor = null, cursorSet = false, olderHasMore = false, olderLoading = false;
 let reportSummary = null, reportMonthCache = {}, reportLoading = false, reportLoadToken = 0;
 const SUMMARY_VERSION = 1;
@@ -2007,6 +2009,8 @@ function rebuildLedger(){
   const map = new Map();
   [ledgerSources.older, ledgerSources.pending, ledgerSources.recent]
     .forEach(source=>source.forEach((entry,id)=>map.set(id,entry)));
+  // 로컬에서 방금 확정한 변경이 스냅샷보다 우선한다 (승인 직후 결의완료로 되돌아가는 현상 방지)
+  localOverrides.forEach((entry,id)=>map.set(id, entry));
   ledger = [...map.values()].sort(compareEntries);
 }
 
@@ -2893,6 +2897,7 @@ async function loadLedger(){
   const year = currentYear;
 reportSummary = null; reportMonthCache = {}; reportLoading = false; reportLoadToken++;
   ledgerSources = {recent:new Map(), pending:new Map(), older:new Map()};
+  localOverrides = new Map();   // ← 이 줄 추가
   olderCursor = null; cursorSet = false; olderHasMore = false; olderLoading = false;
   await ensureLedgerMigrated(year);
   const col = entriesRef(year);
@@ -3148,17 +3153,25 @@ async function renderReportDetail(){
 }
 // ---------- per-entry transactions ----------
 function applyLocalChanges(upserts,deletes){
-  // recent/pending이 older를 덮어쓰므로, 해당 소스가 가진 항목도 함께 갱신한다.
-  // 승인 등으로 pending 쿼리에서 빠질 경우를 대비해 older에도 항상 최신본을 둔다.
+  // recent/pending 스냅샷이 나중에 도착해도, 방금 저장한 상태가 유지되도록 localOverrides에 둔다.
   upserts.forEach((entry,id)=>{
+    localOverrides.set(id, entry);
     if(ledgerSources.recent.has(id)) ledgerSources.recent.set(id, entry);
     if(ledgerSources.pending.has(id)) ledgerSources.pending.set(id, entry);
     ledgerSources.older.set(id, entry);
   });
-  deletes.forEach(id=>Object.values(ledgerSources).forEach(source=>source.delete(id)));
+  deletes.forEach(id=>{
+    localOverrides.delete(id);
+    Object.values(ledgerSources).forEach(source=>source.delete(id));
+  });
   rebuildLedger();
   setFooter('저장됨');
 }
+
+
+
+
+
 // Locks the given entry ids, hands the latest data to work(found, api).
 // In work(): do any extra api.tx.get(...) reads FIRST, then api.set / api.remove.
 async function entryTransaction(ids,work){
