@@ -9,12 +9,12 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=2.11">
+<link rel="stylesheet" href="style.css?v=2.12">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <header class="masthead">
-    <span class="version-tag">v2.11</span>
+    <span class="version-tag">v2.12</span>
     <div class="masthead-inner">
 
     <p class="org">한국외국어대학교 노동조합 회계 프로그램</p>
@@ -288,13 +288,15 @@
       <b id="entry-storage-warning"></b>
     </div>
     <section style="margin-top:16px;">
-      <div class="sec-head"><span class="sec-num">01</span><h2>새 내역 입력</h2></div>
-<!-- 자주 쓰는 지출 템플릿: 버튼은 모두 사용 가능, 설정은 '템플릿 관리' 권한이 있는 계정만 -->
+<!-- 자주 쓰는 지출 템플릿: 제목 줄 오른쪽 정렬. 설정 편집기는 제목 아래에 펼쳐짐 (로그인한 허가 담당자 모두 사용·설정 가능) -->
 <div class="quick-template-container" id="quick-template-container">
-  <div class="qt-bar">
-    <span class="qt-title">⚡ 자주 쓰는 지출 템플릿</span>
-    <span id="quick-template-buttons" class="qt-buttons"></span>
-    <button type="button" id="btn-template-manage" class="btn-text hidden">⚙ 템플릿 설정</button>
+  <div class="sec-head sec-head-entry">
+    <span class="sec-num">01</span><h2>새 내역 입력</h2>
+    <div class="qt-bar">
+      <span class="qt-title">⚡ 자주 쓰는 지출 템플릿</span>
+      <span id="quick-template-buttons" class="qt-buttons"></span>
+      <button type="button" id="btn-template-manage" class="btn-text hidden">⚙ 템플릿 설정</button>
+    </div>
   </div>
   <div id="template-editor" class="qt-editor hidden">
     <p class="qt-note">버튼 이름과 입력값을 정해 두면 새 내역 입력에서 한 번에 채워 줍니다. 결제일은 채우지 않습니다.</p>
@@ -310,8 +312,8 @@
   </div>
 </div>
 
-      <div class="card">
-        <div class="form-grid">
+      <div class="card flush entry-form-card">
+        <div class="form-grid entry-form-grid">
           <div class="field">
             <label>구분</label>
             <div class="gubun-toggle">
@@ -332,11 +334,12 @@
 
           <div class="field span2"><label>내용</label><input type="text" id="f-desc" placeholder="예: 집행부 회의 식비" list="dl-desc" autocomplete="off"></div>
           <div class="field"><label>지급처</label><input type="text" id="f-payee" placeholder="예: 배달의민족" list="recent-payee-options"><datalist id="recent-payee-options"></datalist></div>
-          <div class="field"><label>금액(원)</label><input type="text" id="f-amount" inputmode="numeric" placeholder="예: 50000 (환불은 -50000)" list="dl-amount" autocomplete="off"></div>
+          <div class="field span2"><label>금액(원)</label><input type="text" id="f-amount" inputmode="numeric" placeholder="예: 50000 (환불은 -50000)" list="dl-amount" autocomplete="off"></div>
         </div>
         <datalist id="dl-desc"></datalist>
         <datalist id="dl-amount"></datalist>
 
+<div class="entry-form-footer">
 <!-- 영수증 첨부 영역 -->
 <div class="mb-3">
   <label class="form-label font-weight-bold">🧾 영수증 증빙 첨부</label>
@@ -360,6 +363,7 @@
         <button class="btn-primary" id="btn-add">내역 추가</button>
         <button class="btn-revert hidden" id="btn-cancel-entry-edit" type="button">수정 취소</button>
         <span id="save-status"></span>
+</div>
       </div>
     </section>
 
@@ -370,9 +374,9 @@
 
     <section>
       <div class="sec-head"><span class="sec-num">03</span><h2>결의 내역</h2></div>
-      <div class="card">
-        <div class="filter-row" id="status-filters-entry"></div>
-        <div class="filter-row" id="month-filters-entry"></div>
+      <div class="filter-row" id="status-filters-entry"></div>
+      <div class="filter-row" id="month-filters-entry"></div>
+      <div class="card flush entry-table-card">
         <div class="table-scroll transaction-table-scroll entry-table-container">
           <table class="transaction-table entry-table">
             <colgroup>
@@ -383,9 +387,9 @@
             <tbody id="tx-body-entry"></tbody>
           </table>
         </div>
-        <p class="count-note" id="tx-count-entry"></p>
-<button class="btn-primary hidden" id="btn-load-more-entries" type="button" style="margin-top:12px;">이전 내역 더 보기</button>
       </div>
+      <p class="count-note" id="tx-count-entry"></p>
+<button class="btn-primary hidden" id="btn-load-more-entries" type="button" style="margin-top:12px;">이전 내역 더 보기</button>
     </section>
 
     <section class="pending-section" style="margin-top:28px;">
@@ -500,7 +504,7 @@
 (function(){
   function start(){
     var s = document.createElement('script');
-    s.src = 'app.js?v=2.11';
+    s.src = 'app.js?v=2.12';
     document.body.appendChild(s);
   }
   fetch('data.json', {cache:'no-cache'})

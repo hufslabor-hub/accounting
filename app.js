@@ -2,6 +2,16 @@
 const APP_DATA = window.APP_DATA || {};
 const BASE_LEDGER = Array.isArray(APP_DATA.baseLedger) ? APP_DATA.baseLedger : [];
 const SUGGESTIONS = (APP_DATA.suggestions && typeof APP_DATA.suggestions === 'object') ? APP_DATA.suggestions : {};
+// ---------- 브라우저 로컬 스토리지 (이 기기에만 저장되는 편의 정보) ----------
+const LS_PREFIX = 'hufs-labor:';
+function lsGet(key){
+  try{ const v = localStorage.getItem(LS_PREFIX+key); return v==null ? null : JSON.parse(v); }
+  catch(e){ return null; }
+}
+function lsSet(key,value){
+  try{ localStorage.setItem(LS_PREFIX+key, JSON.stringify(value)); return true; }
+  catch(e){ return false; }   // 저장 공간 부족·사생활 보호 모드 등: 조용히 무시
+}
 let auth = null;
 let db = null;
 let currentUser = null;
@@ -19,6 +29,7 @@ let staffSortMode = 'exec-first';   // exec-first | delegate-first | name
 const transferState = {skip:new Set(), amounts:{}, group:'전체', recvMemo:'', myMemo:''};
 let paymentReportEntryIds = [];
 let paymentReportSourceStatus = '';
+let paymentReportApproval = null;   // 승인 직후 {approval, managementNo} — PDF에 승인 도장을 넣기 위해 보관
 let editingEntryId = '';
 let accountCategories = createDefaultAccountCategories();
 let charts = {};
@@ -39,7 +50,6 @@ const STATUS_LABEL = {
   confirmed:'<span class="approved-status">승인</span>',
   rejected:'반려됨'
 };
-const DRIVE_FOLDER_ID = '1gMzC9jbjYONOXv9ZCqJpB8kH8NYmb2it';
 
 const fmt = n => Math.round(n).toLocaleString('ko-KR') + '원';
 const fmtShort = n => Math.round(n).toLocaleString('ko-KR');
@@ -176,14 +186,14 @@ function renderStorageNotice(){
   if(warning) warning.textContent = '';
 }
 
-function showAuthGate(title, message, uid=''){
+function showAuthGate(title, message, email=''){
   stopQuotaCountdown();
     document.getElementById('gate-sign-in').classList.remove('hidden');   // ← 추가
   document.getElementById('auth-gate-title').textContent = title;
   document.getElementById('auth-gate-message').textContent = message;
   const userId = document.getElementById('auth-user-id');
-  userId.classList.toggle('hidden', !uid);
-  userId.innerHTML = uid ? `Google 계정 UID: <code>${escapeHTML(uid)}</code>` : '';
+  userId.classList.toggle('hidden', !email);
+  userId.innerHTML = email ? `Google 계정 이메일: <code>${escapeHTML(email)}</code>` : '';
   document.getElementById('auth-gate').classList.remove('hidden');
   document.getElementById('app-controls').classList.add('hidden');
   document.getElementById('app-tabs').classList.add('hidden');
@@ -258,7 +268,7 @@ function stopSharedDataWatchers(){
 
 
 // ---------- 자주 쓰는 지출 템플릿 ----------
-// 사용: 로그인한 모든 담당자 / 설정: allowedUsers 문서에 canManageTemplates: true 가 있는 계정만
+// 사용·설정: 로그인한 모든 허가 담당자 (UID별 권한 없음). 저장 위치: Firestore(공유) + 이 브라우저의 로컬 스토리지(보관본)
 const QUICK_TEMPLATES_KEY = 'quick-templates:list';
 const MAX_QUICK_TEMPLATES = 20;
 const DEFAULT_QUICK_TEMPLATES = [
@@ -266,7 +276,11 @@ const DEFAULT_QUICK_TEMPLATES = [
   {id:'default-2', name:'생일 축하 사업', cls:null, desc:'조합원 정기 생일 축하 상품권 지급', payee:'조합원 일동', spender:'', amount:''},
   {id:'default-3', name:'업무용 유류비', cls:null, desc:'노조 업무 차량 유류비 지급', payee:'주유소', spender:'', amount:''}
 ];
-let quickTemplates = DEFAULT_QUICK_TEMPLATES.map(t=>({...t}));
+let quickTemplates = (()=>{
+  const local = lsGet('quick-templates');
+  const list = Array.isArray(local) ? normalizeQuickTemplates(local) : [];
+  return list.length ? list : DEFAULT_QUICK_TEMPLATES.map(t=>({...t}));
+})();
 let currentPermissions = {manageTemplates:false};
 let templateDraft = [];
 
@@ -413,7 +427,7 @@ function newTemplateDraft(base){
 
 async function saveTemplates(){
   if(!currentPermissions.manageTemplates){
-    setTemplateStatus('템플릿을 설정할 권한이 없습니다.', true);
+    setTemplateStatus('로그인한 뒤 다시 시도해 주세요.', true);
     return;
   }
   collectTemplateDraft();
@@ -429,12 +443,15 @@ async function saveTemplates(){
   try{
     await storageSet(QUICK_TEMPLATES_KEY, JSON.stringify(cleaned));
     quickTemplates = cleaned;
+    lsSet('quick-templates', cleaned);
     renderQuickTemplates();
     setTemplateStatus(`템플릿 ${cleaned.length}개를 저장했습니다.`);
   }catch(e){
-    setTemplateStatus(e.code==='permission-denied'
-      ? '저장이 서버에서 거부되었습니다. Firestore 규칙에 템플릿 관리 권한이 반영되었는지 확인해 주세요.'
-      : `저장 실패: ${e.message || String(e)}`, true);
+    // 서버 저장이 실패해도 이 브라우저에는 남겨 둡니다
+    quickTemplates = cleaned;
+    const kept = lsSet('quick-templates', cleaned);
+    renderQuickTemplates();
+    setTemplateStatus(`서버 저장 실패: ${e.message || String(e)}${kept ? ' (이 브라우저에는 저장했습니다.)' : ''}`, true);
   }
 }
 
@@ -525,24 +542,6 @@ function exportTransactionsToCSV(transactions) {
 
 
   
-function applyTemplate(key) {
-  const tpl = QUICK_TEMPLATES[key];
-  if (!tpl) return;
-
-  // 폼 필드 요소 ID에 맞춰 값 채우기 (기존 HTML 입력 요소 ID 참조)
-  if (document.getElementById('f-type')) document.getElementById('f-type').value = tpl.type;
-  if (document.getElementById('f-hang')) document.getElementById('f-hang').value = tpl.hang;
-  if (document.getElementById('f-mok')) document.getElementById('f-mok').value = tpl.mok;
-  if (document.getElementById('f-desc')) document.getElementById('f-desc').value = tpl.desc;
-  if (document.getElementById('f-payee')) document.getElementById('f-payee').value = tpl.payee;
-  if (document.getElementById('f-staff')) document.getElementById('f-staff').value = tpl.staff;
-
-  // 금액 필드로 포커스 이동하여 빠른 금액 입력 유도
-  const amountEl = document.getElementById('f-amount');
-  if (amountEl) amountEl.focus();
-}
-
-  
 function watchSharedData(){
   stopSharedDataWatchers();
   const watchedKeys = [YEARS_KEY,budgetKey(currentYear),accountBalanceKey(currentYear),STAFF_NAMES_KEY,STAFF_BANK_DETAILS_KEY,STAFF_GROUPS_KEY,QUICK_TEMPLATES_KEY,categoryKey(currentYear)];
@@ -583,6 +582,7 @@ function watchSharedData(){
           renderStaffNames();
         } else if(key===QUICK_TEMPLATES_KEY){
           quickTemplates = normalizeQuickTemplates(data);
+          lsSet('quick-templates', quickTemplates);
           renderQuickTemplates();
         } else if(key===categoryKey(currentYear)){
           if(JSON.stringify(accountCategories)!==JSON.stringify(data)){
@@ -601,9 +601,17 @@ function watchSharedData(){
 }
 
 async function initializeApplicationData(){
-  activateTab(window.location.hash.slice(1) || 'entry');
+  activateTab(window.location.hash.slice(1) || lsGet('tab') || 'entry');
   renderStorageNotice();
   await loadYears();
+  const savedYear = Number(lsGet('year'));
+  if(years.includes(savedYear)) currentYear = savedYear;
+  const savedSort = lsGet('staff-sort');
+  if(['exec-first','delegate-first','name'].includes(savedSort)){
+    staffSortMode = savedSort;
+    const sortSelect = document.getElementById('staff-sort-select');
+    if(sortSelect) sortSelect.value = savedSort;
+  }
   await loadYearData();
   setupDatalists();
   setGubun('지출');
@@ -643,23 +651,23 @@ async function handleAuthState(user){
 
   try{
 const allowed = await Promise.race([
-  db.collection('allowedUsers').doc(user.uid).get(),
+  db.collection('allowedEmails').doc(String(user.email||'').toLowerCase()).get(),
   new Promise((_,reject)=>setTimeout(
     ()=>reject(Object.assign(new Error('Firestore 응답 시간 초과 (한도 초과 가능성)'),{code:'resource-exhausted'})),
     2500))
 ]);
    
-    if(!allowed.exists){
+    if(!user.email || !user.emailVerified || !allowed.exists){
       showAuthGate(
         '접근 권한이 없습니다',
-        '이 계정 UID를 Firebase 담당자에게 전달하고 allowedUsers에 등록해 달라고 요청하세요.',
-        user.uid
+        '이 이메일을 Firebase 담당자에게 전달하고 allowedEmails에 등록해 달라고 요청하세요.',
+        user.email || ''
       );
       document.getElementById('gate-sign-in').classList.add('hidden');
       document.getElementById('auth-status').textContent = '허용되지 않은 계정';
       return;
     }
-currentPermissions = {manageTemplates: (allowed.data() || {}).canManageTemplates === true};
+currentPermissions = {manageTemplates:true};   // 허가된 계정이면 누구나 템플릿 설정 가능
 renderQuickTemplates();
 document.getElementById('auth-status').textContent = `${user.email || 'Google 계정'} 데이터 불러오는 중…`;
 document.getElementById('auth-gate-message').textContent = '장부와 예산 자료를 불러오는 중입니다. 잠시만 기다려 주세요.';
@@ -2237,6 +2245,7 @@ async function setYear(v){
     await loadYearData();
     renderAll();
     watchSharedData();
+    lsSet('year', currentYear);
   }catch(error){
     document.getElementById('auth-status').textContent = `${currentYear}년 데이터를 불러오지 못했습니다: ${error.message || error}`;
     currentYear = previousYear;
@@ -2774,7 +2783,9 @@ function aggregates(list){
 }
 
 // ---------- charts ----------
+const CHART_FONT_SIZE = 14;   // 앱 본문 글자 크기와 동일
 Chart.defaults.font.family = "'Pretendard', sans-serif";
+Chart.defaults.font.size = CHART_FONT_SIZE;
 // 차트 색은 style.css의 컬러 스킴(:root 변수)에서 읽어옵니다 → 스킴을 바꾸면 차트도 함께 바뀝니다
 function cssVar(name,fallback){
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -2820,7 +2831,7 @@ function chartLegend(mobile,{position='top',align='end',usePointStyle=false,kind
   const labels = {
     boxWidth: mobile ? 10 : 12,
     padding: mobile ? 8 : 12,
-    font:{size: mobile ? 11 : 12}
+    font:{size:CHART_FONT_SIZE}
   };
   if(usePointStyle) labels.usePointStyle = true;
   // 모바일 도넛: 범례 이름이 길면 말줄임 (전체 이름은 툴팁에서 확인)
@@ -2848,8 +2859,8 @@ function chartTooltip(mobile,callbacks,{wrapTitle=false}={}){
     position:'nearest',
     padding: mobile ? 8 : 10,
     caretPadding: mobile ? 14 : 6,
-    titleFont:{size: mobile ? 12 : 13},
-    bodyFont:{size: mobile ? 11 : 12}
+    titleFont:{size:CHART_FONT_SIZE},
+    bodyFont:{size:CHART_FONT_SIZE}
   };
   if(mobile) tooltip.yAlign = 'bottom';   // 터치한 손가락이 툴팁을 가리지 않도록 위쪽에 표시
   return tooltip;
@@ -2917,8 +2928,8 @@ document.getElementById('r-count').textContent = `승인된 ${approvedCount.toLo
       ...(mobile ? {interaction:{mode:'index', intersect:false}} : {}),
       plugins:{ legend:chartLegend(mobile,{position:'top',align:'end',usePointStyle:true}),
         tooltip:chartTooltip(mobile,{label: ctx => `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`})},
-      scales:{ y:{ticks:{callback:v=>mobile?compactWon(v):fmtShort(v), font:{size:mobile?10:12}}, grid:{color:P.grid}},
-               x:{ticks:{font:{size:mobile?10:12}}, grid:{display:false}} }
+      scales:{ y:{ticks:{callback:v=>mobile?compactWon(v):fmtShort(v), font:{size:CHART_FONT_SIZE}}, grid:{color:P.grid}},
+               x:{ticks:{font:{size:CHART_FONT_SIZE}}, grid:{display:false}} }
     }
   }; });
 
@@ -2947,8 +2958,8 @@ document.getElementById('r-count').textContent = `승인된 ${approvedCount.toLo
     data:{ labels: ag.incomeLabels, datasets:[{data: ag.incomeValues, backgroundColor:P.income}]},
     options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
       plugins:{legend:{display:false}, tooltip:chartTooltip(mobile,{label: ctx => fmt(ctx.parsed.x)},{wrapTitle:true})},
-      scales:{ x:{ticks:{callback:v=>mobile?compactWon(v):fmtShort(v), font:{size:mobile?10:12}, maxTicksLimit:mobile?4:undefined}, grid:{color:P.grid}},
-               y:{ticks:{font:{size:mobile?10:12}, callback:function(v){ const l=this.getLabelForValue(v); return mobile?truncateLabel(l,9):l; }}, grid:{display:false}} }
+      scales:{ x:{ticks:{callback:v=>mobile?compactWon(v):fmtShort(v), font:{size:CHART_FONT_SIZE}, maxTicksLimit:mobile?4:undefined}, grid:{color:P.grid}},
+               y:{ticks:{font:{size:CHART_FONT_SIZE}, callback:function(v){ const l=this.getLabelForValue(v); return mobile?truncateLabel(l,9):l; }}, grid:{display:false}} }
     }
   }; });
 
@@ -3031,8 +3042,8 @@ function renderBudgetChart(spentByMok, throughMonth){
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
       plugins:{ legend:chartLegend(mobile,{position:'top',align:'end',usePointStyle:true}),
         tooltip:chartTooltip(mobile,{label: ctx => `${ctx.dataset.label}: ${fmt(ctx.parsed.x)}`},{wrapTitle:true})},
-      scales:{ x:{ticks:{callback:v=>mobile?compactWon(v):fmtShort(v), font:{size:mobile?10:12}, maxTicksLimit:mobile?4:undefined}, grid:{color:P.grid}},
-               y:{ticks:{font:{size:mobile?10:12}, callback:function(v){ const l=this.getLabelForValue(v); return mobile?truncateLabel(l,9):l; }}, grid:{display:false}} }
+      scales:{ x:{ticks:{callback:v=>mobile?compactWon(v):fmtShort(v), font:{size:CHART_FONT_SIZE}, maxTicksLimit:mobile?4:undefined}, grid:{color:P.grid}},
+               y:{ticks:{font:{size:CHART_FONT_SIZE}, callback:function(v){ const l=this.getLabelForValue(v); return mobile?truncateLabel(l,9):l; }}, grid:{display:false}} }
     }
   }; });
 }
@@ -3687,12 +3698,10 @@ async function peekPaymentNumber(date){
   return {dateKey,sequence,managementNo:`${dateKey}${String(sequence).padStart(3,'0')}`};
 }
 
-async function commitPaymentApproval({ids,dateKey,sequence,approvalTime,uploadedFile}){
+async function commitPaymentApproval({ids,dateKey,sequence,approvalTime}){
   const sequenceRef = db.collection('accountingData').doc(`management-sequence:payment:${dateKey}`);
   const managementNo = `${dateKey}${String(sequence).padStart(3,'0')}`;
   const approvedBy = currentUser.email || currentUser.displayName || '';
-  const fileId = uploadedFile?.id || '';
-  const fileUrl = uploadedFile?.webViewLink || '';
   await entryTransaction(ids,async (found,api)=>{
     const sequenceSnapshot = await api.tx.get(sequenceRef);                       // read before any write
     const stored = checkSequence(
@@ -3721,8 +3730,6 @@ if(ap.year===currentYear && ap.month<=closedThrough){
   acctMonth:acctPeriod(approvalTime).month,
   managementNo
 };
-      if(fileId) next.paymentReportFileId = fileId;
-      if(fileUrl) next.paymentReportUrl = fileUrl;
       if(entry.gubun==='수입'){ next.confirmedAt = at; next.confirmedBy = approvedBy; }
       else{ next.paidAt = at; next.paidBy = approvedBy; }
       api.set(next);
@@ -3772,7 +3779,7 @@ function downloadBlob(blob,fileName){
   setTimeout(()=>URL.revokeObjectURL(url),10000);
 }
 
-async function downloadReportPdf(ids,spender,prefix){
+async function downloadReportPdf(ids,spender,prefix,approval=null,managementNo=null){
   if(typeof window.html2pdf!=='function'){
     throw new Error('PDF 생성 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침해 주세요.');
   }
@@ -3780,7 +3787,7 @@ async function downloadReportPdf(ids,spender,prefix){
   if(!entries.length) throw new Error('내역을 찾을 수 없습니다.');
   const total = entries.reduce((sum,entry)=>sum+Number(entry.amount||0),0);
   const fileName = `${prefix}_${paymentDateKey(new Date())}_${safeFileName(spender)}_${total}원.pdf`;
-  downloadBlob(await buildReportPdfBlob(entries,spender),fileName);
+  downloadBlob(await buildReportPdfBlob(entries,spender,approval,managementNo),fileName);
   return fileName;
 }
 
@@ -3790,7 +3797,8 @@ async function downloadReportFromDialog(){
     const entries = paymentReportEntryIds.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
     const spender = requireSingleSpender(entries);
     status.textContent = 'PDF를 만드는 중입니다…';
-    const fileName = await downloadReportPdf(paymentReportEntryIds,spender,'보고서');
+    const approved = paymentReportApproval;
+    const fileName = await downloadReportPdf(paymentReportEntryIds,spender,approved ? '승인보고서' : '보고서',approved?.approval||null,approved?.managementNo||null);
     status.textContent = `PDF를 저장했습니다: ${fileName}`;
   }catch(error){
     status.textContent = `PDF 생성 실패: ${error.message || String(error)}`;
@@ -4227,6 +4235,7 @@ function openPaymentReport(status){
     const spender = requireSingleSpender(entries);
     paymentReportEntryIds = entries.map(entry=>entry.id);
     paymentReportSourceStatus = status;
+    paymentReportApproval = null;
     renderPaymentReport(entries,spender);
     document.getElementById('payment-report-status').textContent = '';
     const approveButton = document.getElementById('btn-approve-payment-report');
@@ -4294,57 +4303,7 @@ const rows = ordered.map((entry,index)=>`
     </div>
     ${approval
       ? `<p class="payment-report-note">승인자: ${escapeHTML(approval.approver)} · ${escapeHTML(approval.date)} · 지급 승인 도장이 포함된 보고서입니다.</p>`
-      : '<p class="payment-report-note">승인 시 승인 도장이 포함된 PDF를 공유 드라이브에 저장합니다.</p>'}`;
-}
-
-async function getDriveAccessToken(){
-  if(!auth?.currentUser) throw new Error('Google 계정에 로그인한 뒤 다시 시도해 주세요.');
-  const provider = new firebase.auth.GoogleAuthProvider();
-  provider.addScope('https://www.googleapis.com/auth/drive.file');
-  const customParameters = {prompt:'consent'};
-  if(auth.currentUser.email) customParameters.login_hint = auth.currentUser.email;
-  provider.setCustomParameters(customParameters);
-  const result = await auth.currentUser.reauthenticateWithPopup(provider);
-  const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result) || result.credential;
-  if(!credential?.accessToken){
-    throw new Error('Google에서 Drive 파일 접근 동의를 완료하지 않아 접근 토큰을 받지 못했습니다. 팝업에서 Drive 권한을 허용하고 다시 시도해 주세요.');
-  }
-  return credential.accessToken;
-}
-
-async function uploadPaymentReport(token,blob,fileName){
-  const boundary = `accounting-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const metadata = {
-    name:fileName,
-    mimeType:'application/pdf',
-    parents:[DRIVE_FOLDER_ID]
-  };
-  const body = new Blob([
-    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n`,
-    JSON.stringify(metadata),
-    `\r\n--${boundary}\r\nContent-Type: application/pdf\r\n\r\n`,
-    blob,
-    `\r\n--${boundary}--`
-  ],{type:`multipart/related; boundary=${boundary}`});
-  const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,webViewLink',{
-    method:'POST',
-    headers:{Authorization:`Bearer ${token}`},
-    body
-  });
-  const result = await response.json();
-  if(!response.ok) throw new Error(result.error?.message || `Google Drive 업로드에 실패했습니다 (${response.status}).`);
-  return result;
-}
-
-async function deletePaymentReport(token,fileId){
-  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?supportsAllDrives=true`,{
-    method:'DELETE',
-    headers:{Authorization:`Bearer ${token}`}
-  });
-  if(!response.ok && response.status!==404){
-    const result = await response.json().catch(()=>({}));
-    throw new Error(result.error?.message || `Google Drive 임시 파일 삭제 실패 (${response.status}).`);
-  }
+      : '<p class="payment-report-note">승인하면 승인 도장이 포함된 보고서가 됩니다.</p>'}`;
 }
 
 async function approvePaymentReport(){
@@ -4353,7 +4312,7 @@ async function approvePaymentReport(){
   const ids = paymentReportEntryIds.slice();
   const entries = ids.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
   if(paymentReportSourceStatus!=='submitted'){
-    status.textContent = '선택 내역 승인과 PDF 저장은 결의완료된 내역만 가능합니다.';
+    status.textContent = '선택 내역 승인은 결의완료된 내역만 가능합니다.';
     return;
   }
   if(!entries.length || entries.length!==ids.length || entries.some(entry=>entry.status!=='submitted')){
@@ -4374,10 +4333,8 @@ async function approvePaymentReport(){
       date:`${formatEntryDate(approvalDate)} ${approvalTime.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}`,
       approver, label:'승인 완료'
     };
-    const total = entries.reduce((sum,entry)=>sum+Number(entry.amount||0),0);
-    const fileName = `${paymentDateKey(approvalTime)}_${safeFileName(spender)}_${total}원.pdf`;
 
-    // 1) 승인 상태를 먼저 Firestore에 반영 (Drive 실패와 무관하게 상태가 바뀌도록)
+    // 승인 상태를 Firestore에 반영
     let managementNo = '';
     let next = null;
     for(let attempt=1; attempt<=3; attempt++){
@@ -4387,8 +4344,7 @@ async function approvePaymentReport(){
           ids,
           dateKey:next.dateKey,
           sequence:next.sequence,
-          approvalTime,
-          uploadedFile:null
+          approvalTime
         });
         break;
       }catch(error){
@@ -4405,41 +4361,9 @@ async function approvePaymentReport(){
     renderEntryView();
     const approvedEntries = ids.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
     renderPaymentReport(approvedEntries,spender,approval,managementNo);
-    status.textContent = `승인 완료 (관리번호 ${managementNo}). 결의 내역에 승인으로 표시됩니다. PDF 저장을 시도합니다…`;
+    paymentReportApproval = {approval, managementNo};   // PDF 다운로드 시 승인 도장 포함
+    status.textContent = `승인 완료 (관리번호 ${managementNo}). 결의 내역에 승인으로 표시됩니다. 도장이 찍힌 PDF는 ‘PDF 다운로드’ 버튼으로 저장할 수 있습니다.`;
     button.classList.add('hidden');
-
-    // 2) PDF·Drive는 실패해도 승인 상태는 유지
-    try{
-      if(typeof window.html2pdf!=='function'){
-        throw new Error('PDF 생성 도구를 불러오지 못했습니다.');
-      }
-      const token = await getDriveAccessToken();
-      const blob = await buildReportPdfBlob(approvedEntries,spender,approval,managementNo);
-      const uploadedFile = await uploadPaymentReport(token,blob,fileName);
-      // Drive 파일 정보만 후속 반영 (상태 변경 없음)
-      try{
-        await entryTransaction(ids,(found,api)=>{
-          ids.forEach(id=>{
-            const entry = found.get(id);
-            if(!entry) return;
-            api.set({
-              ...entry,
-              paymentReportFileId:uploadedFile.id,
-              paymentReportUrl:uploadedFile.webViewLink || ''
-            });
-          });
-        });
-      }catch(_e){ /* 파일 링크 저장 실패는 승인에 영향 없음 */ }
-      status.textContent = `승인 및 PDF 저장 완료: ${fileName} (관리번호 ${managementNo})`;
-      if(uploadedFile.webViewLink){
-        const link = document.createElement('a');
-        link.href = uploadedFile.webViewLink; link.target = '_blank'; link.rel = 'noopener';
-        link.textContent = 'Google Drive에서 PDF 열기';
-        status.append(' ',link);
-      }
-    }catch(pdfError){
-      status.textContent = `승인은 완료되었습니다 (관리번호 ${managementNo}). PDF 저장만 실패: ${pdfError.message || pdfError}`;
-    }
   }catch(error){
     status.textContent = `선택 내역 처리 실패: ${error.message || String(error)}`;
   }finally{
@@ -4820,6 +4744,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     if(activateTab(btn.dataset.view)){
       window.history.replaceState(null, '', '#' + btn.dataset.view);
+      lsSet('tab', btn.dataset.view);
     }
   });
 });
@@ -4864,6 +4789,7 @@ document.getElementById('btn-save-account-balance').addEventListener('click',sav
 document.getElementById('btn-add-staff-name').addEventListener('click',addStaffName);
 document.getElementById('staff-sort-select').addEventListener('change',event=>{
   staffSortMode = event.target.value;
+  lsSet('staff-sort', staffSortMode);
   renderStaffNames();
 });
 document.getElementById('transfer-group-filter').addEventListener('change',event=>{
