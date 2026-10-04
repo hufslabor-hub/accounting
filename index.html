@@ -3116,16 +3116,25 @@ const PDF_OPTIONS = {
 function safeFileName(text){ return String(text).replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').trim(); }
 
 async function buildReportPdfBlob(entries,spender,approval=null,managementNo=null){
+  // 화면 안에 두되 맨 뒤로 보내고 가려서, 캡처는 되지만 사용자에게는 안 보이게 함
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'position:absolute;left:0;top:0;width:794px;z-index:-1;opacity:0;pointer-events:none;';
   const host = document.createElement('div');
   host.className = 'payment-report-sheet';
-  host.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;background:#fff;';
-  document.body.appendChild(host);
+  host.style.cssText = 'width:794px;background:#fff;';
+  wrapper.appendChild(host);
+  document.body.appendChild(wrapper);
   try{
     renderPaymentReport(entries,spender,approval,managementNo,host);
     if(document.fonts?.ready) await document.fonts.ready;
-    return await window.html2pdf().set(PDF_OPTIONS).from(host).outputPdf('blob');
+    await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));  // 렌더링 완료 대기
+    window.scrollTo(0,0);
+    return await window.html2pdf().set({
+      ...PDF_OPTIONS,
+      html2canvas:{...PDF_OPTIONS.html2canvas,scrollX:0,scrollY:0,windowWidth:794}
+    }).from(host).outputPdf('blob');
   }finally{
-    host.remove();
+    wrapper.remove();
   }
 }
 
