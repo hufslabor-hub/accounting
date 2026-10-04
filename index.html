@@ -1,6 +1,29 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+    <style>
+    /* 1. 최상단으로 옮겨 문법 오류의 영향을 받지 않게 만듭니다 */
+    .version-tag {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: none; /* 대문자 강제 변환 해제 */
+      color: var(--ink, #333);
+      opacity: 0.6;
+      border: 1px solid var(--ink, #333);
+      border-radius: 4px;
+      padding: 2px 6px;
+      background-color: rgba(0, 0, 0, 0.03);
+      display: inline-block;
+      margin: 10px 0 0 10px; /* 주변 여백 살짝 추가 */
+    }
+
+    /* 2. 기존에 작성되어 있던 스타일들 */
+    .workflow-actions .lbl-short{display:inline;}
+    /* 만약 화면이 계속 깨진다면 아래의 닫는 중괄호 하나를 지워보세요 */
+    } 
+  </style>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title> 쇼미더머니 — 한국외국어대학교 노동조합 회계프로그램</title>
@@ -10,20 +33,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-   .version-tag {
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 11px;
-            font-weight: 600;
-            letter-spacing: 1px;
-            text-transform: none; /* ◀ 대문자 강제 변환 해제 */
-            color: var(--ink);
-            opacity: 0.6;
-            border: 1px solid var(--ink);
-            border-radius: 4px;
-            padding: 2px 6px;
-            background-color: rgba(0, 0, 0, 0.03);
-            display: inline-block;
-        }
+  
   :root{
   --navy:#3B4953; --navy-2:#5A7863;
   --paper:#EBF4DD; --paper-2:#F7FAF2;
@@ -647,17 +657,18 @@ body {
   }
   .workflow-actions .lbl-full{display:none;}
   .workflow-actions .lbl-short{display:inline;}
-}
+} 
 </style>
 </head>
 <body>
-  <span class="version-tag">v2.1 &lt;meta char&gt;</span>
 <header class="masthead">
     <div class="masthead-inner">
 
     <p class="org">한국외국어대학교 노동조합 회계 프로그램</p>
-    <h1 class="title">쇼미더머니 <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
-    
+    <h1 class="title">쇼미더머니
+       <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
+      <span class="version-tag">v2.2</span>
+
     <div class="auth-bar">
       <span id="auth-status">Firebase 연결 확인 중...</span>
       <button class="btn-auth hidden" id="btn-sign-in" type="button">Google 로그인</button>
