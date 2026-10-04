@@ -811,6 +811,7 @@ function renderStorageNotice(){
 
 function showAuthGate(title, message, uid=''){
   stopQuotaCountdown();
+    document.getElementById('gate-sign-in').classList.remove('hidden');   // ← 추가
   document.getElementById('auth-gate-title').textContent = title;
   document.getElementById('auth-gate-message').textContent = message;
   const userId = document.getElementById('auth-user-id');
@@ -852,11 +853,13 @@ function stopQuotaCountdown(){
 }
 
 function showQuotaGate(){
+  document.getElementById('gate-sign-in').classList.remove('hidden');
   if(db) db.terminate().catch(()=>{});   // 불필요한 재시도 중단
   showAuthGate(
     '우리는 거지입니다. 오늘 사용량 한도를 모두 사용했습니다.',
-   로그인은 성공했지만 Firestore가 응답하지 않습니다. 무료 일일 읽기 한도를 모두 사용했을 가능성이 가장 높습니다. 한도가 초기화된 뒤 다시 접속해 주세요. (인터넷 연결이 불안정해도 같은 화면이 나올 수 있습니다.)'
-  );
+   '로그인은 성공했지만 Firestore가 응답하지 않습니다. 무료 일일 읽기 한도를 모두 사용했을 가능성이 가장 높습니다. 한도가 초기화된 뒤 다시 접속해 주세요. (인터넷 연결이 불안정해도 같은 화면이 나올 수 있습니다.)'
+  document.getElementById('gate-sign-in').classList.add('hidden');
+    );
   const box = document.getElementById('quota-countdown');
   const reset = quotaResetTime();
   const resetLabel = reset.toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -876,6 +879,7 @@ function showQuotaGate(){
        <span class="quota-time">${pad(h)}:${pad(m)}:${pad(s)}</span>
        <small>초기화 예정: ${resetLabel} (내 컴퓨터 시간 기준)</small>`;
   };
+  const gateButton = document.getElementById('gate-sign-in');
   box.classList.remove('hidden');
   tick();
   quotaTimer = setInterval(tick,1000);
@@ -981,12 +985,13 @@ const allowed = await Promise.race([
       document.getElementById('auth-status').textContent = '허용되지 않은 계정';
       return;
     }
-    document.getElementById('auth-gate').classList.add('hidden');
-    document.getElementById('app-controls').classList.remove('hidden');
-    document.getElementById('app-tabs').classList.remove('hidden');
-    document.getElementById('app-content').classList.remove('hidden');
-    document.getElementById('auth-status').textContent = user.email || '로그인됨';
-    await initializeApplicationData();
+document.getElementById('auth-status').textContent = `${user.email || 'Google 계정'} 데이터 불러오는 중...`;
+await initializeApplicationData();
+document.getElementById('auth-gate').classList.add('hidden');
+document.getElementById('app-controls').classList.remove('hidden');
+document.getElementById('app-tabs').classList.remove('hidden');
+document.getElementById('app-content').classList.remove('hidden');
+document.getElementById('auth-status').textContent = user.email || '로그인됨';
      }catch(e){
     console.error('AUTH-GATE ERROR', e.code, e.message, e);
     stopSharedDataWatchers();
