@@ -830,9 +830,20 @@ html, body {
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script>
-const BASE_LEDGER = JSON.parse(document.getElementById('base-ledger').textContent);
-const SUGGESTIONS = JSON.parse(document.getElementById('suggestions').textContent);
-
+function parseScriptJSON(elementId, fallbackValue) {
+  const el = document.getElementById(elementId);
+  if (!el) return fallbackValue;
+  try {
+    // 텍스트 양끝 공백 제거 후 파싱
+    return JSON.parse(el.textContent.trim());
+  } catch (e) {
+    console.error(`[${elementId}] JSON 파싱 오류:`, e);
+    return fallbackValue;
+  }
+}
+// 수정 적용
+const BASE_LEDGER = parseScriptJSON('base-ledger', []);
+const SUGGESTIONS = parseScriptJSON('suggestions', {});
 let auth = null;
 let db = null;
 let currentUser = null;
