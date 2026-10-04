@@ -697,7 +697,7 @@ body {
   <! 월 마감 있던 자리>
   
 </section>
-      새 내역은 <b>입력완료</b>로 등록되며, 같은 담당자의 내역만을 선택해 결의할 수 있습니다. 승인(입금 완료)된 내역만 보고서 탭 집계에 반영됩니다.
+      새 내역은 <b>입력 내역</b>으로 등록되며, 같은 담당자의 내역만을 선택해 결의할 수 있습니다. 승인(입금 완료)된 내역만 보고서 탭 집계에 반영됩니다.
       <b id="entry-storage-warning"></b>
     </div>
 <!//여기가 결산 탭 새 내역 입력>
@@ -764,12 +764,12 @@ body {
     </section>
 
     <section class="pending-section" style="margin-top:28px;">
-      <div class="sec-head"><span class="sec-num">☰</span><h2>입력 완료 <span class="pending-count" id="pending-count">0</span></h2></div>
+      <div class="sec-head"><span class="sec-num">☰</span><h2>입력 내역 <span class="pending-count" id="pending-count">0</span></h2></div>
       <div class="pending-box" id="pending-box"><div id="pending-list"></div></div>
     </section>
 
     <section>
-      <div class="sec-head"><span class="sec-num">☰</span><h2>전체 내역</h2></div>
+      <div class="sec-head"><span class="sec-num">☰</span><h2>결의 내역</h2></div>
       <div class="card">
         <div class="filter-row" id="status-filters-entry"></div>
         <div class="filter-row" id="month-filters-entry"></div>
@@ -799,7 +799,7 @@ body {
         <p id="closing-status" style="margin:0 0 6px;font-weight:700;"></p>
         <p id="closing-detail" class="count-note" style="margin:0 0 14px;"></p>
         <button class="btn-primary" id="btn-close-month" type="button"></button>
-        <button class="btn-revert" id="btn-reopen-month" type="button">마지막 마감 취소</button>
+        <button class="btn-primary" id="btn-reopen-month" type="button">마지막 마감 취소</button>
         <span id="closing-msg" role="status"></span>
       </div>
     </section>
@@ -3793,7 +3793,10 @@ function rowActions(t){
     return `<button class="btn-revert" data-act="unapprove" data-id="${escapeHTML(t.id)}">승인 취소</button>`;
   }
   const parts = [];
-  if(t.status==='rejected') parts.push(`<button class="btn-revert" data-act="input-complete" data-id="${escapeHTML(t.id)}">입력완료로 복원</button>`);
+  if(t.status==='submitted'){
+    parts.push(`<button class="btn-reject" data-act="reject-submitted" data-id="${escapeHTML(t.id)}">반려</button>`);
+  }
+  if(t.status==='rejected') parts.push(`<button class="btn-revert" data-act="input-complete" data-id="${escapeHTML(t.id)}">입력 내역으로 복원</button>`);
   parts.push(`<button class="del-btn" data-act="delete" data-id="${escapeHTML(t.id)}">삭제</button>`);
   return `<div class="action-row">${parts.join('')}</div>`;
 }
@@ -3803,6 +3806,7 @@ function bindRowActions(container){
       const id = btn.getAttribute('data-id');
       const act = btn.getAttribute('data-act');
       if(act==='unapprove' && !window.confirm('승인을 취소하고 선택 내역을 결의완료 대기 목록으로 되돌리시겠습니까?')) return;
+      if(act==='reject-submitted' && !window.confirm('이 내역을 반려하여 입력 내역으로 되돌리시겠습니까?')) return;
       const approvedStates = ['approved','paid','confirmed'];
       try{
         await entryTransaction([id],(found,api)=>{
@@ -3815,7 +3819,14 @@ function bindRowActions(container){
           }else if(act==='input-complete'){
             if(entry.status!=='rejected') throw stateChangedError('반려된 내역만 복원할 수 있습니다.');
             api.set({...entry,status:'input-complete'});
- }else if(act==='unapprove'){
+          }else if(act==='reject-submitted'){
+            if(entry.status!=='submitted') throw stateChangedError('결의완료 내역만 반려할 수 있습니다.');
+            const next = {...entry, status:'input-complete'};
+            next.rejectedAt = new Date().toISOString();
+            next.rejectedBy = currentUser?.email || currentUser?.displayName || '';
+            ['managementNo','submissionSequence','submittedAt','submittedBy'].forEach(key=>delete next[key]);
+            api.set(next);
+          }else if(act==='unapprove'){
             if(!approvedStates.includes(entry.status)) throw stateChangedError('이미 승인 상태가 아닙니다.');
             if(entry.acctMonth && monthNo(entry.acctMonth)<=closedThrough){
               throw stateChangedError(`${entry.acctMonth}월은 마감되어 승인 취소할 수 없습니다. 마감을 취소한 뒤 시도해 주세요.`);
@@ -3830,7 +3841,10 @@ function bindRowActions(container){
             api.set(next);
           }
         });
-        setStatus(act==='unapprove' ? '승인을 취소해 결의완료 대기 목록으로 되돌렸습니다.' : '반영되어 공유 저장소에 저장됨');
+        const msg = act==='unapprove' ? '승인을 취소해 결의완료 대기 목록으로 되돌렸습니다.'
+          : act==='reject-submitted' ? '반려하여 입력 내역으로 되돌렸습니다.'
+          : '반영되어 공유 저장소에 저장됨';
+        setStatus(msg);
       }catch(error){
         setStatus(`변경에 실패했습니다: ${error.message || String(error)}`,true);
       }
@@ -3997,7 +4011,7 @@ function renderPendingBox(){
   const list = document.getElementById('pending-list');
   list.innerHTML = `
     <div class="workflow-stage">
-      <h3>입력완료 · 결의 대기 (${inputComplete.length}건)</h3>
+      <h3>입력 내역 · 결의 대기 (${inputComplete.length}건)</h3>
       ${workflowTable(inputComplete,'input-complete',checkedIds)}
       <p class="workflow-summary" data-workflow-summary="input-complete" role="status"></p>
       <div class="workflow-actions">
@@ -4987,25 +5001,25 @@ async function addEntry(){
   const spender = document.getElementById('f-spender').value.trim();
 
   if(!date){
-    setStatus('결제일을 YYYY-MM-DD 또는 YYYYMMDD 형식으로 입력하거나 달력에서 선택해주세요.');
+    setStatus('결제일을 YYYY-MM-DD 또는 YYYYMMDD 형식으로 입력하거나 달력에서 선택해주세요.', true);
     return;
   }
   if(!amountRaw || !desc){
-    setStatus('금액과 내용은 필수입니다.');
+    setStatus('금액과 내용은 필수입니다.', true);
     return;
   }
   // 회계연도와 다른 연도(전년도 등) 날짜도 입력 가능하도록 허용
   if(date > fyEnd(currentYear)){
-    setStatus(`${currentYear} 회계연도 이후 날짜는 입력할 수 없습니다.`);
+    setStatus(`${currentYear} 회계연도 이후 날짜는 입력할 수 없습니다.`, true);
     return;
   }
 const amount = Number(amountRaw);
 if(!Number.isFinite(amount) || !Number.isInteger(amount) || amount===0){
-  setStatus('금액은 0이 아닌 정수로 입력해주세요. 환불·반환은 음수로 입력합니다.');
+  setStatus('금액은 0이 아닌 정수로 입력해주세요. 환불·반환은 음수로 입력합니다.', true);
   return;
 }
   if(!classification || !hasAccount(currentGubun==='수입' ? 'income' : 'expense',classification)){
-    setStatus('예산 관리에서 등록된 목을 선택해주세요.');
+    setStatus('예산 관리에서 등록된 목을 선택해주세요.', true);
     return;
   }
      const month = (parseInt(date.split('-')[1],10)) + '월';
@@ -5052,7 +5066,7 @@ if(!Number.isFinite(amount) || !Number.isInteger(amount) || amount===0){
       return;
     }
     clearEntryForm();
-    setStatus('내역이 입력완료로 등록되었습니다.');
+    setStatus('내역이 입력 내역으로 등록되었습니다.');
   }
   renderReport();
   renderEntryView();
