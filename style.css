@@ -1,0 +1,649 @@
+    /* 1. 최상단으로 옮겨 문법 오류의 영향을 받지 않게 만듭니다 */
+.version-tag {
+  position: fixed;            /* 화면 좌측 최상단에 절대 고정 */
+  top: 12px;
+  left: 12px;
+  z-index: 9999;              /* 다른 요소에 가려지지 않도록 최상단 레이어 설정 */
+  
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 11px;
+  font-weight: 700;           /* 글자 두껍게 */
+  letter-spacing: 0.5px;
+  text-transform: none;       /* 소문자 유지 */
+  
+    color: #ffffff !important;             
+  opacity: 1 !important;                 
+  
+  background-color: rgba(255, 255, 255, 0.15) ;
+  border: 1px solid rgba(255, 255, 255, 0.25); /* 은은한 흰색 테두리 */
+  border-radius: 4px;
+  padding: 3px 8px;
+  
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15); /* 살짝 그림자 효과를 주어 부각 */
+}
+
+  
+  :root{
+  --navy:#3B4953; --navy-2:#5A7863;
+  --paper:#EBF4DD; --paper-2:#F7FAF2;
+  --gold:#90AB8B; --gold-soft:#D5E3CB;
+  --income:#5A7863; --income-row:#E3EED8; --expense:#3B4953;
+  --ink:#3B4953; --ink-soft:#5A7863; --line:#CFDDC3;
+}
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+body, button, input, select, textarea, table { font-family:'Pretendard',sans-serif; }
+body { background-color:var(--paper); color:var(--ink); }
+  .wrap{max-width:1040px;margin:0 auto;padding:0 24px 80px;}
+  header.masthead{
+    max-width:none;width:100%;margin:0;
+    background:linear-gradient(180deg, var(--navy) 0%, var(--navy-2) 100%);
+    color:var(--paper-2); padding:44px 24px 28px; position:relative;
+  }
+  header.masthead::after{ display:none; }
+  .masthead-inner{max-width:1040px;margin:0 auto;}
+  .org{font-size:17px;letter-spacing:.02em;color:var(--gold-soft);font-weight:500;margin:0 0 10px;}
+  h1.title{font-family:'Pretendard',sans-serif;font-weight:800;font-size:clamp(24px,4vw,36px);line-height:1.25;margin:0 0 20px;max-width:none;}
+  .budget-orphan-row td{color:var(--expense);font-weight:700;}
+  .tabs-sticky{
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    background: var(--navy);
+    border-bottom: 4px solid var(--gold);
+    box-shadow: 0 4px 12px rgba(17,45,78,.12);
+  }
+  .tabs-inner{max-width:1040px;margin:0 auto;padding:0 16px;}
+  nav.tabs{
+    display:flex;gap:2px;margin:0;
+    overflow-x:auto;-webkit-overflow-scrolling:touch;
+    flex-wrap:nowrap;scrollbar-width:none;
+  }
+  nav.tabs::-webkit-scrollbar{display:none;}
+  .tab-btn{
+    background:rgba(249,247,247,.08); border:none; color:var(--paper);
+    font-family:'Pretendard',sans-serif; font-size:14.5px; font-weight:500;
+    padding:12px 18px; cursor:pointer; border-radius:6px 6px 0 0;
+    flex:0 0 auto; white-space:nowrap;
+  }
+  .tab-btn.active{background:var(--paper); color:var(--navy); font-weight:700;}
+  .type-budget-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 14px;}
+  .type-budget-summary-item{padding:12px;background:var(--paper-2);border:1px solid var(--line);text-align:center;}
+  .type-budget-summary-label{display:block;color:var(--ink-soft);font-size:13px;margin-bottom:6px;}
+  .type-budget-summary-values{font-weight:700;line-height:1.6;}
+  .hierarchy-summary-difference{font-weight:700;}
+  .hierarchy-summary-difference.mismatch{color:var(--expense);}
+  @media(max-width:600px){.type-budget-summary{grid-template-columns:1fr;}}
+
+
+
+  .view{display:none;}
+  .view.active{display:block;}
+
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-top:32px;}
+  .stat{background:var(--paper-2);padding:22px 20px;}
+  .stat .label{font-size:13px;color:var(--ink-soft);margin:0 0 8px;}
+  .stat .value{font-family:'Pretendard',sans-serif;font-weight:700;font-size:clamp(19px,2.4vw,25px);margin:0;}
+  .stat .value.income{color:var(--income);} .stat .value.expense{color:var(--expense);}
+  .stat .sub{font-size:12px;color:var(--ink-soft);margin-top:6px;}
+  .balance-check{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:end;}
+  .balance-check .field{min-width:0;}
+  .balance-check-result{grid-column:1/-1;padding:14px 16px;background:var(--paper);color:var(--ink);font-size:14px;font-weight:700;}
+  .balance-check-result.match{background:var(--paper);color:var(--income);}
+  .balance-check-result.mismatch{background:#b42318;border:1px solid #7a271a;border-left:6px solid #7a271a;color:#fff;}
+  .balance-check-result.unset{background:var(--paper-2);color:var(--ink-soft);}
+  .staff-table-scroll{overflow-x:auto;border:1px solid var(--line);background:var(--paper-2);}
+  .staff-table{width:100%;min-width:560px;border-collapse:collapse;font-size:14px;}
+  .staff-table th{background:var(--navy);color:var(--paper-2);font-weight:700;text-align:center;padding:10px 8px;}
+  .staff-table td{padding:6px 8px;vertical-align:middle;border-bottom:1px solid var(--line);}
+  .staff-table td+td{border-left:1px solid var(--line);}
+  .staff-table tbody tr:hover{background:var(--paper);}
+  .staff-table input[type=text]{width:100%;box-sizing:border-box;border:1px solid var(--line);padding:7px 8px;font:inherit;background:var(--paper-2);}
+  .staff-table .staff-name-cell{font-weight:700;white-space:nowrap;}
+  .staff-table .staff-actions{white-space:nowrap;text-align:center;}
+  .staff-table .btn-primary{padding:6px 12px;font-size:13px;}
+  @media (max-width:760px){.balance-check{grid-template-columns:1fr;}}
+
+  section{margin-top:56px;}
+  .sec-head{display:flex;align-items:baseline;gap:12px;border-bottom:2px solid var(--navy);padding-bottom:10px;margin-bottom:22px;}
+  .sec-num{font-family:'Pretendard',sans-serif;font-weight:700;color:var(--gold);font-size:15px;}
+  h2{font-family:'Pretendard',sans-serif;font-weight:700;font-size:21px;margin:0;}
+  p.sec-desc{color:var(--ink-soft);font-size:14px;margin:0 0 20px;max-width:64ch;}
+
+  .card{background:var(--paper-2);border:1px solid var(--line);padding:24px;}
+  .chart-box{position:relative;height:300px;}
+  .chart-box.tall{height:400px;}
+  .two-col{display:grid;grid-template-columns:1.3fr 1fr;gap:20px;}
+  @media (max-width:760px){ .two-col{grid-template-columns:1fr;} .stats{grid-template-columns:1fr;} .form-grid{grid-template-columns:1fr !important;} .form-grid > .field,.form-grid > .field.span2,.form-grid > .field.span3{grid-column:1 / -1 !important;min-width:0;} }
+
+  table{width:100%;border-collapse:collapse;font-size:14px;}
+  .table-scroll{max-height:880px;overflow-y:auto;overflow-x:auto;position:relative;}
+  thead th,.table-scroll thead th,.hierarchy-table th{
+    background:var(--navy);color:var(--paper-2);font-weight:700;text-align:center;
+    border-top:1px solid var(--navy-2);border-bottom:3px solid var(--navy-2);
+  }
+  .table-scroll thead th{position:sticky;top:0;z-index:2;box-shadow:0 2px 5px rgba(17,45,78,.14);}
+  .transaction-table-scroll{overflow-x:auto;}
+  .entry-table-container{position:relative;}
+ 
+  .transaction-table{width:100%;min-width:0;table-layout:fixed;}
+  .transaction-table th,.transaction-table td{overflow-wrap:anywhere;vertical-align:middle;}
+  .transaction-table th{white-space:normal;word-break:keep-all;}
+  .transaction-table td:first-child{white-space:nowrap;}
+  .entry-table{min-width:0;width:100%;}
+  .income-row{background:var(--income-row);}
+  .expense-row{background:var(--paper-2);}
+  .entry-table .col-date{width:11%;}
+  .entry-table .col-type{width:6%;}
+  .entry-table .col-description{width:14%;}
+  .entry-table .col-mok{width:10%;}
+  .entry-table .col-payee{width:9%;}
+  .entry-table .col-spender{width:8%;}
+  .entry-table .col-amount{width:10%;}
+  .entry-table .col-status{width:10%;}
+  .entry-table .col-mgmt{width:10%;}
+  .entry-table .col-actions{width:12%;}
+  .transaction-table .col-date{width:15%;}
+  .transaction-table .col-type{width:6%;}
+  .transaction-table .col-description{width:13%;}
+  .transaction-table .col-mok{width:10%;}
+  .transaction-table .col-payee{width:9%;}
+  .transaction-table .col-spender{width:9%;}
+  .transaction-table .col-amount{width:11%;}
+  .transaction-table .col-status{width:14%;}
+  .transaction-table .col-actions{width:12%;}
+  .transaction-table td.num{white-space:nowrap;}
+  .entry-table td:nth-child(8){white-space:nowrap;}
+  .entry-table td.col-actions-cell,
+  .entry-table th.col-actions-head{
+    text-align:center; vertical-align:middle;
+  }
+  .entry-table td.col-actions-cell .action-row{
+    justify-content:center;
+  }
+  tfoot tr{background:#e9eef4;font-weight:700;}
+  tfoot th,tfoot td{border-top:2px solid var(--navy-2);vertical-align:middle;}
+  .report-total-row{background:#e9eef4;font-weight:700;}
+  .hierarchy-total-row{font-weight:700;background:#e9eef4;}
+  .hierarchy-total-label{text-align:center;font-weight:700;}
+  .hierarchy-total-value{text-align:right;font-weight:700;white-space:nowrap;}
+  .hierarchy-total-message{text-align:center;font-weight:700;}
+  .hierarchy-total-mismatch td{background:#f8e1df;color:var(--expense);font-weight:700;}
+  .status-approved,.status-confirmed{background:var(--income-row);color:var(--navy);}
+  .report-transaction-table{min-width:0;width:100%;table-layout:fixed;}
+  .report-transaction-table th,.report-transaction-table td{overflow-wrap:anywhere;word-break:keep-all;white-space:normal;}
+  .report-transaction-table .col-date{width:14%;}
+  .report-transaction-table .col-description{width:18%;}
+  .report-transaction-table .col-mok{width:12%;}
+  .report-transaction-table .col-payee{width:14%;}
+  .report-transaction-table .col-amount{width:12%;}
+  .report-transaction-table td:last-child,
+  .report-transaction-table th:last-child{width:14%;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+/* 보고서 탭 스타일 예시 */
+.report-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 15px;
+}
+.report-tab-btn {
+  padding: 8px 14px;
+  border: 1px solid var(--navy-2, #1b263b);
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.report-tab-btn:hover, .report-tab-btn.active {
+  background: var(--navy, #0d1b2a);
+  color: #fff;
+}
+.badge-closed {
+  background: #e0e0e0;
+  color: #424242;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+  @media (max-width:600px){
+    .transaction-table th,.transaction-table td{padding:6px 3px;font-size:12px;}
+    .transaction-table td.num{font-size:11px;white-space:normal;}
+    .entry-table .col-date{width:15%;}
+    .entry-table .col-type{width:6%;}
+    .entry-table .col-description{width:13%;}
+    .entry-table .col-mok{width:10%;}
+    .entry-table .col-payee{width:9%;}
+    .entry-table .col-spender{width:9%;}
+    .entry-table .col-amount{width:11%;}
+    .entry-table .col-status{width:15%;}
+    .entry-table .col-actions{width:12%;}
+  }
+  th,td{text-align:center;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th+th,td+td{border-left:1px solid var(--line);}
+  thead th+th{border-left-color:rgba(219,226,239,.42);}
+  th{color:var(--ink-soft);font-weight:500;font-size:14px;text-align:center;}
+  .field label{font-size:14px;color:var(--ink-soft);}
+  .date-entry-control{position:relative;display:flex;gap:8px;align-items:stretch;width:100%;min-width:0;}
+  .date-entry-control input[type="text"]{flex:1 1 auto;min-width:0;}
+  /* 달력 input: 버튼 위에 투명 오버레이로 모바일에서도 네이티브 피커 동작 */
+  .date-entry-control .date-picker-native{
+    -webkit-appearance:none;appearance:none;
+    position:absolute;right:0;top:0;bottom:0;left:auto;
+    width:64px;min-width:0;max-width:64px;height:100%;
+    opacity:0.011;border:0;padding:0;margin:0;background:transparent;
+    font-size:16px;z-index:2;cursor:pointer;box-sizing:border-box;
+  }
+  .date-picker-button{flex:0 0 64px;width:64px;border:1px solid var(--line);background:var(--paper-2);color:var(--navy);padding:0 8px;font:inherit;font-size:14px;line-height:1.2;cursor:pointer;position:relative;z-index:1;white-space:nowrap;}
+  td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  th.num{text-align:center;}
+  tr:last-child td{border-bottom:none;}
+  .bar-track{background:var(--paper);height:8px;overflow:hidden;margin-top:6px;}
+  .bar-fill{height:100%;background:var(--expense);}
+
+  .filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+  .filter-btn{border:1px solid var(--line);background:var(--paper-2);padding:7px 14px;font-size:13px;font-family:'Pretendard',sans-serif;color:var(--ink-soft);cursor:pointer;}
+  .filter-btn.active{background:var(--navy);border-color:var(--navy);color:var(--paper-2);}
+  .tag{display:inline-block;font-size:11px;padding:2px 7px;background:var(--paper);color:var(--navy);border:1px solid var(--gold-soft);margin-top:3px;}
+  .table-scroll .tag{font-size:14px;}
+  .count-note{font-size:14px;color:var(--ink-soft);margin-top:10px;}
+
+  .notice{
+    background:var(--paper); border:1px solid var(--gold-soft); color:var(--navy);
+    font-size:14px; padding:12px 16px; margin-bottom:20px;
+  }
+
+.year-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 4px;}
+.year-bar label{color:var(--gold-soft);font-size:14px;}
+#year-select{padding:7px 12px;font-size:14px;font-weight:700;background:var(--paper-2);color:var(--navy);border:none;border-radius:6px;cursor:pointer;}
+#fy-range{font-size:14px;color:var(--paper);}
+.auth-bar{display:flex;align-items:center;gap:10px;justify-content:flex-end;margin-top:0;}
+.auth-bar span{font-size:12.5px;color:var(--paper);}
+.btn-auth{background:var(--paper-2);color:var(--navy);border:0;border-radius:4px;padding:8px 12px;font-weight:700;cursor:pointer;}
+.auth-gate{max-width:560px;margin:56px auto;padding:28px;background:var(--paper-2);border:1px solid var(--line);text-align:center;}
+.auth-gate h2{margin-bottom:12px;}
+.auth-gate p{color:var(--ink-soft);line-height:1.7;}
+.auth-gate code{overflow-wrap:anywhere;}
+.hidden{display:none!important;}
+
+  /* form */
+  .form-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:18px;}
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field.span2{grid-column:span 2;}
+  .field.span3{grid-column:span 3;}
+  label{font-size:14px;color:var(--ink);}
+  select{border:1px solid var(--line);padding:9px 10px;font-size:14px;background:var(--paper-2);font-family:'Pretendard',sans-serif;}
+  input[type=text], input[type=date], input[type=number]{
+    border:1px solid var(--line); padding:9px 10px; font-size:14px;
+    font-family:'Pretendard',sans-serif; background:var(--paper-2);
+  }
+  .hierarchy-toolbar{display:flex;justify-content:flex-end;margin:0 0 10px;}
+  .hierarchy-table-scroll{max-height:65vh;overflow:auto;border:1px solid var(--line);background:var(--paper-2);}
+  .hierarchy-table{width:100%;min-width:760px;border-collapse:collapse;}
+  .hierarchy-table th{position:sticky;top:0;z-index:1;background:var(--navy);padding:10px;text-align:center;font-size:14px;}
+  .hierarchy-table td{padding:6px 8px;vertical-align:middle;}
+  .hierarchy-table .del-btn{font-size:14px;}
+  .hierarchy-table tbody tr:hover{background:var(--paper);}
+  .hierarchy-table select,.hierarchy-table input{box-sizing:border-box;width:100%;min-width:0;}
+  .hierarchy-table .hierarchy-category-type{
+    appearance:none;-webkit-appearance:none;padding:9px 26px 9px 7px;text-align-last:center;
+    background-image:linear-gradient(45deg,transparent 50%,var(--ink-soft) 50%),linear-gradient(135deg,var(--ink-soft) 50%,transparent 50%);
+    background-position:calc(100% - 13px) 50%,calc(100% - 8px) 50%;
+    background-size:5px 5px;background-repeat:no-repeat;
+  }
+  .hierarchy-table tbody td:not(:nth-child(5)) input,.hierarchy-table tbody td:not(:nth-child(5)) select{text-align:center;}
+  .hierarchy-table .hierarchy-item-budget{text-align:right;}
+  .budget-report-table{min-width:900px;}
+  .hierarchy-table .hierarchy-row-delete{white-space:nowrap;}
+  .hierarchy-save-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;}
+  input:focus{outline:2px solid var(--navy); outline-offset:-1px;}
+  .gubun-toggle{
+    display:flex; border:1px solid var(--line); overflow:hidden;
+    width:100%; min-width:160px; box-sizing:border-box;
+  }
+  .gubun-toggle button{
+    flex:1 1 50%; width:50%; min-width:0; border:none; padding:9px 10px;
+    background:var(--paper-2); cursor:pointer; box-sizing:border-box;
+    font-family:'Pretendard',sans-serif; font-size:14px; font-weight:500; color:var(--ink-soft);
+  }
+  .gubun-toggle button.on-income.selected{background:var(--income-row);color:var(--navy);font-weight:700;}
+  .gubun-toggle button.on-expense.selected{background:var(--expense); color:var(--paper-2);font-weight:700;}
+
+  .btn-primary{
+    background:var(--navy); color:var(--paper-2); border:none; padding:11px 22px;
+    font-family:'Pretendard',sans-serif; font-size:14.5px; font-weight:700; cursor:pointer;
+  }
+  .btn-primary:hover{background:var(--navy-2);}
+  .btn-primary.btn-soft{
+    background:var(--gold-soft); color:var(--navy); border:1px solid var(--line);
+  }
+  .btn-primary.btn-soft:hover{background:var(--gold); color:var(--paper-2);}
+  .btn-text{background:none;border:none;color:var(--ink-soft);text-decoration:underline;cursor:pointer;font-size:13px;padding:0;}
+  .del-btn{background:none;border:1px solid var(--line);color:var(--expense);font-size:14px;padding:4px 9px;cursor:pointer;}
+  .del-btn:hover{background:var(--paper);}
+  .locked-note{font-size:14px;color:var(--ink-soft);}
+
+  .status-badge{display:inline-block;font-size:14px;padding:2px 8px;border-radius:2px;font-weight:700;}
+  .management-number{display:block;margin-top:4px;color:var(--ink-soft);font-size:11px;line-height:1.35;}
+  .status-paid{background:var(--income-row);color:var(--navy);}
+  .status-input-complete{background:var(--paper-2);color:var(--navy-2);}
+  .status-submitted{background:var(--paper);color:var(--navy);}
+  .status-rejected{background:#f8e1df;color:var(--expense);}
+
+  .action-row{display:flex;gap:6px;flex-wrap:wrap;}
+  .btn-approve{background:var(--income);color:var(--paper-2);border:none;font-size:14px;padding:5px 10px;cursor:pointer;}
+  .btn-reject{background:none;border:1px solid var(--expense);color:var(--expense);font-size:14px;padding:4px 9px;cursor:pointer;}
+  .btn-revert{background:none;border:1px solid var(--line);color:var(--ink-soft);font-size:14px;padding:4px 9px;cursor:pointer;}
+
+  .pending-box{border:1px solid var(--line);background:var(--paper-2);margin-bottom:22px;}
+  .pending-section .sec-head{margin-bottom:0;}
+  .pending-count{background:var(--gold);color:var(--paper-2);border-radius:10px;font-size:12px;padding:1px 9px;margin-left:8px;}
+  .pending-empty{padding:18px;color:var(--ink-soft);font-size:14px;}
+  .pending-transaction-table{table-layout:fixed;}
+  .pending-transaction-table th{text-align:center;}
+  .pending-transaction-table tbody td:not(.num){text-align:center;}
+  .pending-transaction-table .action-row{justify-content:center;}
+  .pending-transaction-table .col-date{width:12%;}
+  .pending-transaction-table .col-type{width:8%;}
+  .pending-transaction-table .col-description{width:20%;}
+  .pending-transaction-table .col-mok{width:14%;}
+  .pending-transaction-table .col-payee{width:14%;}
+  .pending-transaction-table .col-amount{width:12%;}
+  .pending-transaction-table .col-actions{width:20%;}
+  .workflow-stage{padding:16px;border-bottom:1px solid var(--line);}
+  .workflow-stage:last-child{border-bottom:0;}
+  .workflow-stage h3{font-size:16px;margin:0 0 12px;}
+  .workflow-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
+  .workflow-actions .lbl-short{display:none;}
+  .workflow-select{text-align:center!important;width:44px;}
+  .workflow-index{text-align:center!important;width:56px;}
+.workflow-summary{margin:12px 0 0;padding:10px 14px;background:var(--paper);color:var(--navy);font-weight:700;font-size:14px;}
+.workflow-summary.warn{background:#f8e1df;color:var(--expense);}
+  .submitted-group-row:hover{background:var(--paper);}
+  .submitted-group-detail td{border-bottom:1px solid var(--line);}
+  #save-status.status-error{display:inline-block;margin:8px 0 0;padding:8px 12px;background:#b42318;border:1px solid #7a271a;border-left:5px solid #7a271a;color:#fff;font-weight:700;}
+  dialog.payment-report-dialog{width:min(900px,calc(100% - 32px));max-height:90vh;padding:0;border:1px solid var(--line);color:var(--ink);}
+  dialog.payment-report-dialog::backdrop{background:rgba(17,45,78,.55);}
+  .payment-dialog-header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:var(--navy);color:var(--paper-2);}
+  .payment-dialog-header h2{font-size:18px;}
+  .payment-dialog-body{padding:24px;overflow:auto;max-height:65vh;}
+  .payment-dialog-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;padding:14px 20px;border-top:1px solid var(--line);}
+  .payment-report-sheet{box-sizing:border-box;width:100%;max-width:794px;margin:0 auto;padding:30px;background:#fff;color:#182b40;font-family:'Pretendard',sans-serif;font-size:12px;}
+  .payment-report-document{width:100%;table-layout:fixed;border-collapse:collapse;border:1px solid #26394d;font-size:12px;}
+  .payment-report-document th,.payment-report-document td{border:1px solid #26394d;padding:7px 6px;vertical-align:middle;font-size:12px;line-height:1.5;}
+  .payment-report-document th{background:#f2f5f8;color:#26394d;font-weight:700;text-align:center;white-space:nowrap;}
+  .payment-report-management-cell{padding:0!important;background:#f2f5f8;}
+  .payment-report-management{display:flex;justify-content:space-between;gap:12px;padding:8px 12px;font-size:12px;}
+  .payment-report-management strong{white-space:nowrap;}
+  .payment-report-header{display:grid;grid-template-columns:minmax(0,1fr) 180px;gap:14px;align-items:center;page-break-inside:avoid;break-inside:avoid;}
+  .payment-report-sheet h1{font-size:22px;line-height:1.35;margin:4px 0;text-align:center;}
+  .payment-approval-grid{display:grid;grid-template-columns:1fr 1fr;border:1px solid #26394d;min-height:76px;}
+  .payment-approval-cell{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:7px 4px;border-left:1px solid #26394d;text-align:center;}
+  .payment-approval-cell:first-child{border-left:0;}
+  .payment-approval-cell span{font-size:12px;}
+  .payment-approval-signature{width:100%;height:42px;}
+  .payment-approval-stamp{position:absolute;top:24px;left:50%;width:max-content;max-width:140px;transform:translateX(-50%) rotate(-9deg);border:3px double #b42318;color:#b42318;padding:5px 8px;font-weight:800;font-size:12px;line-height:1.4;text-align:center;background:rgba(255,255,255,.82);}
+  .payment-approval-stamp small{font-size:10px;}
+  .approved-status {
+    color: #2E7D32;
+    font-weight: bold;
+  }
+  .approved-status {
+    color: #2E7D32;
+    font-weight: bold;
+  }
+  .payment-report-title-cell{padding:10px 12px!important;}
+  .payment-report-section-title{text-align:center;font-weight:700;letter-spacing:.18em;background:#e9eef4;}
+  .payment-report-document .report-seq{width:7%;}
+  .payment-report-document .report-date{width:16%;white-space:nowrap;}
+  .payment-report-document .report-description{width:30%;}
+  .payment-report-document .report-payee{width:20%;}
+  .payment-report-document .report-amount{width:14%;white-space:nowrap;}
+  .payment-report-document .report-note{width:13%;}
+  .payment-report-document .report-row td{text-align:center;overflow-wrap:anywhere;}
+  .payment-report-document .report-row td.report-amount,.payment-report-document .report-total-amount{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .payment-report-document tfoot td{font-weight:700;background:#faf8f2;}
+  .payment-report-document .report-total-label{text-align:center!important;}
+  .payment-report-receipts{margin-top:12px;page-break-inside:avoid;break-inside:avoid;}
+  .payment-report-receipts strong{display:block;margin-bottom:6px;}
+  .payment-report-receipt-box{height:125px;border:1px solid #26394d;}
+  .payment-report-note{margin:9px 0 0;color:#64748b;font-size:12px;line-height:1.5;}
+  .payment-report-sheet .report-row{page-break-inside:avoid;break-inside:avoid;}
+  @media(max-width:650px){
+    .payment-report-sheet{padding:16px;}
+    .payment-report-header{grid-template-columns:minmax(0,1fr) 150px;gap:8px;}
+    .payment-report-sheet h1{font-size:18px;}
+    .payment-report-document th,.payment-report-document td{padding:5px 3px;font-size:11px;overflow-wrap:anywhere;}
+  }
+
+  #save-status{font-size:14px;color:var(--ink-soft);margin-left:14px;}
+  #budget-save-status{font-size:14px;}
+
+  footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-soft);display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  @media (max-width:600px){.hierarchy-table-scroll{max-height:70vh;}}
+  .usage-box{margin-top:14px;padding:12px 14px;background:rgba(249,247,247,.10);border:1px solid rgba(219,226,239,.35);}
+.usage-head,.usage-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--paper);}
+.usage-head strong{color:var(--paper-2);font-weight:700;}
+.usage-track{height:12px;background:rgba(249,247,247,.2);margin:8px 0;overflow:hidden;}
+.usage-fill{height:100%;width:0;background:var(--paper);transition:width .4s,background .4s;}
+.usage-fill.warn{background:#f2c14e;}
+.usage-fill.danger{background:#e5484d;}
+  #quota-countdown{margin:16px 0;padding:14px 16px;background:var(--paper);border-left:5px solid var(--navy);color:var(--navy);font-weight:700;line-height:1.7;}
+#quota-countdown .quota-time{display:block;font-size:26px;font-variant-numeric:tabular-nums;margin:4px 0;}
+#quota-countdown small{font-weight:400;color:var(--ink-soft);}
+#auth-gate-message{white-space:pre-line;}
+/* 로그인 상태/오류 알림 텍스트 숨김 */
+#auth-status {
+  display: none !important;
+}
+  
+/* 차트를 감싸는 기존 박스 클래스 스타일 적용 */
+.chart-box {
+  position: relative;
+  width: 100%;
+  height: 380px; /* PC 기본 높이 */
+}
+
+/* 세로로 긴 차트 박스 (tall) 전용 높이 */
+.chart-box.tall {
+  height: 420px;
+}
+
+/* 모바일 화면에서는 차트 높이를 줄여서 범례와 한 화면에 오도록 조정 */
+@media (max-width: 767px) {
+  .chart-box,
+  .chart-box.tall {
+    height: 280px; /* 모바일 높이 통일 */
+  }
+}
+/* 상태 열: 반려됨을 제외하고 음영 제거 */
+.status-paid,
+.status-input-complete,
+.status-submitted,
+.status-approved,
+.status-confirmed{background:none;}
+
+
+.version-tag {
+  font-family: 'Courier New', Courier, monospace; /* 개발자 감성 폰트 */
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--ink);
+  opacity: 0.6; /* 살짝 투명하게 처리하여 본문을 방해하지 않음 */
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  padding: 2px 6px;
+  background-color: rgba(0, 0, 0, 0.03); /* 아주 옅은 배경색 */
+}
+
+
+/* 💡 모바일 화면(768px 미만) 완벽 대응 대응 */
+html {
+  width: 100%;
+}
+
+body {
+  width: 100%;
+  max-width: 100%;
+  /* sticky 동작을 깨뜨리지 않으면서 가로 스크롤을 방지하는 현대적 속성 */
+  overflow-x: clip; 
+}
+
+@media (max-width: 767px) {
+  header.masthead{padding:28px 16px 20px;}
+  .wrap{padding:0 14px 64px;}
+  .tabs-inner{padding:0 8px;}
+  .tab-btn{padding:12px 14px;font-size:13.5px;}
+
+  .card, .sec-head, form, section {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .row > [class*="col-"],
+  .grid-2,
+  .two-col,
+  .form-row {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 0 0 100% !important;
+  }
+  .form-control, .form-select, .btn, input, select {
+    box-sizing: border-box !important;
+  }
+  .date-entry-control{display:flex !important;align-items:stretch !important;width:100% !important;}
+  .date-entry-control input[type="text"]{width:auto !important;flex:1 1 auto !important;min-width:0 !important;}
+  .date-entry-control .date-picker-button{width:64px !important;flex:0 0 64px !important;}
+  .date-entry-control .date-picker-native{width:64px !important;max-width:64px !important;padding:0 !important;border:0 !important;}
+
+  /* 보고서 표: 가로 스크롤만, 글자 세로 깨짐 방지 */
+  .report-transaction-table{
+    min-width:640px !important;
+    display:table !important;
+    white-space:normal !important;
+  }
+  .report-transaction-table thead{display:table-header-group !important;}
+  .report-transaction-table tr{display:table-row !important;}
+  .report-transaction-table th,.report-transaction-table td{
+    display:table-cell !important;
+    white-space:normal !important;
+  }
+  .report-transaction-table td:last-child{white-space:nowrap !important;font-size:11px;}
+
+  /* 결의 내역: 토스뱅크형 카드 목록 (횡스크롤 없음) */
+  #view-entry .entry-table-container,
+  #view-entry .transaction-table-scroll{
+    overflow-x:visible !important;
+  }
+  #view-entry .entry-table{
+    min-width:0 !important;
+    width:100% !important;
+    display:block !important;
+    border:none !important;
+  }
+  #view-entry .entry-table colgroup,
+  #view-entry .entry-table thead{display:none !important;}
+  #view-entry .entry-table tbody{display:block !important;}
+  #view-entry .entry-table tr{
+    display:block !important;
+    background:var(--paper-2);
+    border:1px solid var(--line);
+    border-radius:14px;
+    margin:0 0 10px;
+    padding:12px 14px;
+    box-shadow:0 1px 3px rgba(17,45,78,.06);
+  }
+  #view-entry .entry-table td{
+    display:none !important;
+    border:none !important;
+    padding:0 !important;
+    white-space:normal !important;
+    text-align:left !important;
+  }
+  /* 1결제일 3내용 4목 6담당자 7금액 8상태 10추가작업 */
+  #view-entry .entry-table td:nth-child(1),
+  #view-entry .entry-table td:nth-child(3),
+  #view-entry .entry-table td:nth-child(4),
+  #view-entry .entry-table td:nth-child(6),
+  #view-entry .entry-table td:nth-child(7),
+  #view-entry .entry-table td:nth-child(8),
+  #view-entry .entry-table td:nth-child(10){
+    display:block !important;
+  }
+  #view-entry .entry-table td:nth-child(1){
+    font-size:12px;color:var(--ink-soft);margin-bottom:4px;
+  }
+  #view-entry .entry-table td:nth-child(3){
+    font-size:16px;font-weight:700;margin-bottom:2px;
+  }
+  #view-entry .entry-table td:nth-child(4){
+    font-size:13px;color:var(--ink-soft);margin-bottom:6px;
+  }
+  #view-entry .entry-table td:nth-child(6){
+    font-size:13px;color:var(--ink-soft);margin-bottom:4px;
+  }
+  #view-entry .entry-table td:nth-child(6)::before{content:'담당 ';font-weight:500;}
+  #view-entry .entry-table td:nth-child(7){
+    font-size:18px;font-weight:800;margin:4px 0 8px;
+  }
+  #view-entry .entry-table td:nth-child(8){margin-bottom:8px;}
+  #view-entry .entry-table td:nth-child(10){
+    border-top:1px solid var(--line) !important;
+    padding-top:8px !important;
+  }
+  #view-entry .entry-table td.col-actions-cell .action-row{
+    justify-content:flex-start;gap:8px;flex-wrap:wrap;
+  }
+
+  /* 입력 내역·지급 대기 워크플로 표도 카드형 */
+  #view-entry .pending-transaction-table,
+  #view-entry .submitted-groups-table{
+    min-width:0 !important;width:100% !important;display:block !important;
+  }
+  #view-entry .pending-transaction-table thead,
+  #view-entry .submitted-groups-table thead{display:none !important;}
+  #view-entry .pending-transaction-table tbody,
+  #view-entry .submitted-groups-table tbody{display:block !important;}
+  #view-entry .pending-transaction-table tr,
+  #view-entry .submitted-groups-table tr{
+    display:block !important;
+    background:var(--paper-2);
+    border:1px solid var(--line);
+    border-radius:14px;
+    margin:0 0 10px;
+    padding:12px 14px;
+  }
+  #view-entry .pending-transaction-table td,
+  #view-entry .submitted-groups-table td{
+    display:block !important;
+    border:none !important;
+    white-space:normal !important;
+    text-align:left !important;
+    padding:2px 0 !important;
+  }
+  /* 지급 대기: 모바일에서는 묶음 요약만 표시하고 세부내역 행은 숨김 */
+  #view-entry .pending-transaction-table tr.submitted-group-detail,
+  #view-entry .submitted-groups-table tr.submitted-group-detail,
+  #view-entry .pending-transaction-table tr.submitted-group-detail.hidden{
+    display:none !important;
+  }
+  #view-entry .pending-transaction-table tr.submitted-group-row{cursor:default !important;}
+  .detail-hint{display:none;}
+  /* 워크플로 버튼: 크기 통일, 한 줄에 균등 배치 */
+  .workflow-actions{flex-wrap:nowrap !important;gap:8px !important;}
+  .workflow-actions button{
+    flex:1 1 0 !important;min-width:0;height:44px;padding:0 6px !important;
+    font-size:14.5px !important;font-weight:700;line-height:1.2;
+    display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;
+  }
+  .workflow-actions .lbl-full{display:none;}
+  .workflow-actions .lbl-short{display:inline;}
+} 
