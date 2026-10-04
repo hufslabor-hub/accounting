@@ -181,7 +181,7 @@ body { background-color:var(--paper); color:var(--ink); }
   .report-transaction-table .col-payee{width:14%;}
   .report-transaction-table .col-amount{width:12%;}
   .report-transaction-table td:last-child,
-  .report-transaction-table th:last-child{width:14%;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .report-transaction-table th:last-child{width:14%;white-space:normal;overflow-wrap:anywhere;word-break:break-all;}
 
 /* 보고서 탭 스타일 예시 */
 .report-tabs {
@@ -521,7 +521,7 @@ body {
     display:table-cell !important;
     white-space:normal !important;
   }
-  .report-transaction-table td:last-child{white-space:nowrap !important;font-size:11px;}
+  .report-transaction-table td:last-child{white-space:normal !important;word-break:break-all;}
 
   /* 결의 내역: 토스뱅크형 카드 목록 (횡스크롤 없음) */
   #view-entry .entry-table-container,
@@ -781,3 +781,40 @@ body {
 .mbr-total b{font-size:14px;}
 .mbr-empty{padding:18px 8px;text-align:center;color:var(--ink-soft);}
 .mbr-unit{margin:10px 2px 0;font-size:12px;color:var(--ink-soft);}
+
+/* 월별 누적 보고서 안으로 옮긴 총 수입·총 지출·현재 잔액 */
+#report-totals.stats{margin-top:12px;margin-bottom:16px;}
+.report-tabs-empty{margin:0;color:var(--ink-soft);font-size:14px;}
+
+/* 자주 쓰는 지출 템플릿 */
+.quick-template-container{margin-bottom:12px;}
+.qt-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;}
+.qt-title{font-size:13px;font-weight:700;}
+.qt-buttons{display:contents;}
+.qt-btn{min-height:36px;padding:6px 12px;font-size:14px;font-weight:600;color:var(--ink);background:var(--paper-2);border:1.5px solid var(--line);border-radius:999px;cursor:pointer;}
+.qt-btn:hover{border-color:var(--navy);}
+.qt-empty{font-size:13px;color:var(--ink-soft);}
+.qt-editor{margin-top:10px;padding:12px;background:var(--paper-2);border:1px solid var(--line);}
+.qt-note{margin:0 0 10px;font-size:13px;color:var(--ink-soft);}
+.qt-item{margin-bottom:10px;padding:10px;background:var(--paper);border:1px solid var(--line);}
+.qt-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+.qt-grid > *{min-width:0;}
+.qt-grid .span2{grid-column:1 / -1;}
+.qt-grid label{display:block;margin:0 0 3px;font-size:12px;color:var(--ink-soft);}
+.qt-grid input,.qt-grid select{width:100%;min-width:0;}
+.qt-item-foot{display:flex;justify-content:flex-end;margin-top:8px;}
+.qt-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-top:6px;}
+.qt-spacer{flex:1;}
+@media (max-width:600px){
+  .qt-grid{grid-template-columns:minmax(0,1fr);}
+  .qt-btn{min-height:40px;}
+}
+
+/* 모바일: 총 수입·총 지출·현재 잔액을 한 줄 3칸으로 (세로로 길어지지 않게) */
+@media (max-width:760px){
+  #report-totals.stats{grid-template-columns:repeat(3,minmax(0,1fr));}
+  #report-totals .stat{padding:10px 6px;text-align:center;}
+  #report-totals .stat .label{font-size:11px;margin-bottom:4px;}
+  #report-totals .stat .value{font-size:14px;overflow-wrap:anywhere;}
+  #report-totals .stat .sub{font-size:10px;margin-top:4px;}
+}

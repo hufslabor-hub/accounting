@@ -257,36 +257,186 @@ function stopSharedDataWatchers(){
 }
 
 
-// JavaScript: 템플릿 데이터 정의 및 폼 자동 채우기 함수
-const QUICK_TEMPLATES = {
-  '중집활동비': {
-    type: '지출',
-    account: '지출합계',
-    hang: '운영비',
-    mok: '회의비',
-    desc: '중앙집행위원회 정기회의 활동비',
-    payee: '중집위 대표',
-    staff: '담당자'
-  },
-  '생일사업': {
-    type: '지출',
-    account: '지출합계',
-    hang: '사업비',
-    mok: '복지사업비',
-    desc: '조합원 정기 생일 축하 상품권 지급',
-    payee: '조합원 일동',
-    staff: '복지부장'
-  },
-  '차량유류비': {
-    type: '지출',
-    account: '지출합계',
-    hang: '운영비',
-    mok: '여비교통비',
-    desc: '노조 업무 차량 유류비 지급',
-    payee: '주유소',
-    staff: '총무부장'
+// ---------- 자주 쓰는 지출 템플릿 ----------
+// 사용: 로그인한 모든 담당자 / 설정: allowedUsers 문서에 canManageTemplates: true 가 있는 계정만
+const QUICK_TEMPLATES_KEY = 'quick-templates:list';
+const MAX_QUICK_TEMPLATES = 20;
+const DEFAULT_QUICK_TEMPLATES = [
+  {id:'default-1', name:'중집 활동비', cls:null, desc:'중앙집행위원회 정기회의 활동비', payee:'중집위 대표', spender:'', amount:''},
+  {id:'default-2', name:'생일 축하 사업', cls:null, desc:'조합원 정기 생일 축하 상품권 지급', payee:'조합원 일동', spender:'', amount:''},
+  {id:'default-3', name:'업무용 유류비', cls:null, desc:'노조 업무 차량 유류비 지급', payee:'주유소', spender:'', amount:''}
+];
+let quickTemplates = DEFAULT_QUICK_TEMPLATES.map(t=>({...t}));
+let currentPermissions = {manageTemplates:false};
+let templateDraft = [];
+
+function normalizeQuickTemplates(list){
+  if(!Array.isArray(list)) return [];
+  const text = (v,max)=>String(v==null?'':v).trim().slice(0,max);
+  return list.slice(0,MAX_QUICK_TEMPLATES).map((t,i)=>{
+    if(!t || typeof t!=='object') return null;
+    const name = text(t.name,20);
+    if(!name) return null;
+    const cls = t.cls && typeof t.cls==='object' && t.cls.mok
+      ? {gwan:text(t.cls.gwan,80),hang:text(t.cls.hang,80),mok:text(t.cls.mok,80)}
+      : null;
+    return {
+      id:text(t.id,40) || ('t'+i+Date.now().toString(36)),
+      name, cls,
+      desc:text(t.desc,100), payee:text(t.payee,60), spender:text(t.spender,30),
+      amount:/^-?\d+$/.test(text(t.amount,15)) ? text(t.amount,15) : ''
+    };
+  }).filter(Boolean);
+}
+
+function renderQuickTemplates(){
+  const holder = document.getElementById('quick-template-buttons');
+  if(!holder) return;
+  holder.replaceChildren();
+  if(!quickTemplates.length){
+    const empty = document.createElement('span');
+    empty.className = 'qt-empty';
+    empty.textContent = currentPermissions.manageTemplates ? '등록된 템플릿이 없습니다. ⚙ 템플릿 설정에서 추가하세요.' : '등록된 템플릿이 없습니다.';
+    holder.appendChild(empty);
   }
-};
+  quickTemplates.forEach(t=>{
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'qt-btn';
+    btn.dataset.templateId = t.id;
+    btn.textContent = t.name;
+    holder.appendChild(btn);
+  });
+  const manage = document.getElementById('btn-template-manage');
+  if(manage) manage.classList.toggle('hidden', !currentPermissions.manageTemplates);
+  if(!currentPermissions.manageTemplates){
+    const editor = document.getElementById('template-editor');
+    if(editor) editor.classList.add('hidden');
+  }
+}
+
+function applyTemplate(id) {
+  const tpl = quickTemplates.find(t=>t.id===id);
+  if (!tpl) return;
+  if (editingEntryId) {
+    setStatus('내역을 수정하는 중에는 템플릿을 쓸 수 없습니다. 수정을 마치거나 취소한 뒤 사용해 주세요.', true);
+    return;
+  }
+  setGubun('지출');   // 지출 템플릿 (세부 계정과목 목록도 지출 기준으로 갱신)
+  let notice = '';
+  if (tpl.cls) {
+    const value = JSON.stringify({gwan:tpl.cls.gwan, hang:tpl.cls.hang, mok:tpl.cls.mok});
+    const select = document.getElementById('f-mok');
+    if (select && [...select.options].some(o=>o.value===value)) select.value = value;
+    else notice = ' 저장된 세부 계정과목이 현재 목록에 없어 직접 선택해 주세요.';
+  }
+  document.getElementById('f-desc').value = tpl.desc || '';
+  document.getElementById('f-payee').value = tpl.payee || '';
+  if (tpl.spender) document.getElementById('f-spender').value = tpl.spender;
+  document.getElementById('f-amount').value = tpl.amount || '';
+  setStatus(`'${tpl.name}' 템플릿을 불러왔습니다.${notice}`, !!notice);
+  // 금액이 이미 있으면 결제일로, 없으면 금액 입력칸으로 포커스
+  const el = document.getElementById(tpl.amount ? 'f-date' : 'f-amount');
+  if (el) el.focus();
+}
+
+function templateClassificationOptions(selectedValue){
+  const opts = ['<option value="">(선택 안 함)</option>'];
+  [...(accountCategories.expense||[])]
+    .sort((x,y)=>x.name.replace(/_관$/,'').localeCompare(y.name.replace(/_관$/,''),'ko'))
+    .forEach(gwan=>{
+      const items = gwan.accounts.flatMap(hang=>hang.items.map(mok=>({hang,mok})))
+        .filter(({mok})=>mok.trim()!=='대학노조회비')
+        .sort((x,y)=>x.mok.localeCompare(y.mok,'ko'));
+      if(!items.length) return;
+      opts.push('<optgroup label="'+escapeHTML(gwan.name.replace(/_관$/,''))+'">');
+      items.forEach(({hang,mok})=>{
+        const value = JSON.stringify({gwan:gwan.name,hang:hang.name,mok});
+        opts.push('<option value="'+escapeHTML(value)+'"'+(value===selectedValue?' selected':'')+'>'+escapeHTML(mok)+'</option>');
+      });
+      opts.push('</optgroup>');
+    });
+  return opts.join('');
+}
+
+function renderTemplateEditor(){
+  const list = document.getElementById('template-editor-list');
+  if(!list) return;
+  if(!templateDraft.length){
+    list.innerHTML = '<p class="qt-empty">템플릿이 없습니다. 아래에서 추가해 주세요.</p>';
+    return;
+  }
+  list.innerHTML = templateDraft.map((t,i)=>{
+    const clsValue = t.cls ? JSON.stringify({gwan:t.cls.gwan,hang:t.cls.hang,mok:t.cls.mok}) : '';
+    return '<div class="qt-item" data-index="'+i+'"><div class="qt-grid">'+
+      '<div><label>버튼 이름</label><input type="text" data-qt="name" maxlength="20" value="'+escapeHTML(t.name)+'" placeholder="예: 중집 활동비"></div>'+
+      '<div><label>세부 계정과목</label><select data-qt="cls">'+templateClassificationOptions(clsValue)+'</select></div>'+
+      '<div class="span2"><label>내용</label><input type="text" data-qt="desc" maxlength="100" value="'+escapeHTML(t.desc)+'"></div>'+
+      '<div><label>지급처</label><input type="text" data-qt="payee" maxlength="60" value="'+escapeHTML(t.payee)+'"></div>'+
+      '<div><label>담당자</label><input type="text" data-qt="spender" maxlength="30" list="staff-name-options" value="'+escapeHTML(t.spender)+'"></div>'+
+      '<div><label>금액(원, 비워도 됨)</label><input type="text" data-qt="amount" inputmode="numeric" maxlength="15" value="'+escapeHTML(t.amount)+'"></div>'+
+      '</div><div class="qt-item-foot"><button type="button" class="btn-text" data-qt-remove="'+i+'">이 템플릿 삭제</button></div></div>';
+  }).join('');
+}
+
+// 편집 중 입력값을 draft에 반영
+function collectTemplateDraft(){
+  document.querySelectorAll('#template-editor-list .qt-item').forEach(item=>{
+    const i = Number(item.dataset.index);
+    const t = templateDraft[i];
+    if(!t) return;
+    const val = key => item.querySelector('[data-qt="'+key+'"]').value;
+    t.name = val('name'); t.desc = val('desc'); t.payee = val('payee'); t.spender = val('spender');
+    t.amount = val('amount').replace(/[,\s]/g,'');
+    try{ const c = JSON.parse(val('cls')||'null'); t.cls = c && c.mok ? c : null; }catch(e){ t.cls = null; }
+  });
+}
+
+function setTemplateStatus(msg,isError=false){
+  const el = document.getElementById('template-status');
+  if(!el) return;
+  el.textContent = msg;
+  el.style.color = isError ? 'var(--expense)' : '';
+}
+
+function openTemplateEditor(){
+  if(!currentPermissions.manageTemplates) return;
+  templateDraft = quickTemplates.map(t=>({...t, cls:t.cls?{...t.cls}:null}));
+  renderTemplateEditor();
+  setTemplateStatus('');
+  document.getElementById('template-editor').classList.remove('hidden');
+}
+
+function newTemplateDraft(base){
+  return Object.assign({id:'t'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), name:'', cls:null, desc:'', payee:'', spender:'', amount:''}, base||{});
+}
+
+async function saveTemplates(){
+  if(!currentPermissions.manageTemplates){
+    setTemplateStatus('템플릿을 설정할 권한이 없습니다.', true);
+    return;
+  }
+  collectTemplateDraft();
+  const names = new Set();
+  for(const t of templateDraft){
+    const name = String(t.name||'').trim();
+    if(!name){ setTemplateStatus('버튼 이름이 비어 있는 템플릿이 있습니다.', true); return; }
+    if(names.has(name)){ setTemplateStatus(`버튼 이름이 겹칩니다: ${name}`, true); return; }
+    names.add(name);
+    if(t.amount && !/^-?\d+$/.test(t.amount)){ setTemplateStatus(`금액은 숫자만 입력해 주세요: ${name}`, true); return; }
+  }
+  const cleaned = normalizeQuickTemplates(templateDraft);
+  try{
+    await storageSet(QUICK_TEMPLATES_KEY, JSON.stringify(cleaned));
+    quickTemplates = cleaned;
+    renderQuickTemplates();
+    setTemplateStatus(`템플릿 ${cleaned.length}개를 저장했습니다.`);
+  }catch(e){
+    setTemplateStatus(e.code==='permission-denied'
+      ? '저장이 서버에서 거부되었습니다. Firestore 규칙에 템플릿 관리 권한이 반영되었는지 확인해 주세요.'
+      : `저장 실패: ${e.message || String(e)}`, true);
+  }
+}
 
 /**
  * 데이터를 CSV 파일로 변환하여 다운로드하는 공통 함수 (한글 깨짐 방지 UTF-8 BOM 적용)
@@ -395,7 +545,7 @@ function applyTemplate(key) {
   
 function watchSharedData(){
   stopSharedDataWatchers();
-  const watchedKeys = [YEARS_KEY,budgetKey(currentYear),accountBalanceKey(currentYear),STAFF_NAMES_KEY,STAFF_BANK_DETAILS_KEY,STAFF_GROUPS_KEY,categoryKey(currentYear)];
+  const watchedKeys = [YEARS_KEY,budgetKey(currentYear),accountBalanceKey(currentYear),STAFF_NAMES_KEY,STAFF_BANK_DETAILS_KEY,STAFF_GROUPS_KEY,QUICK_TEMPLATES_KEY,categoryKey(currentYear)];
   watchedKeys.forEach(key=>{
     const unsubscribe = db.collection('accountingData').doc(key).onSnapshot(snapshot=>{
       if(!snapshot.exists) return;
@@ -431,6 +581,9 @@ function watchSharedData(){
         } else if(key===STAFF_GROUPS_KEY){
           staffGroups = normalizeStaffGroups(data);
           renderStaffNames();
+        } else if(key===QUICK_TEMPLATES_KEY){
+          quickTemplates = normalizeQuickTemplates(data);
+          renderQuickTemplates();
         } else if(key===categoryKey(currentYear)){
           if(JSON.stringify(accountCategories)!==JSON.stringify(data)){
             accountCategories = data;
@@ -463,6 +616,8 @@ async function handleAuthState(user){
   stopSharedDataWatchers();
   stopLedgerWatcher();
   currentUser = user;
+  currentPermissions = {manageTemplates:false};
+  renderQuickTemplates();
   document.getElementById('btn-sign-in').classList.add('hidden');
   document.getElementById('btn-sign-out').classList.toggle('hidden', !user);
   if(!user){
@@ -504,6 +659,8 @@ const allowed = await Promise.race([
       document.getElementById('auth-status').textContent = '허용되지 않은 계정';
       return;
     }
+currentPermissions = {manageTemplates: (allowed.data() || {}).canManageTemplates === true};
+renderQuickTemplates();
 document.getElementById('auth-status').textContent = `${user.email || 'Google 계정'} 데이터 불러오는 중…`;
 document.getElementById('auth-gate-message').textContent = '장부와 예산 자료를 불러오는 중입니다. 잠시만 기다려 주세요.';
 await initializeApplicationData();
@@ -2803,10 +2960,8 @@ document.getElementById('r-count').textContent = `승인된 ${approvedCount.toLo
 
 // ---- 1) 보고서 탭을 열면 가장 최근 월을 자동 선택 ----
 function autoSelectMonthlyReportMonth(approved){
-  if(currentMonthlyReportMonth!==0) return;
-  const months = reportMonthsFromSummary(approved);
-  if(!months.length) return;
-  currentMonthlyReportMonth = monthNo(months[months.length-1]);
+  if(currentMonthlyReportMonth!==0 || closedThrough<1) return;
+  currentMonthlyReportMonth = closedThrough;   // 마감된 월 중 가장 최근 월
   renderReportTabs();
   loadMonthlyBudgetReport(currentMonthlyReportMonth);
 }
@@ -3697,17 +3852,43 @@ async function updateSelectedWorkflow(fromStatus,toStatus){
 let currentMonthlyReportMonth = 0; // 1~12, 0 = 미선택
 let monthlyReportDirty = false;     // 결산 내역이 바뀐 뒤 아직 월별 보고서에 반영 안 됨
 
+function resetMonthlyReportView() {
+  const titleEl = document.getElementById('report-title');
+  const noteEl = document.getElementById('monthly-budget-note');
+  const scrollBox = document.getElementById('monthly-budget-scroll');
+  const mobileBox = document.getElementById('monthly-budget-mobile');
+  if (titleEl) titleEl.textContent = '월을 선택하세요';
+  if (scrollBox) scrollBox.style.display = 'none';
+  if (mobileBox) mobileBox.classList.remove('is-ready');
+  if (noteEl) noteEl.textContent = closedThrough
+    ? '상단 월 탭을 눌러 해당 월말 기준 보고서를 조회하세요.'
+    : '마감된 월이 없습니다. 월을 마감하면 해당 월 버튼이 생성됩니다.';
+}
+
+// 월 버튼은 마감된 월(1월 ~ closedThrough월)만 만든다
 function renderReportTabs() {
   const container = document.getElementById('report-tabs-container');
   if (!container) return;
 
+  // 마감 취소 등으로 선택한 월이 마감 범위를 벗어났으면 선택 해제
+  if (currentMonthlyReportMonth > closedThrough) {
+    currentMonthlyReportMonth = 0;
+    resetMonthlyReportView();
+  }
+
   container.innerHTML = '';
-  for (let m = 1; m <= 12; m++) {
+  if (!closedThrough) {
+    const empty = document.createElement('p');
+    empty.className = 'report-tabs-empty';
+    empty.textContent = '마감된 월이 없습니다. 월을 마감하면 해당 월 버튼이 생성됩니다.';
+    container.appendChild(empty);
+    return;
+  }
+  for (let m = 1; m <= closedThrough; m++) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'report-tab-btn' + (m === currentMonthlyReportMonth ? ' active' : '');
-    const closedMark = m <= closedThrough ? ' ✓' : '';
-    btn.textContent = m + '월' + closedMark;
+    btn.textContent = m + '월 ✓';
     btn.dataset.month = String(m);
     btn.addEventListener('click', () => {
       currentMonthlyReportMonth = m;
@@ -3719,6 +3900,18 @@ function renderReportTabs() {
   }
 }
 
+// 마감/마감 취소 뒤: 월 버튼을 다시 만들고, 선택이 비면 가장 최근 마감월을 선택
+function syncMonthlyReportToClosure() {
+  renderReportTabs();
+  if (currentMonthlyReportMonth === 0 && closedThrough > 0) {
+    currentMonthlyReportMonth = closedThrough;
+    renderReportTabs();
+  }
+  if (currentMonthlyReportMonth >= 1 && currentMonthlyReportMonth <= 12) {
+    loadMonthlyBudgetReport(currentMonthlyReportMonth);
+  }
+}
+
 /**
  * 선택 월(1~N)까지 승인된 실적을 누적해 연간 예산과 대비 표시.
  * 예산은 연간 예산(동일), 결산액만 1월~선택월 누적.
@@ -3726,7 +3919,6 @@ function renderReportTabs() {
 async function loadMonthlyBudgetReport(throughMonth, {exact=false}={}) {
   const titleEl = document.getElementById('report-title');
   const noteEl = document.getElementById('monthly-budget-note');
-  const summaryBox = document.getElementById('monthly-report-summary');
   const scrollBox = document.getElementById('monthly-budget-scroll');
   const mobileBox = document.getElementById('monthly-budget-mobile');
   const tbody = document.getElementById('monthly-budget-body');
@@ -3743,7 +3935,6 @@ async function loadMonthlyBudgetReport(throughMonth, {exact=false}={}) {
   monthlyReportDirty = false;
   if (titleEl) titleEl.textContent = year + '년 1월 ~ ' + n + '월 말 기준 · 관·항·목 예산 대비 실적';
   if (noteEl) noteEl.textContent = '승인 내역을 불러오는 중…';
-  if (summaryBox) summaryBox.style.display = 'none';
   if (scrollBox) scrollBox.style.display = 'none';
   if (mobileBox) mobileBox.classList.remove('is-ready');
   tbody.innerHTML = '';
@@ -3760,7 +3951,6 @@ async function loadMonthlyBudgetReport(throughMonth, {exact=false}={}) {
       });
       const count = fromSummary.reduce((s, c) => s + c._count, 0);
       renderMonthlyBudgetSection(fromSummary, n);
-      if (summaryBox) summaryBox.style.display = '';
       if (scrollBox) scrollBox.style.display = '';
       if (mobileBox) mobileBox.classList.add('is-ready');
       if (noteEl) {
@@ -3791,7 +3981,6 @@ async function loadMonthlyBudgetReport(throughMonth, {exact=false}={}) {
     });
 
     renderMonthlyBudgetSection(cumulative, n);
-    if (summaryBox) summaryBox.style.display = '';
     if (scrollBox) scrollBox.style.display = '';
     if (mobileBox) mobileBox.classList.add('is-ready');
     if (noteEl) {
@@ -4012,11 +4201,6 @@ function renderMonthlyBudgetSection(approvedList, throughMonth) {
     appendRow(type, '미분류/삭제된 항목', '-', o.paths.length + '개 분류', 0, o.amount, o.paths.join('\\n'));
   });
 
-  document.getElementById('monthly-income-budget').textContent = fmtShort(incomeBudget);
-  document.getElementById('monthly-income-settled').textContent = fmtShort(incomeSettled);
-  document.getElementById('monthly-expense-budget').textContent = fmtShort(expenseBudget);
-  document.getElementById('monthly-expense-settled').textContent = fmtShort(expenseSettled);
-  document.getElementById('monthly-balance').textContent = fmt(incomeSettled - expenseSettled);
 
   const totalRate = totalBudget > 0 ? ((totalSettled / totalBudget) * 100).toFixed(1) + '%' : '-';
   tfoot.innerHTML =
@@ -4310,10 +4494,7 @@ async function changeClosure(delta){
     closedThrough = target;
     await loadLedger();        // 새 기준으로 목록 다시 읽기
     renderReport();
-    renderReportTabs();
-    if (currentMonthlyReportMonth >= 1 && currentMonthlyReportMonth <= 12) {
-      loadMonthlyBudgetReport(currentMonthlyReportMonth);
-    }
+    syncMonthlyReportToClosure();
     renderEntryView();
     msg.textContent = delta>0 ? `${target}월을 마감했습니다.` : `${expected}월 마감을 취소했습니다.`;
   }catch(error){
@@ -4702,6 +4883,47 @@ document.getElementById('btn-transfer-bulk').addEventListener('click',()=>{
   status.textContent = `표시 중인 ${rows.length}명에게 ${fmt(amount)}을 적용했습니다.`;
 });
 document.getElementById('btn-transfer-download').addEventListener('click',downloadTransferFile);
+(function(){
+  const container = document.getElementById('quick-template-container');
+  if(!container) return;
+  container.addEventListener('click',event=>{
+    const useBtn = event.target.closest('[data-template-id]');
+    if(useBtn){ applyTemplate(useBtn.dataset.templateId); return; }
+    const removeBtn = event.target.closest('[data-qt-remove]');
+    if(removeBtn){
+      collectTemplateDraft();
+      templateDraft.splice(Number(removeBtn.dataset.qtRemove),1);
+      renderTemplateEditor();
+      return;
+    }
+    const id = event.target.closest('button')?.id;
+    if(id==='btn-template-manage') openTemplateEditor();
+    else if(id==='btn-template-close') document.getElementById('template-editor').classList.add('hidden');
+    else if(id==='btn-template-save') saveTemplates();
+    else if(id==='btn-template-add' || id==='btn-template-add-form'){
+      collectTemplateDraft();
+      if(templateDraft.length>=MAX_QUICK_TEMPLATES){ setTemplateStatus(`템플릿은 최대 ${MAX_QUICK_TEMPLATES}개까지 만들 수 있습니다.`, true); return; }
+      let base = {};
+      if(id==='btn-template-add-form'){
+        let cls = null;
+        try{ const c = JSON.parse(document.getElementById('f-mok').value||'null'); cls = c && c.mok && currentGubun==='지출' ? c : null; }catch(e){}
+        base = {
+          cls,
+          desc:document.getElementById('f-desc').value.trim(),
+          payee:document.getElementById('f-payee').value.trim(),
+          spender:document.getElementById('f-spender').value.trim(),
+          amount:/^-?\d+$/.test(document.getElementById('f-amount').value.replace(/[,\s]/g,'')) ? document.getElementById('f-amount').value.replace(/[,\s]/g,'') : ''
+        };
+      }
+      templateDraft.push(newTemplateDraft(base));
+      renderTemplateEditor();
+      setTemplateStatus('');
+      const items = document.querySelectorAll('#template-editor-list .qt-item');
+      const last = items[items.length-1];
+      if(last) last.querySelector('[data-qt="name"]').focus();
+    }
+  });
+})();
 (function(){
   const box = document.getElementById('monthly-budget-mobile');
   if(!box) return;

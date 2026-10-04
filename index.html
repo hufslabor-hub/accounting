@@ -9,12 +9,12 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=2.10">
+<link rel="stylesheet" href="style.css?v=2.11">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <header class="masthead">
-    <span class="version-tag">v2.10</span>
+    <span class="version-tag">v2.11</span>
     <div class="masthead-inner">
 
     <p class="org">한국외국어대학교 노동조합 회계 프로그램</p>
@@ -76,10 +76,10 @@
   <p class="sec-desc" style="margin:0 0 8px;">월 버튼을 누르면 <b>해당 월말 기준</b>으로 예산 대비 결산(1월~선택 월 승인 내역 누적)을 표시합니다. 예산은 연간 예산이며, 결산액은 월이 올라갈수록 누적됩니다.</p>
   <div id="report-tabs-container" class="report-tabs" style="display: flex; gap: 8px; flex-wrap: wrap; margin: 15px 0;"></div>
   <h3 id="report-title">월을 선택하세요</h3>
-  <div id="monthly-report-summary" class="type-budget-summary" style="display:none;" aria-label="선택 월말 기준 수입·지출 총액">
-    <div class="type-budget-summary-item"><span class="type-budget-summary-label">수입 총액</span><div class="type-budget-summary-values">예산 <span id="monthly-income-budget">0원</span><br>결산 <span id="monthly-income-settled">0원</span></div></div>
-    <div class="type-budget-summary-item"><span class="type-budget-summary-label">지출 총액</span><div class="type-budget-summary-values">예산 <span id="monthly-expense-budget">0원</span><br>결산 <span id="monthly-expense-settled">0원</span></div></div>
-    <div class="type-budget-summary-item"><span class="type-budget-summary-label">잔액(수입 − 지출 결산)</span><div class="type-budget-summary-values" id="monthly-balance">0원</div></div>
+  <div class="stats" id="report-totals">
+    <div class="stat"><p class="label">총 수입</p><p class="value income" id="r-income">-</p><p class="sub">전기이월금 포함</p></div>
+    <div class="stat"><p class="label">총 지출</p><p class="value expense" id="r-expense">-</p><p class="sub" id="r-count">-</p></div>
+    <div class="stat"><p class="label">현재 잔액(계산)</p><p class="value" id="r-balance">-</p><p class="sub">총 수입 − 총 지출</p></div>
   </div>
   <div class="table-scroll" id="monthly-budget-scroll" style="display:none;">
     <table class="budget-report-table">
@@ -101,12 +101,6 @@
   <button class="btn-text" id="btn-monthly-exact" type="button">정밀 재조회 (전체 승인 내역 직접 읽기)</button>
 </div>
 </section>
-
-    <div class="stats">
-      <div class="stat"><p class="label">총 수입</p><p class="value income" id="r-income">-</p><p class="sub">전기이월금 포함</p></div>
-      <div class="stat"><p class="label">총 지출</p><p class="value expense" id="r-expense">-</p><p class="sub" id="r-count">-</p></div>
-      <div class="stat"><p class="label">현재 잔액(계산)</p><p class="value" id="r-balance">-</p><p class="sub">총 수입 − 총 지출</p></div>
-    </div>
 
     <section>
       <div class="sec-head"><span class="sec-num">02</span><h2>세부 거래 내역</h2></div>
@@ -295,14 +289,27 @@
     </div>
     <section style="margin-top:16px;">
       <div class="sec-head"><span class="sec-num">01</span><h2>새 내역 입력</h2></div>
-<!-- HTML: 입력 폼 상단 또는 적절한 위치에 추가할 다빈도 템플릿 버튼 구역 -->
-<div class="quick-template-container" style="margin-bottom: 12px;">
-  <span style="font-size: 13px; font-weight: bold; margin-right: 8px;">⚡ 자주 쓰는 지출 템플릿:</span>
-  <button type="button" class="btn btn-sm btn-outline-secondary" onclick="applyTemplate('중집활동비')">중집 활동비</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary" onclick="applyTemplate('생일사업')">생일 축하 사업</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary" onclick="applyTemplate('차량유류비')">업무용 유류비</button>
+<!-- 자주 쓰는 지출 템플릿: 버튼은 모두 사용 가능, 설정은 '템플릿 관리' 권한이 있는 계정만 -->
+<div class="quick-template-container" id="quick-template-container">
+  <div class="qt-bar">
+    <span class="qt-title">⚡ 자주 쓰는 지출 템플릿</span>
+    <span id="quick-template-buttons" class="qt-buttons"></span>
+    <button type="button" id="btn-template-manage" class="btn-text hidden">⚙ 템플릿 설정</button>
+  </div>
+  <div id="template-editor" class="qt-editor hidden">
+    <p class="qt-note">버튼 이름과 입력값을 정해 두면 새 내역 입력에서 한 번에 채워 줍니다. 결제일은 채우지 않습니다.</p>
+    <div id="template-editor-list"></div>
+    <div class="qt-actions">
+      <button type="button" class="btn-text" id="btn-template-add">＋ 빈 템플릿 추가</button>
+      <button type="button" class="btn-text" id="btn-template-add-form">＋ 현재 입력값으로 추가</button>
+      <span class="qt-spacer"></span>
+      <button type="button" class="btn-primary" id="btn-template-save">저장</button>
+      <button type="button" class="btn-text" id="btn-template-close">닫기</button>
+    </div>
+    <p id="template-status" role="status"></p>
+  </div>
 </div>
-      
+
       <div class="card">
         <div class="form-grid">
           <div class="field">
@@ -493,7 +500,7 @@
 (function(){
   function start(){
     var s = document.createElement('script');
-    s.src = 'app.js?v=2.10';
+    s.src = 'app.js?v=2.11';
     document.body.appendChild(s);
   }
   fetch('data.json', {cache:'no-cache'})
