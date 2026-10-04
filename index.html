@@ -833,9 +833,18 @@ html, body {
 function parseScriptJSON(elementId, fallbackValue) {
   const el = document.getElementById(elementId);
   if (!el) return fallbackValue;
+  
+  // 주석 제거 및 공백 정제
+  const content = el.textContent
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/.*/g, '')
+    .trim();
+
+  // 내용이 비어있으면 JSON.parse를 실행하지 않고 기본값 반환
+  if (!content) return fallbackValue;
+
   try {
-    // 텍스트 양끝 공백 제거 후 파싱
-    return JSON.parse(el.textContent.trim());
+    return JSON.parse(content);
   } catch (e) {
     console.error(`[${elementId}] JSON 파싱 오류:`, e);
     return fallbackValue;
