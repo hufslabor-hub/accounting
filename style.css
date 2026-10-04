@@ -927,7 +927,6 @@ button{transition:background-color .12s,color .12s,box-shadow .12s;}
   .qt-btn:hover:not(:disabled),
   .date-picker-button:hover:not(:disabled),
   .receipt-pick-btn:hover:not(:disabled),
-  .gubun-toggle button:not(.selected):hover:not(:disabled),
   .btn-primary.btn-soft:hover:not(:disabled),
   .del-btn:hover:not(:disabled),
   .btn-reject:hover:not(:disabled),
@@ -957,8 +956,28 @@ button{transition:background-color .12s,color .12s,box-shadow .12s;}
   .hierarchy-table .hierarchy-row-delete:hover:not(:disabled){box-shadow:none;}
   .tab-btn:not(.active):hover{background:var(--paper);color:var(--navy);}
   .tab-btn.active:hover{background:rgba(247,250,242,.08);color:var(--paper);}
-  .gubun-toggle button.on-income.selected:hover:not(:disabled){background:var(--navy);color:var(--income-row);}
-  .gubun-toggle button.on-expense.selected:hover:not(:disabled){background:var(--paper-2);color:var(--expense);}
 }
 .receipt-del-btn{background:var(--paper-2);color:var(--expense);border:1.5px solid var(--expense);cursor:pointer;}
 @media (hover:hover){.receipt-del-btn:hover{background:var(--expense);color:var(--paper-2);}}
+
+/* 9) 수입/지출 토글: hover는 '선택됨'과 구별되는 중간 톤, 선택된 버튼은 hover해도 그대로 */
+@media (hover:hover){
+  .gubun-toggle button:not(.selected):hover:not(:disabled){background:var(--gold);color:var(--navy);font-weight:700;}
+}
+
+/* 10) 새 내역 입력 항목 제목: 진한 녹색 + 굵게 (시인성) */
+:root{--green-dark:#2B4A37;}
+.entry-form-grid .field > label,
+.entry-form-footer .form-label{color:var(--green-dark);font-weight:700;}
+
+/* 11) 보고서 탭 새로고침 / 집계 재계산: 번호 붙은 버튼 */
+.report-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;}
+.btn-compact{padding:8px 14px;font-size:14px;display:inline-flex;align-items:center;gap:8px;white-space:nowrap;}
+.btn-step{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;
+  background:var(--paper-2);color:var(--navy);font-size:12px;font-weight:700;line-height:1;}
+.btn-primary.btn-soft .btn-step{background:var(--navy);color:var(--paper-2);}
+.report-actions-hint{flex:1 1 240px;font-size:13px;color:var(--ink-soft);}
+@media (hover:hover){
+  .btn-primary:not(.btn-soft):hover:not(:disabled) .btn-step{background:var(--navy);color:var(--paper-2);}
+  .btn-primary.btn-soft:hover:not(:disabled) .btn-step{background:var(--paper-2);color:var(--navy);}
+}
