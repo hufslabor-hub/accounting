@@ -5054,33 +5054,29 @@ function renderUsage(total,start){
     `초기화 ${fmtTime(reset)} · 조회 ${fmtTime(new Date())}`;
 }
 
-document.getElementById('some-button')?.addEventListener('click', function(event) {
+document.getElementById('some-button')?.addEventListener('click', async function(event) {
   const button = event.currentTarget;
   const note = document.getElementById('usage-note');
+  
   if (button) button.disabled = true;
   if (note) note.textContent = '조회 중…';
-  
+
   try {
-    // ... 기존 로직 ...
-  } catch (err) {
-    console.error(err);
+    const { total, start } = await fetchTodayReads();
+    renderUsage(total, start);
+  } catch (error) {
+    if (note) {
+      note.textContent = /permission|403|PERMISSION/i.test(error.message)
+        ? '권한이 없습니다. 프로젝트 소유자/뷰어 계정이거나 Monitoring API가 켜져 있는지 확인하세요.'
+        : `사용량 조회 실패: ${error.message}`;
+    }
+  } finally {
+    if (button) button.disabled = false;
   }
 });
-    const button = event.currentTarget;
-  const note = document.getElementById('usage-note');
-  button.disabled = true;
-  note.textContent = '조회 중…';
-  try{
-    const {total,start} = await fetchTodayReads();
-    renderUsage(total,start);
-  }catch(error){
-    note.textContent = /permission|403|PERMISSION/i.test(error.message)
-      ? '권한이 없습니다. 프로젝트 소유자/뷰어 계정이거나 Monitoring API가 켜져 있는지 확인하세요.'
-      : `사용량 조회 실패: ${error.message}`;
-  }finally{
-    button.disabled = false;
-  }
-});
+
+
+  
 connectFirebase();
 </script>
 
