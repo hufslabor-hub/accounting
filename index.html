@@ -10,6 +10,20 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
+   .version-tag {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: none; /* ◀ 대문자 강제 변환 해제 */
+            color: var(--ink);
+            opacity: 0.6;
+            border: 1px solid var(--ink);
+            border-radius: 4px;
+            padding: 2px 6px;
+            background-color: rgba(0, 0, 0, 0.03);
+            display: inline-block;
+        }
   :root{
   --navy:#3B4953; --navy-2:#5A7863;
   --paper:#EBF4DD; --paper-2:#F7FAF2;
@@ -66,20 +80,7 @@ body { background-color:var(--paper); color:var(--ink); }
   .hierarchy-summary-difference.mismatch{color:var(--expense);}
   @media(max-width:600px){.type-budget-summary{grid-template-columns:1fr;}}
 
- .version-tag {
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 11px;
-            font-weight: 600;
-            letter-spacing: 1px;
-            text-transform: none; /* ◀ 대문자 강제 변환 해제 */
-            color: var(--ink);
-            opacity: 0.6;
-            border: 1px solid var(--ink);
-            border-radius: 4px;
-            padding: 2px 6px;
-            background-color: rgba(0, 0, 0, 0.03);
-            display: inline-block;
-        }
+
 
   .view{display:none;}
   .view.active{display:block;}
@@ -650,7 +651,7 @@ body {
 </style>
 </head>
 <body>
-  <span class="version-tag">v2.0 &lt;meta char&gt;</span>
+  <span class="version-tag">v2.1 &lt;meta char&gt;</span>
 <header class="masthead">
     <div class="masthead-inner">
 
