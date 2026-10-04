@@ -879,7 +879,6 @@ function showQuotaGate(){
        <span class="quota-time">${pad(h)}:${pad(m)}:${pad(s)}</span>
        <small>초기화 예정: ${resetLabel} (내 컴퓨터 시간 기준)</small>`;
   };
-  const gateButton = document.getElementById('gate-sign-in');
   box.classList.remove('hidden');
   tick();
   quotaTimer = setInterval(tick,1000);
