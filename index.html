@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-v1.2
+v1.3
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title> 쇼미더머니 — 한국외국어대학교 노동조합 회계프로그램</title>
@@ -124,8 +124,9 @@ body { background-color:var(--paper); color:var(--ink); }
   .entry-table .col-payee{width:9%;}
   .entry-table .col-spender{width:8%;}
   .entry-table .col-amount{width:10%;}
-  .entry-table .col-status{width:12%;}
-  .entry-table .col-actions{width:14%;}
+  .entry-table .col-status{width:10%;}
+  .entry-table .col-mgmt{width:10%;}
+  .entry-table .col-actions{width:12%;}
   .transaction-table .col-date{width:15%;}
   .transaction-table .col-type{width:6%;}
   .transaction-table .col-description{width:13%;}
@@ -486,8 +487,8 @@ body {
 
 <header class="masthead">
     <div class="masthead-inner">
-    <p class="org">한국외국어대학교 노동조합</p>
-    <h1 class="title">쇼미더머니(노동조합 회계 프로그램) <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
+    <p class="org">한국외국어대학교 노동조합 회계 프로그램</p>
+    <h1 class="title">쇼미더머니() <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
     
     <div class="auth-bar">
       <span id="auth-status">Firebase 연결 확인 중...</span>
@@ -539,9 +540,10 @@ body {
 </div>
 
 <!-- 월별 누적 보고서: 선택 월말 기준 관·항·목 예산 대비 실적 -->
-<div id="report-section" class="card" style="margin-top: 20px;">
-  <h2>📊 월별 누적 보고서</h2>
-  <p class="sec-desc" style="margin:8px 0 0;">월 버튼을 누르면 <b>해당 월말 기준</b>으로 예산 대비 결산(1월~선택 월 승인 내역 누적)을 표시합니다. 예산은 연간 예산이며, 결산액은 월이 올라갈수록 누적됩니다.</p>
+<section style="margin-top:20px;">
+<div class="sec-head"><span class="sec-num">01</span><h2>월별 누적 보고서</h2></div>
+<div id="report-section" class="card">
+  <p class="sec-desc" style="margin:0 0 8px;">월 버튼을 누르면 <b>해당 월말 기준</b>으로 예산 대비 결산(1월~선택 월 승인 내역 누적)을 표시합니다. 예산은 연간 예산이며, 결산액은 월이 올라갈수록 누적됩니다.</p>
   <div id="report-tabs-container" class="report-tabs" style="display: flex; gap: 8px; flex-wrap: wrap; margin: 15px 0;"></div>
   <h3 id="report-title">월을 선택하세요</h3>
   <div id="monthly-report-summary" class="type-budget-summary" style="display:none;" aria-label="선택 월말 기준 수입·지출 총액">
@@ -558,8 +560,7 @@ body {
   </div>
   <p class="count-note" id="monthly-budget-note">상단 월 탭을 눌러 해당 월말 기준 보고서를 조회하세요.</p>
 </div>
-
-
+</section>
 
     <div class="stats">
       <div class="stat"><p class="label">총 수입</p><p class="value income" id="r-income">-</p><p class="sub">전기이월금 포함</p></div>
@@ -568,7 +569,26 @@ body {
     </div>
 
     <section>
-      <div class="sec-head"><span class="sec-num">00</span><h2>활동비 계좌 잔액 대조</h2></div>
+      <div class="sec-head"><span class="sec-num">02</span><h2>세부 거래 내역</h2></div>
+      <div class="card">
+        <div class="filter-row" id="month-filters-report"></div>
+        <div class="table-scroll transaction-table-scroll">
+          <table class="transaction-table report-transaction-table">
+            <colgroup>
+              <col class="col-date"><col class="col-description"><col class="col-mok">
+              <col class="col-payee"><col class="col-amount"><col class="col-amount"><col class="col-mgmt">
+            </colgroup>
+            <thead><tr><th>결제일</th><th>내용</th><th>목</th><th>지급처</th><th class="num">수입</th><th class="num">지출</th><th>관리번호</th></tr></thead>
+            <tbody id="tx-body-report"></tbody>
+            <tfoot id="tx-report-total"></tfoot>
+          </table>
+        </div>
+        <p class="count-note" id="tx-count-report"></p>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="sec-num">03</span><h2>활동비 계좌 잔액 대조</h2></div>
       <p class="sec-desc">실제 활동비 계좌 잔액을 입력하면 승인된 내역의 총 수입 − 총 지출과 비교합니다.</p>
       <div class="card">
         <div class="balance-check">
@@ -610,26 +630,7 @@ body {
     </section>
 
     <section>
-      <div class="sec-head"><span class="sec-num">01</span><h2>세부 거래 내역</h2></div>
-      <div class="card">
-        <div class="filter-row" id="month-filters-report"></div>
-        <div class="table-scroll transaction-table-scroll">
-          <table class="transaction-table report-transaction-table">
-            <colgroup>
-              <col class="col-date"><col class="col-description"><col class="col-mok">
-              <col class="col-payee"><col class="col-amount"><col class="col-amount">
-            </colgroup>
-            <thead><tr><th>결제일</th><th>내용</th><th>목</th><th>지급처</th><th class="num">수입</th><th class="num">지출</th></tr></thead>
-            <tbody id="tx-body-report"></tbody>
-            <tfoot id="tx-report-total"></tfoot>
-          </table>
-        </div>
-        <p class="count-note" id="tx-count-report"></p>
-      </div>
-    </section>
-
-    <section>
-      <div class="sec-head"><span class="sec-num">02</span><h2>그래프 분석</h2></div>
+      <div class="sec-head"><span class="sec-num">04</span><h2>그래프 분석</h2></div>
       <p class="sec-desc">월별 수입·지출 추이와 수입·지출 구성, 예산 집행 현황을 그래프로 확인합니다.</p>
       <div class="card"><div class="chart-box"><canvas id="chartMonthly"></canvas></div></div>
       <div class="two-col" style="margin-top:20px;">
@@ -694,17 +695,12 @@ body {
     </section>
   </div>
   <div class="view" id="view-entry">
-    <div class="notice" style="margin-top:28px;">
-      <section style="margin-top:28px;">
-  <! 월 마감 있던 자리>
-  
-</section>
+    <div class="notice" style="margin-top:12px;">
       새 내역은 <b>입력 내역</b>으로 등록되며, 같은 담당자의 내역만을 선택해 결의할 수 있습니다. 승인(입금 완료)된 내역만 보고서 탭 집계에 반영됩니다.
       <b id="entry-storage-warning"></b>
     </div>
-<!//여기가 결산 탭 새 내역 입력>
-    <section style="margin-top:0;">
-      <div class="sec-head"><span class="sec-num">＋</span><h2>새 내역 입력</h2></div>
+    <section style="margin-top:16px;">
+      <div class="sec-head"><span class="sec-num">01</span><h2>새 내역 입력</h2></div>
 <!-- HTML: 입력 폼 상단 또는 적절한 위치에 추가할 다빈도 템플릿 버튼 구역 -->
 <div class="quick-template-container" style="margin-bottom: 12px;">
   <span style="font-size: 13px; font-weight: bold; margin-right: 8px;">⚡ 자주 쓰는 지출 템플릿:</span>
@@ -733,11 +729,12 @@ body {
           <div class="field"><label for="f-mok">세부 계정과목</label><select id="f-mok"></select></div>
           <div class="field"><label>담당자</label><input type="text" id="f-spender" placeholder="입력자 이름" list="staff-name-options"><datalist id="staff-name-options"></datalist></div>
 
-          <div class="field span2"><label>내용</label><input type="text" id="f-desc" placeholder="예: 집행부 회의 식비" list="dl-desc"></div>
+          <div class="field span2"><label>내용</label><input type="text" id="f-desc" placeholder="예: 집행부 회의 식비" list="dl-desc" autocomplete="off"></div>
           <div class="field"><label>지급처</label><input type="text" id="f-payee" placeholder="예: 배달의민족" list="recent-payee-options"><datalist id="recent-payee-options"></datalist></div>
-          <div class="field"><label>금액(원)</label><input type="number" id="f-amount" placeholder="예: 50,000 (환불은 -50,000)"></div>
+          <div class="field"><label>금액(원)</label><input type="text" id="f-amount" inputmode="numeric" placeholder="예: 50000 (환불은 -50000)" list="dl-amount" autocomplete="off"></div>
         </div>
         <datalist id="dl-desc"></datalist>
+        <datalist id="dl-amount"></datalist>
 
 <!-- 영수증 첨부 영역 -->
 <div class="mb-3">
@@ -766,12 +763,12 @@ body {
     </section>
 
     <section class="pending-section" style="margin-top:28px;">
-      <div class="sec-head"><span class="sec-num">☰</span><h2>입력 내역 <span class="pending-count" id="pending-count">0</span></h2></div>
+      <div class="sec-head"><span class="sec-num">02</span><h2>입력 내역 <span class="pending-count" id="pending-count">0</span></h2></div>
       <div class="pending-box" id="pending-box"><div id="pending-list"></div></div>
     </section>
 
     <section>
-      <div class="sec-head"><span class="sec-num">☰</span><h2>결의 내역</h2></div>
+      <div class="sec-head"><span class="sec-num">03</span><h2>결의 내역</h2></div>
       <div class="card">
         <div class="filter-row" id="status-filters-entry"></div>
         <div class="filter-row" id="month-filters-entry"></div>
@@ -779,9 +776,9 @@ body {
           <table class="transaction-table entry-table">
             <colgroup>
               <col class="col-date"><col class="col-type"><col class="col-description"><col class="col-mok">
-              <col class="col-payee"><col class="col-spender"><col class="col-amount"><col class="col-status"><col class="col-actions">
+              <col class="col-payee"><col class="col-spender"><col class="col-amount"><col class="col-status"><col class="col-mgmt"><col class="col-actions">
             </colgroup>
-            <thead><tr><th>결제일</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th>담당자</th><th class="num">금액</th><th>상태</th><th class="col-actions-head">추가 작업</th></tr></thead>
+            <thead><tr><th>결제일</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th>담당자</th><th class="num">금액</th><th>상태</th><th>관리번호</th><th class="col-actions-head">추가 작업</th></tr></thead>
             <tbody id="tx-body-entry"></tbody>
           </table>
         </div>
@@ -791,12 +788,12 @@ body {
     </section>
 
     <section class="pending-section" style="margin-top:28px;">
-      <div class="sec-head"><span class="sec-num">☰</span><h2>지급 대기 <span class="pending-count" id="submitted-count">0</span></h2></div>
+      <div class="sec-head"><span class="sec-num">04</span><h2>지급 대기 <span class="pending-count" id="submitted-count">0</span></h2></div>
       <div class="pending-box" id="submitted-box"><div id="submitted-list"></div></div>
     </section>
 
     <section style="margin-top:48px;">
-      <div class="sec-head"><span class="sec-num">✓</span><h2>월 마감</h2></div>
+      <div class="sec-head"><span class="sec-num">05</span><h2>월 마감</h2></div>
       <div class="card">
         <p id="closing-status" style="margin:0 0 6px;font-weight:700;"></p>
         <p id="closing-detail" class="count-note" style="margin:0 0 14px;"></p>
@@ -3210,12 +3207,13 @@ async function renderReportDetail(){
       <td>${escapeHTML(t.category||'-')}</td>
       <td>${escapeHTML(t.payee||t.spender||'-')}</td>
       <td class="num" style="color:#3F72AF">${t.gubun==='수입'?fmtShort(t.amount):''}</td>
-      <td class="num" style="color:#112D4E">${t.gubun==='지출'?fmtShort(t.amount):''}</td>`;
+      <td class="num" style="color:#112D4E">${t.gubun==='지출'?fmtShort(t.amount):''}</td>
+      <td>${t.managementNo?escapeHTML(String(t.managementNo)):''}</td>`;
     body.appendChild(tr);
   });
   const income = list.reduce((sum,t)=>sum+(t.gubun==='수입'?Number(t.amount||0):0),0);
   const expense = list.reduce((sum,t)=>sum+(t.gubun==='지출'?Number(t.amount||0):0),0);
-  total.innerHTML = `<tr class="report-total-row"><th colspan="4">${month} 합계 · ${list.length}건</th><td class="num">${fmtShort(income)}</td><td class="num">${fmtShort(expense)}</td></tr>`;
+  total.innerHTML = `<tr class="report-total-row"><th colspan="4">${month} 합계 · ${list.length}건</th><td class="num">${fmtShort(income)}</td><td class="num">${fmtShort(expense)}</td><td></td></tr>`;
   note.textContent = `${month} 승인 거래 ${list.length.toLocaleString('ko-KR')}건 (선택한 월만 불러옵니다)`;
 }
 // ---------- per-entry transactions ----------
@@ -3801,6 +3799,7 @@ const source = ledger;
         <td>${escapeHTML(t.payee||t.spender||'-')}</td>
         <td class="num" style="color:#3F72AF">${t.gubun==='수입'?fmtShort(t.amount):''}</td>
         <td class="num" style="color:#112D4E">${t.gubun==='지출'?fmtShort(t.amount):''}</td>
+        <td>${t.managementNo?escapeHTML(String(t.managementNo)):''}</td>
       `;
     } else {
       tr.innerHTML = `
@@ -3811,7 +3810,8 @@ const source = ledger;
         <td>${escapeHTML(t.payee||'-')}</td>
         <td>${escapeHTML(t.spender||'-')}</td>
         <td class="num">${fmtShort(t.amount)}</td>
-        <td><span class="status-badge status-${t.status}">${STATUS_LABEL[t.status]||t.status}</span>${t.managementNo?`<span class="management-number">관리번호 ${escapeHTML(String(t.managementNo))}</span>`:''}</td>
+        <td><span class="status-badge status-${t.status}">${STATUS_LABEL[t.status]||t.status}</span></td>
+        <td class="num">${t.managementNo?escapeHTML(String(t.managementNo)):''}</td>
         <td class="col-actions-cell">${rowActions(t)}</td>
       `;
     }
@@ -3821,7 +3821,7 @@ const source = ledger;
     const totalIncome = filtered.reduce((sum,entry)=>sum+(entry.gubun==='수입'?Number(entry.amount||0):0),0);
     const totalExpense = filtered.reduce((sum,entry)=>sum+(entry.gubun==='지출'?Number(entry.amount||0):0),0);
     document.getElementById('tx-report-total').innerHTML =
-      `<tr class="report-total-row"><th colspan="4">합계 · ${filtered.length}건</th><td class="num">${fmtShort(totalIncome)}</td><td class="num">${fmtShort(totalExpense)}</td></tr>`;
+      `<tr class="report-total-row"><th colspan="4">합계 · ${filtered.length}건</th><td class="num">${fmtShort(totalIncome)}</td><td class="num">${fmtShort(totalExpense)}</td><td></td></tr>`;
   }
 
   let countText = `${monthSel} 거래 ${filtered.length.toLocaleString('ko-KR')}건`;
@@ -4051,9 +4051,9 @@ function renderPendingBox(){
     ...[...document.querySelectorAll('[data-workflow-group]:checked')].flatMap(input=>(input.dataset.workflowIds||'').split(',').filter(Boolean))
   ]);
   const byDate = (a,b)=>(b.date||'').localeCompare(a.date||'');
-  // 마감된 달의 미승인 건은 결의·입력 대기 목록에서 제외 (마감 취소 후 다시 처리)
-  const inputComplete = ledger.filter(t=>t.status==='input-complete' && !t.locked && !isClosedOpenItem(t)).sort(byDate);
-  const submitted = ledger.filter(t=>t.status==='submitted' && !t.locked && !isClosedOpenItem(t)).sort(byDate);
+  // 마감 여부와 관계없이 입력·결의 대기 목록에 표시 (새 내역 입력은 항상 가능)
+  const inputComplete = ledger.filter(t=>t.status==='input-complete' && !t.locked).sort(byDate);
+  const submitted = ledger.filter(t=>t.status==='submitted' && !t.locked).sort(byDate);
   const submittedGroups = groupSubmittedEntries(submitted);
   document.getElementById('pending-count').textContent = inputComplete.length;
   const list = document.getElementById('pending-list');
@@ -4893,9 +4893,6 @@ function setStatus(msg,isError=false){
 
 // ---------- form ----------
 function setupDatalists(){
-  const dlDesc = document.getElementById('dl-desc');
-const descSet = new Set(BASE_LEDGER.map(t=>t.desc).filter(Boolean));  
-Array.from(descSet).slice(0,200).forEach(d=>{ const o=document.createElement('option'); o.value=d; dlDesc.appendChild(o); });
   renderRecentEntryOptions();
   refreshMokOptions();
 }
@@ -4928,6 +4925,24 @@ function recentEntryValues(property){
 function renderRecentEntryOptions(){
   const spenderList = document.getElementById('staff-name-options');
   const payeeList = document.getElementById('recent-payee-options');
+  const descList = document.getElementById('dl-desc');
+  const amountList = document.getElementById('dl-amount');
+  if(descList){
+    descList.replaceChildren();
+    recentEntryValues('desc').forEach(v=>{
+      const option=document.createElement('option');
+      option.value=v;
+      descList.appendChild(option);
+    });
+  }
+  if(amountList){
+    amountList.replaceChildren();
+    recentEntryValues('amount').forEach(v=>{
+      const option=document.createElement('option');
+      option.value=v;
+      amountList.appendChild(option);
+    });
+  }
   if(spenderList){
     spenderList.replaceChildren();
     [...recentEntryValues('spender'),...staffNames].filter((name,index,all)=>name && all.indexOf(name)===index)
