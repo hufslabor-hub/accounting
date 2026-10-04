@@ -650,17 +650,25 @@ async function handleAuthState(user){
   document.getElementById('auth-status').textContent = `${user.email || 'Google 계정'} 확인 중…`;
 
   try{
+const myEmail = String(user.email||'').toLowerCase();
 const allowed = await Promise.race([
-  db.collection('allowedEmails').doc(String(user.email||'').toLowerCase()).get(),
+  // 허용 이메일 목록 문서(accessControl/allowedEmails)를 읽습니다.
+  // 미등록 계정은 규칙상 읽기가 거부되므로 permission-denied = 미등록으로 처리합니다.
+  db.collection('accessControl').doc('allowedEmails').get()
+    .then(snap=>({denied:false, emails:snap.exists && Array.isArray(snap.data().emails) ? snap.data().emails : []}))
+    .catch(err=>{
+      if(err && err.code==='permission-denied') return {denied:true, emails:[]};
+      throw err;
+    }),
   new Promise((_,reject)=>setTimeout(
     ()=>reject(Object.assign(new Error('Firestore 응답 시간 초과 (한도 초과 가능성)'),{code:'resource-exhausted'})),
     2500))
 ]);
-   
-    if(!user.email || !user.emailVerified || !allowed.exists){
+
+    if(!user.email || !user.emailVerified || allowed.denied || !allowed.emails.some(e=>String(e).trim().toLowerCase()===myEmail)){
       showAuthGate(
         '접근 권한이 없습니다',
-        '이 이메일을 Firebase 담당자에게 전달하고 allowedEmails에 등록해 달라고 요청하세요.',
+        '이 이메일을 Firebase 담당자에게 전달해 허용 이메일 목록(accessControl/allowedEmails)에 등록해 달라고 요청하세요.\n(이미 등록했다면 firestore.rules가 게시되었는지도 확인해 주세요.)',
         user.email || ''
       );
       document.getElementById('gate-sign-in').classList.add('hidden');
@@ -689,7 +697,7 @@ document.getElementById('auth-status').textContent = user.email || '로그인됨
     if(e.code==='permission-denied'){
       showAuthGate(
         '접근 권한을 확인하지 못했습니다',
-        'Firestore가 요청을 거부했습니다. 아래 두 가지를 확인해 주세요.\n1) 수정된 firestore.rules가 Firebase 콘솔에서 게시되었는지\n2) allowedEmails 컬렉션에 이 이메일(소문자)이 문서 ID로 등록되었는지',
+        'Firestore가 요청을 거부했습니다. firestore.rules가 최신 내용으로 게시되었는지, 장부 데이터 규칙(accountingData)이 맞는지 확인해 주세요.',
         user.email || ''
       );
       document.getElementById('gate-sign-in').classList.add('hidden');
