@@ -10,6 +10,31 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link rel="stylesheet" href="style.css?v=2.6">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style id="patch-style">
+  /* 버전태그: 테두리를 글자색과 동일하게, 모바일에서는 스크롤하면 위로 사라지게(고정 해제) */
+  .version-tag{border:1px solid currentColor !important;}
+  @media (max-width:768px){
+    .version-tag{position:absolute !important;}
+  }
+  /* 사용자 탭 */
+  .staff-add-grid{display:grid;grid-template-columns:130px 1fr auto;gap:12px;align-items:end;}
+  .staff-toolbar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin-top:16px;}
+  .staff-toolbar label{font-size:.9em;font-weight:600;}
+  .staff-toolbar select{max-width:100%;}
+  .transfer-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:12px;}
+  .transfer-bulk{display:flex;gap:8px;align-items:end;}
+  .transfer-bulk .field{flex:1;}
+  .transfer-table input[type="text"]{width:100%;min-width:90px;text-align:right;}
+  .transfer-table td.num,.transfer-table th.num{text-align:right;}
+  .transfer-summary{margin-top:12px;font-weight:600;}
+  .transfer-actions{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+  @media (max-width:480px){
+    .staff-add-grid{grid-template-columns:1fr auto;}
+    .staff-add-grid .field:first-child{grid-column:1 / -1;}
+    .transfer-grid{grid-template-columns:1fr;}
+  }
+</style>
 </head>
 <body>
     <span class="version-tag">v2.6</span>
@@ -212,7 +237,7 @@
       <p class="sec-desc">여기에 등록한 이름은 결산 관리의 담당자 입력란에서 선택할 수 있습니다. 목록에 없는 이름도 입력란에 직접 입력할 수 있습니다.</p>
       <div class="notice">은행명과 계좌번호는 이 앱을 사용할 수 있는 모든 허가된 담당자에게 공유됩니다. 공유해도 되는 정보만 입력해 주세요.</div>
       <div class="card">
-        <div class="form-grid" style="grid-template-columns:150px 1fr auto;align-items:end;">
+        <div class="staff-add-grid">
           <div class="field">
             <label for="staff-group-input">구분</label>
             <select id="staff-group-input">
@@ -227,8 +252,54 @@
           </div>
           <button class="btn-primary" id="btn-add-staff-name" type="button">이름 추가</button>
         </div>
-        <div id="staff-name-list" class="staff-table-scroll" style="margin-top:16px;"></div>
+        <div class="staff-toolbar">
+          <label for="staff-sort-select">정렬</label>
+          <select id="staff-sort-select">
+            <option value="exec-first">구분순 (집행부 → 대의원)</option>
+            <option value="delegate-first">구분순 (대의원 → 집행부)</option>
+            <option value="name">이름순</option>
+          </select>
+        </div>
+        <div id="staff-name-list" class="staff-table-scroll" style="margin-top:12px;"></div>
         <p id="staff-name-status" role="status"></p>
+      </div>
+    </section>
+    <section id="transfer-section" style="margin-top:24px;">
+      <div class="sec-head"><span class="sec-num">☰</span><h2>우리은행 다계좌이체 파일</h2></div>
+      <p class="sec-desc">위 담당자 목록에서 은행이 <b>우리은행</b>이고 계좌번호가 등록된 사람만 표시됩니다. 금액을 입력하고 선택한 뒤 다운로드하면 우리은행 다계좌이체용 엑셀(.xls) 파일이 만들어집니다.</p>
+      <div class="card">
+        <div class="transfer-grid">
+          <div class="field">
+            <label for="transfer-group-filter">구분 보기</label>
+            <select id="transfer-group-filter">
+              <option value="전체">전체</option>
+              <option value="집행부">집행부</option>
+              <option value="대의원">대의원</option>
+              <option value="미지정">미지정</option>
+            </select>
+          </div>
+          <div class="transfer-bulk">
+            <div class="field">
+              <label for="transfer-bulk-amount">일괄 금액(원)</label>
+              <input type="text" id="transfer-bulk-amount" inputmode="numeric" placeholder="예: 50000" autocomplete="off">
+            </div>
+            <button class="btn-primary" id="btn-transfer-bulk" type="button">일괄 적용</button>
+          </div>
+          <div class="field">
+            <label for="transfer-recv-memo">받는 통장 표시내용</label>
+            <input type="text" id="transfer-recv-memo" placeholder="예: 1월활동비" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="transfer-my-memo">내 통장 표시내용</label>
+            <input type="text" id="transfer-my-memo" placeholder="예: 노동조합1월" autocomplete="off">
+          </div>
+        </div>
+        <div id="transfer-list" class="staff-table-scroll" style="margin-top:16px;"></div>
+        <p id="transfer-summary" class="transfer-summary"></p>
+        <div class="transfer-actions">
+          <button class="btn-primary" id="btn-transfer-download" type="button">이체 파일 다운로드 (.xls)</button>
+        </div>
+        <p id="transfer-status" role="status"></p>
       </div>
     </section>
   </div>
@@ -437,7 +508,7 @@
 (function(){
   function start(){
     var s = document.createElement('script');
-    s.src = 'app.js?v=2.7';
+    s.src = 'app.js?v=2.8';
     document.body.appendChild(s);
   }
   fetch('data.json', {cache:'no-cache'})

@@ -15,6 +15,8 @@ const monthNo = m => parseInt(m,10) || 0;
 let staffNames = [];
 let staffBankDetails = [];
 let staffGroups = {};   // { 이름: '집행부' | '대의원' }
+let staffSortMode = 'exec-first';   // exec-first | delegate-first | name
+const transferState = {skip:new Set(), amounts:{}, group:'전체', recvMemo:'', myMemo:''};
 let paymentReportEntryIds = [];
 let paymentReportSourceStatus = '';
 let editingEntryId = '';
@@ -1421,7 +1423,133 @@ async function loadStaffGroups() {
 
 function staffGroupRank(name){
   const i = STAFF_GROUP_OPTIONS.indexOf(staffGroups[name]);
-  return i < 0 ? STAFF_GROUP_OPTIONS.length : i;
+  if(i < 0) return STAFF_GROUP_OPTIONS.length;      // 미지정은 항상 마지막
+  return staffSortMode==='delegate-first' ? STAFF_GROUP_OPTIONS.length - 1 - i : i;
+}
+
+function sortedStaffNames(names){
+  const byName = (x,y)=>x.localeCompare(y,'ko');
+  if(staffSortMode==='name') return [...names].sort(byName);
+  return [...names].sort((x,y)=>staffGroupRank(x)-staffGroupRank(y) || byName(x,y));
+}
+
+/* ===== 우리은행 다계좌이체 ===== */
+function isWooriBank(bank){
+  const b = String(bank||'').replace(/\s+/g,'').toLowerCase();
+  return b.includes('우리') || b.includes('woori');
+}
+
+function parseTransferAmount(value){
+  const digits = String(value||'').replace(/[,\s원]/g,'');
+  if(!/^\d+$/.test(digits)) return 0;
+  const n = parseInt(digits,10);
+  return Number.isSafeInteger(n) ? n : 0;
+}
+
+function transferCandidates(){
+  const rows = [];
+  staffNames.forEach(name=>{
+    const d = staffBankDetails.find(x=>x.name===name);
+    if(d && isWooriBank(d.bank) && d.accountNumber) rows.push({name,account:d.accountNumber,group:staffGroups[name]||''});
+  });
+  return rows;
+}
+
+function visibleTransferRows(){
+  const byName = new Map(transferCandidates().map(r=>[r.name,r]));
+  return sortedStaffNames([...byName.keys()])
+    .map(name=>byName.get(name))
+    .filter(r=>transferState.group==='전체' || (r.group||'미지정')===transferState.group);
+}
+
+function updateTransferSummary(){
+  const el = document.getElementById('transfer-summary');
+  if(!el) return;
+  const rows = visibleTransferRows().filter(r=>!transferState.skip.has(r.name));
+  const total = rows.reduce((sum,r)=>sum + parseTransferAmount(transferState.amounts[r.name]),0);
+  const excluded = staffNames.length - transferCandidates().length;
+  el.textContent = `선택 ${rows.length}명 · 합계 ${fmt(total)}` + (excluded>0 ? ` (우리은행 계좌가 아니거나 계좌번호가 없는 ${excluded}명은 제외)` : '');
+}
+
+function renderTransferSection(){
+  const list = document.getElementById('transfer-list');
+  if(!list) return;
+  const filter = document.getElementById('transfer-group-filter');
+  if(filter && filter.value!==transferState.group) filter.value = transferState.group;
+  const sel = document.getElementById('staff-sort-select');
+  if(sel && sel.value!==staffSortMode) sel.value = staffSortMode;
+  list.replaceChildren();
+  const rows = visibleTransferRows();
+  if(!rows.length){
+    const empty = document.createElement('p');
+    empty.className = 'pending-empty';
+    empty.textContent = '표시할 우리은행 계좌 담당자가 없습니다. 위 목록에서 은행(우리은행)과 계좌번호를 저장해 주세요.';
+    list.appendChild(empty);
+    updateTransferSummary();
+    return;
+  }
+  const table = document.createElement('table');
+  table.className = 'staff-table transfer-table';
+  table.innerHTML = `<thead><tr>
+    <th style="width:10%">선택</th>
+    <th style="width:16%">구분</th>
+    <th style="width:20%">이름</th>
+    <th style="width:30%">계좌번호</th>
+    <th class="num" style="width:24%">금액(원)</th>
+  </tr></thead>`;
+  const tbody = document.createElement('tbody');
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.dataset.transferRow = r.name;
+    const amount = transferState.amounts[r.name] || '';
+    tr.innerHTML = `
+      <td><input type="checkbox" data-transfer-check="${escapeHTML(r.name)}"${transferState.skip.has(r.name)?'':' checked'} aria-label="${escapeHTML(r.name)} 선택"></td>
+      <td>${escapeHTML(r.group || '미지정')}</td>
+      <td class="staff-name-cell">${escapeHTML(r.name)}</td>
+      <td>${escapeHTML(r.account)}</td>
+      <td class="num"><input type="text" data-transfer-amount="${escapeHTML(r.name)}" value="${escapeHTML(amount)}" inputmode="numeric" placeholder="금액" autocomplete="off" aria-label="${escapeHTML(r.name)} 이체 금액"></td>`;
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  list.appendChild(table);
+  updateTransferSummary();
+}
+
+function downloadTransferFile(){
+  const status = document.getElementById('transfer-status');
+  if(typeof XLSX==='undefined'){
+    status.textContent = '엑셀 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침해 주세요.';
+    return;
+  }
+  const rows = visibleTransferRows().filter(r=>!transferState.skip.has(r.name));
+  if(!rows.length){ status.textContent = '이체할 담당자를 선택해 주세요.'; return; }
+  const missing = rows.filter(r=>!parseTransferAmount(transferState.amounts[r.name]));
+  if(missing.length){
+    status.textContent = `금액이 없거나 올바르지 않은 담당자: ${missing.map(r=>r.name).join(', ')}`;
+    return;
+  }
+  const recvMemo = transferState.recvMemo.trim();
+  const myMemo = transferState.myMemo.trim();
+  const ws = {};
+  rows.forEach((r,i)=>{
+    const values = ['우리은행', r.account, String(parseTransferAmount(transferState.amounts[r.name])), recvMemo, myMemo];
+    values.forEach((v,j)=>{
+      ws[XLSX.utils.encode_cell({r:i,c:j})] = {t:'s', v, z:j>=2?'@':'General'};
+    });
+  });
+  ws['!ref'] = `A1:E${rows.length}`;
+  ws['!cols'] = [{wch:12},{wch:22},{wch:12},{wch:16},{wch:16}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Sheet1');
+  const now = new Date();
+  const stamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+  try{
+    XLSX.writeFile(wb,`다계좌이체_${stamp}.xls`,{bookType:'biff8'});
+    const total = rows.reduce((sum,r)=>sum + parseTransferAmount(transferState.amounts[r.name]),0);
+    status.textContent = `${rows.length}명, 합계 ${fmt(total)} 이체 파일을 만들었습니다.`;
+  }catch(e){
+    status.textContent = `파일 생성 실패: ${e.message || String(e)}`;
+  }
 }
 
 function renderStaffNames(){
@@ -1429,6 +1557,7 @@ function renderStaffNames(){
   const list = document.getElementById('staff-name-list');
   if(!datalist || !list) return;
   renderRecentEntryOptions();
+  renderTransferSection();
   list.replaceChildren();
   if(!staffNames.length){
     const empty = document.createElement('p');
@@ -1448,7 +1577,7 @@ function renderStaffNames(){
     <th style="width:13%">삭제</th>
   </tr></thead>`;
   const tbody = document.createElement('tbody');
-  [...staffNames].sort((x,y)=>staffGroupRank(x)-staffGroupRank(y) || x.localeCompare(y,'ko')).forEach((name,index)=>{
+  sortedStaffNames(staffNames).forEach((name,index)=>{
     const details = staffBankDetails.find(detail=>detail.name===name) || {bank:'',accountNumber:''};
     const tr = document.createElement('tr');
     tr.dataset.staffRow = name;
@@ -4423,6 +4552,40 @@ document.getElementById('year-select').addEventListener('change',event=>setYear(
 document.getElementById('account-balance-input').addEventListener('input',event=>formatBudgetInput(event.target));
 document.getElementById('btn-save-account-balance').addEventListener('click',saveAccountBalance);
 document.getElementById('btn-add-staff-name').addEventListener('click',addStaffName);
+document.getElementById('staff-sort-select').addEventListener('change',event=>{
+  staffSortMode = event.target.value;
+  renderStaffNames();
+});
+document.getElementById('transfer-group-filter').addEventListener('change',event=>{
+  transferState.group = event.target.value;
+  renderTransferSection();
+});
+document.getElementById('transfer-recv-memo').addEventListener('input',event=>{ transferState.recvMemo = event.target.value; });
+document.getElementById('transfer-my-memo').addEventListener('input',event=>{ transferState.myMemo = event.target.value; });
+document.getElementById('btn-transfer-bulk').addEventListener('click',()=>{
+  const status = document.getElementById('transfer-status');
+  const input = document.getElementById('transfer-bulk-amount');
+  const amount = parseTransferAmount(input.value);
+  if(!amount){ status.textContent = '일괄 적용할 금액을 숫자로 입력해 주세요.'; return; }
+  const rows = visibleTransferRows();
+  rows.forEach(r=>{ transferState.amounts[r.name] = String(amount); });
+  renderTransferSection();
+  status.textContent = `표시 중인 ${rows.length}명에게 ${fmt(amount)}을 적용했습니다.`;
+});
+document.getElementById('btn-transfer-download').addEventListener('click',downloadTransferFile);
+document.getElementById('transfer-list').addEventListener('input',event=>{
+  const input = event.target.closest('[data-transfer-amount]');
+  if(!input) return;
+  transferState.amounts[input.dataset.transferAmount] = input.value;
+  updateTransferSummary();
+});
+document.getElementById('transfer-list').addEventListener('change',event=>{
+  const check = event.target.closest('[data-transfer-check]');
+  if(!check) return;
+  if(check.checked) transferState.skip.delete(check.dataset.transferCheck);
+  else transferState.skip.add(check.dataset.transferCheck);
+  updateTransferSummary();
+});
 document.getElementById('staff-name-list').addEventListener('click',event=>{
   const saveButton = event.target.closest('[data-save-staff-profile]');
   if(saveButton){
