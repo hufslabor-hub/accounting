@@ -853,7 +853,6 @@ function stopQuotaCountdown(){
 }
 
 function showQuotaGate(){
-  document.getElementById('gate-sign-in').classList.remove('hidden');
   if(db) db.terminate().catch(()=>{});   // 불필요한 재시도 중단
   showAuthGate(
    '우리는 거지입니다. 오늘 사용량 한도를 모두 사용했습니다.',
