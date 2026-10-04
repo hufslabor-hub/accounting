@@ -642,14 +642,8 @@ body {
   <div class="view" id="view-entry">
     <div class="notice" style="margin-top:28px;">
       <section style="margin-top:28px;">
-  <div class="sec-head"><span class="sec-num">✓</span><h2>월 마감</h2></div>
-  <div class="card">
-    <p id="closing-status" style="margin:0 0 6px;font-weight:700;"></p>
-    <p id="closing-detail" class="count-note" style="margin:0 0 14px;"></p>
-    <button class="btn-primary" id="btn-close-month" type="button"></button>
-    <button class="btn-revert" id="btn-reopen-month" type="button">마지막 마감 취소</button>
-    <span id="closing-msg" role="status"></span>
-  </div>
+  //월 마감 있던 자리      
+  
 </section>
       이 화면에 입력한 내역은 <b>이 페이지를 함께 보는 재정담당자 전원에게 공유</b>됩니다. 새 내역은 <b>입력완료</b>로 등록되며, 같은 담당자의 내역을 선택해 제출·처리할 수 있습니다. 승인된 내역은 보고서 탭 집계에 반영됩니다. 기존 엑셀에서 가져온 내역(8월 24일 이전)은 원본 보존을 위해 삭제할 수 없습니다.
       <b id="entry-storage-warning"></b>
@@ -727,7 +721,7 @@ body {
       <div class="card">
         <div class="filter-row" id="status-filters-entry"></div>
         <div class="filter-row" id="month-filters-entry"></div>
-<div class="table-scroll transaction-table-scroll entry-table-container">
+        <div class="table-scroll transaction-table-scroll entry-table-container">
           <table class="transaction-table entry-table">
             <colgroup>
               <col class="col-date"><col class="col-type"><col class="col-description"><col class="col-mok">
@@ -741,6 +735,17 @@ body {
 <button class="btn-primary hidden" id="btn-load-more-entries" type="button" style="margin-top:12px;">이전 내역 더 보기</button>
       </div>
     </section>
+
+<div class="sec-head"><span class="sec-num">✓</span><h2>월 마감</h2></div>
+  <div class="card">
+    <p id="closing-status" style="margin:0 0 6px;font-weight:700;"></p>
+    <p id="closing-detail" class="count-note" style="margin:0 0 14px;"></p>
+    <button class="btn-primary" id="btn-close-month" type="button"></button>
+    <button class="btn-revert" id="btn-reopen-month" type="button">마지막 마감 취소</button>
+    <span id="closing-msg" role="status"></span>
+  </div>
+
+    
   </div>
 <div class="view" id="view-fund">
   <div class="notice" style="margin-top:28px;">
