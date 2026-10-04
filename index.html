@@ -27,10 +27,7 @@ body { background-color:var(--paper); color:var(--ink); }
     background:linear-gradient(180deg, var(--navy) 0%, var(--navy-2) 100%);
     color:var(--paper-2); padding:44px 24px 28px; position:relative;
   }
-  header.masthead::after{
-    content:""; position:absolute; left:0; right:0; bottom:0; height:6px;
-    background:repeating-linear-gradient(90deg, var(--gold) 0 28px, transparent 28px 40px); opacity:.9;
-  }
+  header.masthead::after{ display:none; }
   .masthead-inner{max-width:1040px;margin:0 auto;}
   .org{font-size:17px;letter-spacing:.02em;color:var(--gold-soft);font-weight:500;margin:0 0 10px;}
   h1.title{font-family:'Pretendard',sans-serif;font-weight:800;font-size:clamp(24px,4vw,36px);line-height:1.25;margin:0 0 20px;max-width:none;}
@@ -116,9 +113,18 @@ body { background-color:var(--paper); color:var(--ink); }
   .transaction-table th,.transaction-table td{overflow-wrap:anywhere;vertical-align:middle;}
   .transaction-table th{white-space:normal;word-break:keep-all;}
   .transaction-table td:first-child{white-space:nowrap;}
-  .entry-table{min-width:920px;}
+  .entry-table{min-width:0;width:100%;}
   .income-row{background:var(--income-row);}
   .expense-row{background:var(--paper-2);}
+  .entry-table .col-date{width:11%;}
+  .entry-table .col-type{width:6%;}
+  .entry-table .col-description{width:14%;}
+  .entry-table .col-mok{width:10%;}
+  .entry-table .col-payee{width:9%;}
+  .entry-table .col-spender{width:8%;}
+  .entry-table .col-amount{width:10%;}
+  .entry-table .col-status{width:12%;}
+  .entry-table .col-actions{width:14%;}
   .transaction-table .col-date{width:15%;}
   .transaction-table .col-type{width:6%;}
   .transaction-table .col-description{width:13%;}
@@ -130,6 +136,13 @@ body { background-color:var(--paper); color:var(--ink); }
   .transaction-table .col-actions{width:12%;}
   .transaction-table td.num{white-space:nowrap;}
   .entry-table td:nth-child(8){white-space:nowrap;}
+  .entry-table td.col-actions-cell,
+  .entry-table th.col-actions-head{
+    text-align:center; vertical-align:middle;
+  }
+  .entry-table td.col-actions-cell .action-row{
+    justify-content:center;
+  }
   tfoot tr{background:#e9eef4;font-weight:700;}
   tfoot th,tfoot td{border-top:2px solid var(--navy-2);vertical-align:middle;}
   .report-total-row{background:#e9eef4;font-weight:700;}
@@ -257,19 +270,27 @@ body { background-color:var(--paper); color:var(--ink); }
   .hierarchy-table .hierarchy-row-delete{white-space:nowrap;}
   .hierarchy-save-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;}
   input:focus{outline:2px solid var(--navy); outline-offset:-1px;}
-  .gubun-toggle{display:flex; border:1px solid var(--line); overflow:hidden;}
-  .gubun-toggle button{
-    flex:1; border:none; padding:9px 10px; background:var(--paper-2); cursor:pointer;
-    font-family:'Pretendard',sans-serif; font-size:14px; color:var(--ink-soft);
+  .gubun-toggle{
+    display:flex; border:1px solid var(--line); overflow:hidden;
+    width:100%; min-width:160px; box-sizing:border-box;
   }
-  .gubun-toggle button.on-income.selected{background:var(--income-row);color:var(--navy);}
-  .gubun-toggle button.on-expense.selected{background:var(--expense); color:var(--paper-2);}
+  .gubun-toggle button{
+    flex:1 1 50%; width:50%; min-width:0; border:none; padding:9px 10px;
+    background:var(--paper-2); cursor:pointer; box-sizing:border-box;
+    font-family:'Pretendard',sans-serif; font-size:14px; font-weight:500; color:var(--ink-soft);
+  }
+  .gubun-toggle button.on-income.selected{background:var(--income-row);color:var(--navy);font-weight:700;}
+  .gubun-toggle button.on-expense.selected{background:var(--expense); color:var(--paper-2);font-weight:700;}
 
   .btn-primary{
     background:var(--navy); color:var(--paper-2); border:none; padding:11px 22px;
     font-family:'Pretendard',sans-serif; font-size:14.5px; font-weight:700; cursor:pointer;
   }
   .btn-primary:hover{background:var(--navy-2);}
+  .btn-primary.btn-soft{
+    background:var(--gold-soft); color:var(--navy); border:1px solid var(--line);
+  }
+  .btn-primary.btn-soft:hover{background:var(--gold); color:var(--paper-2);}
   .btn-text{background:none;border:none;color:var(--ink-soft);text-decoration:underline;cursor:pointer;font-size:13px;padding:0;}
   .del-btn{background:none;border:1px solid var(--line);color:var(--expense);font-size:14px;padding:4px 9px;cursor:pointer;}
   .del-btn:hover{background:var(--paper);}
@@ -464,12 +485,12 @@ body {
 
 <header class="masthead">
     <div class="masthead-inner">
-    <p class="org">한국외국어대학교 노동조합 회계 프로그램</p>
-    <h1 class="title">쇼미더머니 <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
+    <p class="org">한국외국어대학교 노동조합</p>
+    <h1 class="title">쇼미더머니(노동조합 회계 프로그램) <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
     
     <div class="auth-bar">
       <span id="auth-status">Firebase 연결 확인 중...</span>
-      <button class="btn-auth" id="btn-sign-in" type="button">Google 로그인</button>
+      <button class="btn-auth hidden" id="btn-sign-in" type="button">Google 로그인</button>
       <button class="btn-auth hidden" id="btn-sign-out" type="button">로그아웃</button>
     </div>
 
@@ -499,11 +520,11 @@ body {
 </div>
 
 <div class="auth-gate" id="auth-gate">
-  <h2 id="auth-gate-title">로그인이 필요합니다</h2>
-  <p id="auth-gate-message">허가된 담당자 Google 계정으로 로그인해 주세요.</p>
+  <h2 id="auth-gate-title">자료를 불러오고 있습니다</h2>
+  <p id="auth-gate-message">잠시만 기다려 주세요.</p>
   <p id="auth-user-id" class="hidden"></p>
-  <p id="quota-countdown" class="hidden"></p>   <!-- ← 추가 -->
-  <button class="btn-primary" id="gate-sign-in" type="button">Google 로그인</button>
+  <p id="quota-countdown" class="hidden"></p>
+  <button class="btn-primary hidden" id="gate-sign-in" type="button">Google 로그인</button>
 </div>
 
 <div class="wrap hidden" id="app-content">
@@ -779,7 +800,7 @@ body {
               <col class="col-date"><col class="col-type"><col class="col-description"><col class="col-mok">
               <col class="col-payee"><col class="col-spender"><col class="col-amount"><col class="col-status"><col class="col-actions">
             </colgroup>
-            <thead><tr><th>결제일</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th>담당자</th><th class="num">금액</th><th>상태</th><th></th></tr></thead>
+            <thead><tr><th>결제일</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th>담당자</th><th class="num">금액</th><th>상태</th><th class="col-actions-head">추가 작업</th></tr></thead>
             <tbody id="tx-body-entry"></tbody>
           </table>
         </div>
@@ -799,7 +820,7 @@ body {
         <p id="closing-status" style="margin:0 0 6px;font-weight:700;"></p>
         <p id="closing-detail" class="count-note" style="margin:0 0 14px;"></p>
         <button class="btn-primary" id="btn-close-month" type="button"></button>
-        <button class="btn-primary" id="btn-reopen-month" type="button">마지막 마감 취소</button>
+        <button class="btn-primary btn-soft" id="btn-reopen-month" type="button">마지막 마감 취소</button>
         <span id="closing-msg" role="status"></span>
       </div>
     </section>
@@ -1454,23 +1475,35 @@ async function handleAuthState(user){
   stopSharedDataWatchers();
   stopLedgerWatcher();
   currentUser = user;
-  document.getElementById('btn-sign-in').classList.toggle('hidden', !!user);
+  document.getElementById('btn-sign-in').classList.add('hidden');
   document.getElementById('btn-sign-out').classList.toggle('hidden', !user);
   if(!user){
-    showAuthGate('로그인이 필요합니다','허가된 담당자 Google 계정으로 로그인해 주세요.');
-    document.getElementById('auth-status').textContent = '로그인 필요';
+    // 세션 복원 전·비로그인: 로그인 버튼 없이 안내만 (자동 로그인 대기)
+    showAuthGate('자료를 불러오고 있습니다','잠시만 기다려 주세요.');
+    document.getElementById('gate-sign-in').classList.add('hidden');
+    document.getElementById('btn-sign-in').classList.add('hidden');
+    document.getElementById('auth-status').textContent = '인증 확인 중…';
+    // 짧은 대기 후에도 세션이 없으면 로그인 버튼 표시
+    setTimeout(()=>{
+      if(!currentUser){
+        showAuthGate('로그인이 필요합니다','허가된 담당자 Google 계정으로 로그인해 주세요.');
+        document.getElementById('gate-sign-in').classList.remove('hidden');
+        document.getElementById('btn-sign-in').classList.remove('hidden');
+        document.getElementById('auth-status').textContent = '로그인 필요';
+      }
+    }, 1500);
     return;
   }
-  document.getElementById('auth-status').textContent = `${user.email || 'Google 계정'} 확인 중... (STEP2)`;
+  showAuthGate('자료를 불러오고 있습니다','장부와 예산 자료를 불러오는 중입니다. 잠시만 기다려 주세요.');
+  document.getElementById('gate-sign-in').classList.add('hidden');
+  document.getElementById('auth-status').textContent = `${user.email || 'Google 계정'} 확인 중…`;
 
-
-  
   try{
 const allowed = await Promise.race([
   db.collection('allowedUsers').doc(user.uid).get(),
   new Promise((_,reject)=>setTimeout(
     ()=>reject(Object.assign(new Error('Firestore 응답 시간 초과 (한도 초과 가능성)'),{code:'resource-exhausted'})),
-    10000))
+    2500))
 ]);
    
     if(!allowed.exists){
@@ -1479,10 +1512,12 @@ const allowed = await Promise.race([
         '이 계정 UID를 Firebase 담당자에게 전달하고 allowedUsers에 등록해 달라고 요청하세요.',
         user.uid
       );
+      document.getElementById('gate-sign-in').classList.add('hidden');
       document.getElementById('auth-status').textContent = '허용되지 않은 계정';
       return;
     }
-document.getElementById('auth-status').textContent = `${user.email || 'Google 계정'} 데이터 불러오는 중...`;
+document.getElementById('auth-status').textContent = `${user.email || 'Google 계정'} 데이터 불러오는 중…`;
+document.getElementById('auth-gate-message').textContent = '장부와 예산 자료를 불러오는 중입니다. 잠시만 기다려 주세요.';
 await initializeApplicationData();
 document.getElementById('auth-gate').classList.add('hidden');
 document.getElementById('app-controls').classList.remove('hidden');
@@ -1502,6 +1537,7 @@ document.getElementById('auth-status').textContent = user.email || '로그인됨
     '서버 응답이 없습니다 (일일 한도 초과 가능성)',
   '로그인은 성공했지만 Firestore가 응답하지 않습니다. 무료 일일 읽기 한도를 모두 사용했을 가능성이 가장 높습니다. 한도가 초기화된 뒤 다시 접속해 주세요. (인터넷 연결이 불안정해도 같은 화면이 나올 수 있습니다.)'
 );
+    document.getElementById('gate-sign-in').classList.add('hidden');
     document.getElementById('auth-status').textContent = '권한 확인 실패';
   }
 }
@@ -3735,7 +3771,9 @@ const source = ledger;
   const filtered = source
     .filter(t => monthSel==='전체' || t.month===monthSel)
     .filter(t => isReport || currentStatusEntry==='전체' || t.status===currentStatusEntry)
-    // 마감된 달의 승인 건은 결산(전체 내역)에서 숨기고 보고서에만 표시
+    // 결의 내역에는 입력완료(미결의) 건을 넣지 않음 — 입력 내역 상자에서만 관리
+    .filter(t => isReport || t.status!=='input-complete')
+    // 마감된 달의 승인 건은 결의 내역에서 숨기고 보고서에만 표시
     .filter(t => isReport || !isClosedApproved(t))
             .slice()
     .sort((a,b) => (b.date||'').localeCompare(a.date||''));
@@ -3764,7 +3802,7 @@ const source = ledger;
         <td>${escapeHTML(t.spender||'-')}</td>
         <td class="num">${fmtShort(t.amount)}</td>
         <td><span class="status-badge status-${t.status}">${STATUS_LABEL[t.status]||t.status}</span>${t.managementNo?`<span class="management-number">관리번호 ${escapeHTML(String(t.managementNo))}</span>`:''}</td>
-        <td>${rowActions(t)}</td>
+        <td class="col-actions-cell">${rowActions(t)}</td>
       `;
     }
     body.appendChild(tr);
@@ -4812,12 +4850,11 @@ function renderStatusFilters(){
   const el = document.getElementById('status-filters-entry');
   el.innerHTML = '';
   const plainLabels = {
-    'input-complete':'입력완료',
     submitted:'결의완료',
     approved:'승인',
     rejected:'반려됨'
   };
-  const options = ['전체','input-complete','submitted','approved','rejected'];
+  const options = ['전체','submitted','approved','rejected'];
   options.forEach(s=>{
     const btn = document.createElement('button');
     btn.className = 'filter-btn' + (s===currentStatusEntry ? ' active' : '');
