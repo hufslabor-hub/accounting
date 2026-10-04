@@ -585,9 +585,17 @@ body { background-color:var(--paper); color:var(--ink); }
       이 화면에 입력한 내역은 <b>이 페이지를 함께 보는 재정담당자 전원에게 공유</b>됩니다. 새 내역은 <b>입력완료</b>로 등록되며, 같은 담당자의 내역을 선택해 제출·처리할 수 있습니다. 승인된 내역은 보고서 탭 집계에 반영됩니다. 기존 엑셀에서 가져온 내역(8월 24일 이전)은 원본 보존을 위해 삭제할 수 없습니다.
       <b id="entry-storage-warning"></b>
     </div>
-
+// 여기가 결산 탭 새 내역 입력 부
     <section style="margin-top:0;">
       <div class="sec-head"><span class="sec-num">＋</span><h2>새 내역 입력</h2></div>
+<!-- HTML: 입력 폼 상단 또는 적절한 위치에 추가할 다빈도 템플릿 버튼 구역 -->
+<div class="quick-template-container" style="margin-bottom: 12px;">
+  <span style="font-size: 13px; font-weight: bold; margin-right: 8px;">⚡ 자주 쓰는 지출 템플릿:</span>
+  <button type="button" class="btn btn-sm btn-outline-secondary" onclick="applyTemplate('중집활동비')">중집 활동비</button>
+  <button type="button" class="btn btn-sm btn-outline-secondary" onclick="applyTemplate('생일사업')">생일 축하 사업</button>
+  <button type="button" class="btn btn-sm btn-outline-secondary" onclick="applyTemplate('차량유류비')">업무용 유류비</button>
+</div>
+      
       <div class="card">
         <div class="form-grid">
           <div class="field">
@@ -989,6 +997,143 @@ function stopSharedDataWatchers(){
   dataUnsubscribers = [];
 }
 
+
+// JavaScript: 템플릿 데이터 정의 및 폼 자동 채우기 함수
+const QUICK_TEMPLATES = {
+  '중집활동비': {
+    type: '지출',
+    account: '지출합계',
+    hang: '운영비',
+    mok: '회의비',
+    desc: '중앙집행위원회 정기회의 활동비',
+    payee: '중집위 대표',
+    staff: '담당자'
+  },
+  '생일사업': {
+    type: '지출',
+    account: '지출합계',
+    hang: '사업비',
+    mok: '복지사업비',
+    desc: '조합원 정기 생일 축하 상품권 지급',
+    payee: '조합원 일동',
+    staff: '복지부장'
+  },
+  '차량유류비': {
+    type: '지출',
+    account: '지출합계',
+    hang: '운영비',
+    mok: '여비교통비',
+    desc: '노조 업무 차량 유류비 지급',
+    payee: '주유소',
+    staff: '총무부장'
+  }
+};
+
+/**
+ * 데이터를 CSV 파일로 변환하여 다운로드하는 공통 함수 (한글 깨짐 방지 UTF-8 BOM 적용)
+ * @param {Array<Array<string>>} rows - 2차원 배열 데이터 (헤더 + 데이터 행)
+ * @param {string} filename - 저장할 파일명 (예: "2026_예산대비실적.csv")
+ */
+function downloadCSV(rows, filename) {
+  // UTF-8 BOM 추가 (\uFEFF)
+  const csvContent = "\uFEFF" + rows.map(row => 
+    row.map(cell => {
+      // 큰따옴표, 줄바꿈, 쉼표 예외 처리
+      const str = String(cell ?? '').replace(/"/g, '""');
+      return `"${str}"`;
+    }).join(",")
+  ).join("\r\n");
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  
+  link.setAttribute("href", url);
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * 1) 예산 대비 실적 표 CSV 내보내기
+ * @param {Array<Object>} budgetData - 예산 대비 실적 데이터 객체 배열
+ */
+function exportBudgetReportToCSV(budgetData) {
+  const headers = ["관", "항", "목", "예산액(원)", "집행액(원)", "잔액(원)", "집행률(%)"];
+  
+  const rows = [headers];
+  
+  budgetData.forEach(item => {
+    const budget = Number(item.budget || 0);
+    const spent = Number(item.spent || 0);
+    const balance = budget - spent;
+    const rate = budget > 0 ? ((spent / budget) * 100).toFixed(1) : "0.0";
+
+    rows.push([
+      item.gwan || '',
+      item.hang || '',
+      item.mok || '',
+      budget,
+      spent,
+      balance,
+      `${rate}%`
+    ]);
+  });
+
+  const today = new Date().toISOString().slice(0, 10);
+  downloadCSV(rows, `한국외대_노동조합_예산대비실적보고서_${today}.csv`);
+}
+
+/**
+ * 2) 거래 내역 전체/검색결과 CSV 내보내기
+ * @param {Array<Object>} transactions - 거래 내역 데이터 객체 배열
+ */
+function exportTransactionsToCSV(transactions) {
+  const headers = ["날짜", "구분", "관", "항", "목", "적요/내용", "지급처", "담당자", "금액(원)"];
+  
+  const rows = [headers];
+
+  transactions.forEach(t => {
+    rows.push([
+      t.date || '',
+      t.type || '',
+      t.gwan || '',
+      t.hang || '',
+      t.mok || '',
+      t.desc || '',
+      t.payee || '',
+      t.staff || '',
+      Number(t.amount || 0)
+    ]);
+  });
+
+  const today = new Date().toISOString().slice(0, 10);
+  downloadCSV(rows, `한국외대_노동조합_회계장부_거래내역_${today}.csv`);
+}
+
+
+
+  
+function applyTemplate(key) {
+  const tpl = QUICK_TEMPLATES[key];
+  if (!tpl) return;
+
+  // 폼 필드 요소 ID에 맞춰 값 채우기 (기존 HTML 입력 요소 ID 참조)
+  if (document.getElementById('f-type')) document.getElementById('f-type').value = tpl.type;
+  if (document.getElementById('f-hang')) document.getElementById('f-hang').value = tpl.hang;
+  if (document.getElementById('f-mok')) document.getElementById('f-mok').value = tpl.mok;
+  if (document.getElementById('f-desc')) document.getElementById('f-desc').value = tpl.desc;
+  if (document.getElementById('f-payee')) document.getElementById('f-payee').value = tpl.payee;
+  if (document.getElementById('f-staff')) document.getElementById('f-staff').value = tpl.staff;
+
+  // 금액 필드로 포커스 이동하여 빠른 금액 입력 유도
+  const amountEl = document.getElementById('f-amount');
+  if (amountEl) amountEl.focus();
+}
+
+  
 function watchSharedData(){
   stopSharedDataWatchers();
   const watchedKeys = [YEARS_KEY,budgetKey(currentYear),accountBalanceKey(currentYear),STAFF_NAMES_KEY,STAFF_BANK_DETAILS_KEY,categoryKey(currentYear)];
