@@ -1059,7 +1059,9 @@ async function signInWithGoogle(){
   if(!auth) return;
   try{
     document.getElementById('auth-status').textContent = '로그인 창을 여는 중...';
-    await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({prompt:'select_account'});   // 항상 계정 선택 화면 표시
+    await auth.signInWithPopup(provider);
   }catch(e){
     document.getElementById('auth-status').textContent = `Google 로그인 실패: ${e.code || ''} ${e.message}`;
     document.getElementById('auth-gate-message').textContent = `Google 로그인을 완료하지 못했습니다. ${e.code || ''} ${e.message}`;
