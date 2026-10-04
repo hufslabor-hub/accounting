@@ -907,3 +907,58 @@ table:not(.payment-report-document) thead th{
 .hierarchy-total-message{white-space:nowrap;}
 /* 합계 행 글자: 머리글용 연한 th 색이 남아 있던 부분 */
 tfoot th,tfoot td,.report-total-row th,.report-total-row td,.hierarchy-total-row th,.hierarchy-total-row td{color:var(--navy);font-weight:700;}
+
+/* 7) 수입 예산 합계 행(tbody 안)을 지출 예산 합계 행(tfoot)과 동일한 테두리·높이로 */
+.hierarchy-table tbody tr.hierarchy-total-row:hover{background:var(--gold-soft);}
+.hierarchy-table tbody tr.hierarchy-total-row td,
+.hierarchy-table tfoot tr.hierarchy-total-row td{
+  height:44px;padding:9px 10px;box-sizing:border-box;vertical-align:middle;
+  border-top:2px solid var(--navy-2);border-bottom:1px solid var(--line);
+  border-left:1px solid var(--line);border-right:0;
+}
+.hierarchy-table tbody tr.hierarchy-total-row td:first-child,
+.hierarchy-table tfoot tr.hierarchy-total-row td:first-child{border-left:0;}
+
+/* 8) 모든 버튼: 마우스를 올리면 색 반전 (모양이 밀리지 않도록 inset 선 사용) */
+button{transition:background-color .12s,color .12s,box-shadow .12s;}
+@media (hover:hover){
+  .filter-btn:hover:not(:disabled),
+  .mbr-chip:hover:not(:disabled),
+  .qt-btn:hover:not(:disabled),
+  .date-picker-button:hover:not(:disabled),
+  .receipt-pick-btn:hover:not(:disabled),
+  .gubun-toggle button:not(.selected):hover:not(:disabled),
+  .btn-primary.btn-soft:hover:not(:disabled),
+  .del-btn:hover:not(:disabled),
+  .btn-reject:hover:not(:disabled),
+  .report-tab-btn:hover:not(:disabled):not(.active){
+    background:var(--navy);color:var(--paper-2);border-color:var(--navy);
+  }
+  .btn-reject:hover:not(:disabled),.del-btn:hover:not(:disabled){background:var(--expense);border-color:var(--expense);}
+  .btn-revert:hover:not(:disabled){background:var(--ink-soft);color:var(--paper-2);border-color:var(--ink-soft);}
+  /* 선택된(active) 버튼은 반대로 밝게 */
+  .filter-btn.active:hover:not(:disabled),
+  .mbr-chip.is-on:hover:not(:disabled),
+  .report-tab-btn.active:hover:not(:disabled){
+    background:var(--paper-2);color:var(--navy);border-color:var(--navy);box-shadow:inset 0 0 0 1px var(--navy);
+  }
+  .btn-primary:not(.btn-soft):hover:not(:disabled){
+    background:var(--paper-2);color:var(--navy);box-shadow:inset 0 0 0 1px var(--navy);
+  }
+  .btn-approve:hover:not(:disabled){
+    background:var(--paper-2);color:var(--income);box-shadow:inset 0 0 0 1px var(--income);
+  }
+  .btn-auth:hover:not(:disabled){
+    background:var(--navy);color:var(--paper-2);box-shadow:inset 0 0 0 1px var(--paper-2);
+  }
+  .btn-text:hover:not(:disabled){
+    background:var(--ink-soft);color:var(--paper-2);box-shadow:0 0 0 3px var(--ink-soft);
+  }
+  .hierarchy-table .hierarchy-row-delete:hover:not(:disabled){box-shadow:none;}
+  .tab-btn:not(.active):hover{background:var(--paper);color:var(--navy);}
+  .tab-btn.active:hover{background:rgba(247,250,242,.08);color:var(--paper);}
+  .gubun-toggle button.on-income.selected:hover:not(:disabled){background:var(--navy);color:var(--income-row);}
+  .gubun-toggle button.on-expense.selected:hover:not(:disabled){background:var(--paper-2);color:var(--expense);}
+}
+.receipt-del-btn{background:var(--paper-2);color:var(--expense);border:1.5px solid var(--expense);cursor:pointer;}
+@media (hover:hover){.receipt-del-btn:hover{background:var(--expense);color:var(--paper-2);}}
