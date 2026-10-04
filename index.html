@@ -697,7 +697,7 @@ body {
   <! 월 마감 있던 자리>
   
 </section>
-      새 내역은 <b>입력완료</b>로 등록되며, 같은 담당자의 내역만을 선택해 제출할 수 있습니다. 승인(입금 완료)된 내역만 보고서 탭 집계에 반영됩니다.
+      새 내역은 <b>입력완료</b>로 등록되며, 같은 담당자의 내역만을 선택해 결의할 수 있습니다. 승인(입금 완료)된 내역만 보고서 탭 집계에 반영됩니다.
       <b id="entry-storage-warning"></b>
     </div>
 <!//여기가 결산 탭 새 내역 입력>
@@ -788,20 +788,26 @@ body {
       </div>
     </section>
 
-<div class="sec-head"><span class="sec-num">✓</span><h2>월 마감</h2></div>
-  <div class="card">
-    <p id="closing-status" style="margin:0 0 6px;font-weight:700;"></p>
-    <p id="closing-detail" class="count-note" style="margin:0 0 14px;"></p>
-    <button class="btn-primary" id="btn-close-month" type="button"></button>
-    <button class="btn-revert" id="btn-reopen-month" type="button">마지막 마감 취소</button>
-    <span id="closing-msg" role="status"></span>
-  </div>
+    <section class="pending-section" style="margin-top:28px;">
+      <div class="sec-head"><span class="sec-num">☰</span><h2>결의완료 · 지급 대기 <span class="pending-count" id="submitted-count">0</span></h2></div>
+      <div class="pending-box" id="submitted-box"><div id="submitted-list"></div></div>
+    </section>
 
-    
+    <section style="margin-top:48px;">
+      <div class="sec-head"><span class="sec-num">✓</span><h2>월 마감</h2></div>
+      <div class="card">
+        <p id="closing-status" style="margin:0 0 6px;font-weight:700;"></p>
+        <p id="closing-detail" class="count-note" style="margin:0 0 14px;"></p>
+        <button class="btn-primary" id="btn-close-month" type="button"></button>
+        <button class="btn-revert" id="btn-reopen-month" type="button">마지막 마감 취소</button>
+        <span id="closing-msg" role="status"></span>
+      </div>
+    </section>
+
   </div>
 <div class="view" id="view-fund">
   <div class="notice" style="margin-top:28px;">
-    기금 회계입니다. 입력한 내역은 <b>바로 확정</b>되며(제출·승인 없음), 잘못 입력하면 수정·삭제할 수 있습니다. 연도는 위의 회계연도 선택을 따르고, 담당자 정보는 활동비와 공유합니다.
+    기금 회계입니다. 입력한 내역은 <b>바로 확정</b>되며(결의·승인 없음), 잘못 입력하면 수정·삭제할 수 있습니다. 연도는 위의 회계연도 선택을 따르고, 담당자 정보는 활동비와 공유합니다.
   </div>
 
   <section>
@@ -945,7 +951,7 @@ let statusMessageTimer = null;
 
 const STATUS_LABEL = {
   'input-complete':'입력완료',
-  submitted:'제출완료',
+  submitted:'결의완료',
   approved:'<span class="approved-status">승인</span>',
   paid:'<span class="approved-status">승인</span>',
   confirmed:'<span class="approved-status">승인</span>',
@@ -3142,7 +3148,13 @@ async function renderReportDetail(){
 }
 // ---------- per-entry transactions ----------
 function applyLocalChanges(upserts,deletes){
-  upserts.forEach((entry,id)=>ledgerSources.older.set(id,entry));
+  // recent/pending이 older를 덮어쓰므로, 해당 소스가 가진 항목도 함께 갱신한다.
+  // 승인 등으로 pending 쿼리에서 빠질 경우를 대비해 older에도 항상 최신본을 둔다.
+  upserts.forEach((entry,id)=>{
+    if(ledgerSources.recent.has(id)) ledgerSources.recent.set(id, entry);
+    if(ledgerSources.pending.has(id)) ledgerSources.pending.set(id, entry);
+    ledgerSources.older.set(id, entry);
+  });
   deletes.forEach(id=>Object.values(ledgerSources).forEach(source=>source.delete(id)));
   rebuildLedger();
   setFooter('저장됨');
@@ -3755,7 +3767,7 @@ function bindRowActions(container){
     btn.addEventListener('click', async ()=>{
       const id = btn.getAttribute('data-id');
       const act = btn.getAttribute('data-act');
-      if(act==='unapprove' && !window.confirm('승인을 취소하고 선택 내역을 제출완료 대기 목록으로 되돌리시겠습니까?')) return;
+      if(act==='unapprove' && !window.confirm('승인을 취소하고 선택 내역을 결의완료 대기 목록으로 되돌리시겠습니까?')) return;
       const approvedStates = ['approved','paid','confirmed'];
       try{
         await entryTransaction([id],(found,api)=>{
@@ -3783,7 +3795,7 @@ function bindRowActions(container){
             api.set(next);
           }
         });
-        setStatus(act==='unapprove' ? '승인을 취소해 제출완료 대기 목록으로 되돌렸습니다.' : '반영되어 공유 저장소에 저장됨');
+        setStatus(act==='unapprove' ? '승인을 취소해 결의완료 대기 목록으로 되돌렸습니다.' : '반영되어 공유 저장소에 저장됨');
       }catch(error){
         setStatus(`변경에 실패했습니다: ${error.message || String(error)}`,true);
       }
@@ -3877,7 +3889,7 @@ function submittedGroupsTable(groups, checkedIds=new Set()){
     <table class="transaction-table pending-transaction-table">
       <thead><tr>
         <th class="workflow-select"><input type="checkbox" data-workflow-all="submitted" aria-label="전체 선택"></th>
-        <th class="workflow-index">순번</th><th>결제일</th><th colspan="2">제출 묶음</th><th colspan="2">담당자</th><th class="num">합계 금액</th>
+        <th class="workflow-index">순번</th><th>결제일</th><th colspan="2">결의 묶음</th><th colspan="2">담당자</th><th class="num">합계 금액</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
@@ -3904,6 +3916,38 @@ function updateWorkflowSummary(status){
   box.textContent = text;
 }
 
+function bindWorkflowControls(root){
+  if(!root) return;
+  root.querySelectorAll('[data-workflow-action]').forEach(button=>{
+    button.addEventListener('click',()=>{
+      const action = button.dataset.workflowAction;
+      if(action==='submit') updateSelectedWorkflow('input-complete','submitted');
+      else if(action==='edit-input') editSelectedInputEntry();
+      else if(action==='delete-input') deleteSelectedInputEntries();
+      else if(action==='reject-submitted') updateSelectedWorkflow('submitted','input-complete');
+      else if(action==='preview') openPaymentReport('submitted');
+      else if(action==='payment') openPaymentReport('submitted');
+    });
+  });
+  root.querySelectorAll('[data-workflow-id], [data-workflow-group]').forEach(input=>
+    input.addEventListener('change',()=>updateWorkflowSummary(input.dataset.workflowStatus)));
+  root.querySelectorAll('[data-workflow-all]').forEach(input=>
+    input.addEventListener('change',()=>{
+      const status = input.dataset.workflowAll;
+      root.querySelectorAll(`[data-workflow-id][data-workflow-status="${status}"], [data-workflow-group][data-workflow-status="${status}"]`)
+        .forEach(box=>box.checked = input.checked);
+      updateWorkflowSummary(status);
+    }));
+  root.querySelectorAll('.submitted-group-row').forEach(row=>{
+    row.addEventListener('click',event=>{
+      if(event.target.closest('input[type="checkbox"]')) return;
+      const key = row.dataset.groupKey;
+      const detail = root.querySelector(`[data-group-detail="${key}"]`);
+      if(detail) detail.classList.toggle('hidden');
+    });
+  });
+}
+
 function renderPendingBox(){
   const checkedIds = new Set([
     ...[...document.querySelectorAll('[data-workflow-id]:checked')].map(input=>input.dataset.workflowId),
@@ -3913,22 +3957,36 @@ function renderPendingBox(){
   const inputComplete = ledger.filter(t=>t.status==='input-complete' && !t.locked).sort(byDate);
   const submitted = ledger.filter(t=>t.status==='submitted' && !t.locked).sort(byDate);
   const submittedGroups = groupSubmittedEntries(submitted);
-  document.getElementById('pending-count').textContent = inputComplete.length + submitted.length;
+  document.getElementById('pending-count').textContent = inputComplete.length;
   const list = document.getElementById('pending-list');
   list.innerHTML = `
     <div class="workflow-stage">
-      <h3>입력완료 · 제출 대기 (${inputComplete.length}건)</h3>
+      <h3>입력완료 · 결의 대기 (${inputComplete.length}건)</h3>
       ${workflowTable(inputComplete,'input-complete',checkedIds)}
       <p class="workflow-summary" data-workflow-summary="input-complete" role="status"></p>
       <div class="workflow-actions">
-        <button class="btn-primary" type="button" data-workflow-action="preview-input">선택 내역 보고서 열람</button>
-        <button class="btn-primary" type="button" data-workflow-action="submit">선택 내역 제출 및 PDF 저장</button>
+        <button class="btn-primary" type="button" data-workflow-action="submit">선택 내역 결의</button>
         <button class="btn-revert" type="button" data-workflow-action="edit-input">선택 내용 수정</button>
         <button class="btn-reject" type="button" data-workflow-action="delete-input">선택 내역 삭제</button>
       </div>
     </div>
+    <p class="count-note">한 번에 처리하는 선택 내역은 담당자가 모두 같아야 합니다.</p>`;
+  bindRowActions(list);
+  bindWorkflowControls(list);
+  updateWorkflowSummary('input-complete');
+
+  // 결의완료·지급 대기 상자는 전체 내역 아래 / 월 마감 위에 별도 렌더
+  renderSubmittedBox(submittedGroups, submitted, checkedIds);
+}
+
+function renderSubmittedBox(submittedGroups, submitted, checkedIds){
+  const box = document.getElementById('submitted-list');
+  const countEl = document.getElementById('submitted-count');
+  if(!box) return;
+  if(countEl) countEl.textContent = submitted.length;
+  box.innerHTML = `
     <div class="workflow-stage">
-      <h3>제출완료 · 지급 대기 (${submittedGroups.length}묶음 / ${submitted.length}건)</h3>
+      <h3>결의완료 · 지급 대기 (${submittedGroups.length}묶음 / ${submitted.length}건)</h3>
       ${submittedGroupsTable(submittedGroups, checkedIds)}
       <p class="workflow-summary" data-workflow-summary="submitted" role="status"></p>
       <div class="workflow-actions">
@@ -3937,37 +3995,10 @@ function renderPendingBox(){
         <button class="btn-reject" type="button" data-workflow-action="reject-submitted">선택 내역 반려</button>
       </div>
     </div>
-    <p class="count-note">한 번에 처리하는 선택 내역은 담당자가 모두 같아야 합니다. 제출완료 묶음을 클릭하면 상세 내역을 확인할 수 있습니다.</p>`;
-  bindRowActions(list);
-  list.querySelectorAll('[data-workflow-action]').forEach(button=>{
-    button.addEventListener('click',()=>{
-      const action = button.dataset.workflowAction;
-      if(action==='submit') updateSelectedWorkflow('input-complete','submitted');
-      else if(action==='edit-input') editSelectedInputEntry();
-      else if(action==='delete-input') deleteSelectedInputEntries();
-      else if(action==='reject-submitted') updateSelectedWorkflow('submitted','input-complete');
-      else if(action==='preview-input') openPaymentReport('input-complete');
-      else openPaymentReport('submitted');
-    });
-  });
-  list.querySelectorAll('[data-workflow-id], [data-workflow-group]').forEach(input=>
-    input.addEventListener('change',()=>updateWorkflowSummary(input.dataset.workflowStatus)));
-  list.querySelectorAll('[data-workflow-all]').forEach(input=>
-    input.addEventListener('change',()=>{
-      const status = input.dataset.workflowAll;
-      list.querySelectorAll(`[data-workflow-id][data-workflow-status="${status}"], [data-workflow-group][data-workflow-status="${status}"]`)
-        .forEach(box=>box.checked = input.checked);
-      updateWorkflowSummary(status);
-    }));
-  list.querySelectorAll('.submitted-group-row').forEach(row=>{
-    row.addEventListener('click',event=>{
-      if(event.target.closest('input[type="checkbox"]')) return;
-      const key = row.dataset.groupKey;
-      const detail = list.querySelector(`[data-group-detail="${key}"]`);
-      if(detail) detail.classList.toggle('hidden');
-    });
-  });
-  ['input-complete','submitted'].forEach(updateWorkflowSummary);
+    <p class="count-note">한 번에 처리하는 선택 내역은 담당자가 모두 같아야 합니다. 결의완료 묶음을 클릭하면 상세 내역을 확인할 수 있습니다.</p>`;
+  bindRowActions(box);
+  bindWorkflowControls(box);
+  updateWorkflowSummary('submitted');
 }
 
 function selectedWorkflowEntries(status){
@@ -4215,14 +4246,7 @@ async function updateSelectedWorkflow(fromStatus,toStatus){
       const sequence = await persistSubmissionBatch(entries,new Date().toISOString(),actor);
       renderReport();
       renderEntryView();
-      const message = `${spender} 담당자의 ${ids.length}건을 관리번호 ${sequence}로 제출했습니다.`;
-      setStatus(`${message} PDF 보고서를 만드는 중…`);
-      try{
-        const fileName = await downloadReportPdf(ids,spender,'제출');
-        setStatus(`${message} PDF 저장: ${fileName}`);
-      }catch(pdfError){
-        setStatus(`${message} 다만 PDF 생성에 실패했습니다(${pdfError.message}). '선택 내역 보고서 열람'에서 다시 저장할 수 있습니다.`,true);
-      }
+      setStatus(`${spender} 담당자의 ${ids.length}건을 관리번호 ${sequence}로 결의했습니다.`);
       return;
     }
     const now = new Date().toISOString();
@@ -4234,7 +4258,7 @@ async function updateSelectedWorkflow(fromStatus,toStatus){
       targets.forEach(entry=>{
         const next = {...entry,status:toStatus};
         if(toStatus==='input-complete' && fromStatus==='submitted'){
-          // 반려: 제출완료 → 입력완료로 되돌림
+          // 반려: 결의완료 → 입력완료로 되돌림
           next.rejectedAt = now;
           next.rejectedBy = actor;
           ['managementNo','submissionSequence','submittedAt','submittedBy'].forEach(key=>delete next[key]);
@@ -4456,7 +4480,7 @@ function openPaymentReport(status){
     const approveButton = document.getElementById('btn-approve-payment-report');
     approveButton.classList.toggle('hidden',status!=='submitted');
     if(status!=='submitted'){
-      document.getElementById('payment-report-status').textContent = '승인은 제출완료 처리 후 가능합니다.';
+      document.getElementById('payment-report-status').textContent = '승인은 결의완료 처리 후 가능합니다.';
     }
     document.getElementById('payment-report-dialog').showModal();
   }catch(error){
@@ -4473,7 +4497,7 @@ function renderPaymentReport(entries,spender,approval=null,managementNoOverride=
   const existingManagementNumbers = [...new Set(entries.map(entry=>entry.managementNo).filter(Boolean).map(String))];
   const managementNo = managementNoOverride || (existingManagementNumbers.length===1
     ? existingManagementNumbers[0]
-    : existingManagementNumbers.length>1 ? `복수 (${existingManagementNumbers.length}개)` : '제출 후 부여');
+    : existingManagementNumbers.length>1 ? `복수 (${existingManagementNumbers.length}개)` : '결의 후 부여');
   const bankDetails = staffBankDetails.find(detail=>detail.name===spender) || {bank:'',accountNumber:''};
   const sheet = target;                     
 const rows = ordered.map((entry,index)=>`
@@ -4577,7 +4601,7 @@ async function approvePaymentReport(){
   const ids = paymentReportEntryIds.slice();
   const entries = ids.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
   if(paymentReportSourceStatus!=='submitted'){
-    status.textContent = '선택 내역 승인과 PDF 저장은 제출완료된 내역만 가능합니다.';
+    status.textContent = '선택 내역 승인과 PDF 저장은 결의완료된 내역만 가능합니다.';
     return;
   }
   if(!entries.length || entries.length!==ids.length || entries.some(entry=>entry.status!=='submitted')){
@@ -4707,7 +4731,7 @@ function renderStatusFilters(){
   el.innerHTML = '';
   const plainLabels = {
     'input-complete':'입력완료',
-    submitted:'제출완료',
+    submitted:'결의완료',
     approved:'승인',
     rejected:'반려됨'
   };
