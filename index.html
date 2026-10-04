@@ -520,11 +520,12 @@ body {
 <div id="report-section" class="card" style="margin-top: 20px;">
   <h2>📊 월별 누적 보고서</h2>
   
-  <!-- 1월 ~ 12월 탭 버튼들이 생성될 곳 -->
-  <div id="report-tabs-container" class="report-tabs"></div>
+  <!-- 1월~12월 버튼이 동적으로 들어갈 위치 -->
+  <div id="report-tabs-container" class="report-tabs" style="display: flex; gap: 8px; flex-wrap: wrap; margin: 15px 0;"></div>
+
+  <h3 id="report-title">보고서를 선택하세요</h3>
 
   <!-- 보고서 테이블 -->
-  <h3 id="report-title" style="margin-top: 15px;">보고서를 선택하세요</h3>
   <table class="ledger-table">
     <thead>
       <tr>
@@ -2116,7 +2117,34 @@ function acctPeriod(date=new Date()){
 }
 const entryAcctMonth = t => APPROVED_STATES.includes(t.status) ? (t.acctMonth ?? monthNo(t.month)) : null;
 
+document.addEventListener('DOMContentLoaded', function() {
+  renderReportTabs(2027); // 기준 연도 설정
+});
 
+function renderReportTabs(currentYear) {
+  const container = document.getElementById('report-tabs-container');
+  if (!container) return;
+
+  container.innerHTML = '';
+  
+  for (let m = 1; m <= 12; m++) {
+    const monthStr = String(m).padStart(2, '0');
+    const btn = document.createElement('button');
+    btn.className = 'report-tab-btn';
+    btn.textContent = `${m}월 보고서`;
+    btn.type = 'button';
+    
+    btn.onclick = () => {
+      document.querySelectorAll('.report-tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      
+      // 마감된 누적 데이터 호출
+      loadCumulativeReport(currentYear, monthStr);
+    };
+    
+    container.appendChild(btn);
+  }
+}
 
 async function loadBudget(){
   try{
