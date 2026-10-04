@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ko">
-v1.4
 <head>
+v1.5
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title> 쇼미더머니 — 한국외국어대학교 노동조합 회계프로그램</title>
@@ -487,8 +487,8 @@ body {
 
 <header class="masthead">
     <div class="masthead-inner">
-    <p class="org">한국외국어대학교 노동조합 회계 프로그램</p>
-    <h1 class="title">쇼미더머니<span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
+    <p class="org">한국외국어대학교 노동조합</p>
+    <h1 class="title">쇼미더머니(노동조합 회계 프로그램) <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
     
     <div class="auth-bar">
       <span id="auth-status">Firebase 연결 확인 중...</span>
@@ -3148,28 +3148,48 @@ async function loadReportSummary(force=false){
 async function loadReportMonth(month){
   if(reportMonthCache[month]) return;
   const year = currentYear, n = monthNo(month);
-  const base = () => entriesRef(year).where('status','in',APPROVED_STATES);
-  const [byAcct, legacy] = await Promise.all([
-    base().where('acctMonth','==',n).get(),
-    base().where('month','==',month).get()
-  ]);
+  // 승인 건 전체를 읽어 거래 결제일 월로 필터 (승인월과 무관)
+  const snapshot = await entriesRef(year).where('status','in',APPROVED_STATES).get();
   if(year!==currentYear) return;
-  const map = new Map();
-  byAcct.docs.forEach(d=>map.set(d.id,d.data()));
-  legacy.docs.forEach(d=>{ if(d.data().acctMonth===undefined) map.set(d.id,d.data()); });  // 회계월 없는 기존 건만
-  reportMonthCache[month] = [...map.values()];
+  const list = [];
+  snapshot.docs.forEach(doc=>{
+    const t = doc.data();
+    t.id = doc.id;
+    let m = entryTxnMonth(t);
+    if(!m && t.month) m = monthNo(t.month);
+    if(m !== n) return;
+    const dateYear = Number(String(t.date||'').slice(0,4));
+    if(dateYear && dateYear !== year) return;
+    list.push(t);
+  });
+  reportMonthCache[month] = list;
 }
 
+function reportMonthsFromSummary(approved){
+  const set = new Set();
+  (approved||[]).forEach(t=>{
+    if(t.month && monthList.includes(t.month)) set.add(t.month);
+    else {
+      const m = monthNo(t.month) || entryTxnMonth(t);
+      if(m>=1 && m<=12) set.add(m+'월');
+    }
+  });
+  // 집계에 월이 없으면 1~12 중 캐시/실데이터가 있는 월은 아래에서 보완
+  return monthList.filter(m=>set.has(m));
+}
   
 function renderReportMonthFilters(approved){
   const el = document.getElementById('month-filters-report');
+  if(!el) return;
   el.innerHTML = '';
-  const months = monthList.filter(m=>approved.some(t=>t.month===m));
-  if(!months.includes(currentMonthReport)) currentMonthReport = months[months.length-1] || '';
+  let months = reportMonthsFromSummary(approved);
+  // 집계 월이 비어 있으면 월 버튼 전부 제공 (클릭 시 실제 승인 건 조회)
+  if(!months.length) months = monthList.slice();
+  if(!months.includes(currentMonthReport)) currentMonthReport = months[months.length-1] || '1월';
   months.forEach(m=>{
     const btn = document.createElement('button');
     btn.className = 'filter-btn' + (m===currentMonthReport ? ' active' : '');
-btn.textContent = m + (monthNo(m)<=closedThrough ? ' ✓' : '');
+    btn.textContent = m + (monthNo(m)<=closedThrough ? ' ✓' : '');
     btn.addEventListener('click',()=>{
       currentMonthReport = m;
       renderReportMonthFilters(approved);
@@ -3184,10 +3204,11 @@ async function renderReportDetail(){
   const body = document.getElementById('tx-body-report');
   const total = document.getElementById('tx-report-total');
   const note = document.getElementById('tx-count-report');
+  if(!body || !total || !note) return;
   const month = currentMonthReport;
-  if(!reportSummary || !month){
+  if(!month){
     body.innerHTML = ''; total.innerHTML = '';
-    note.textContent = '승인된 내역이 없습니다.';
+    note.textContent = '월을 선택해 주세요.';
     return;
   }
   if(!reportMonthCache[month]){
@@ -3214,7 +3235,9 @@ async function renderReportDetail(){
   const income = list.reduce((sum,t)=>sum+(t.gubun==='수입'?Number(t.amount||0):0),0);
   const expense = list.reduce((sum,t)=>sum+(t.gubun==='지출'?Number(t.amount||0):0),0);
   total.innerHTML = `<tr class="report-total-row"><th colspan="4">${month} 합계 · ${list.length}건</th><td class="num">${fmtShort(income)}</td><td class="num">${fmtShort(expense)}</td><td></td></tr>`;
-  note.textContent = `${month} 승인 거래 ${list.length.toLocaleString('ko-KR')}건 (선택한 월만 불러옵니다)`;
+  note.textContent = list.length
+    ? `${month} 승인 거래 ${list.length.toLocaleString('ko-KR')}건 (거래 결제일 기준)`
+    : `${month}에 승인된 거래가 없습니다.`;
 }
 // ---------- per-entry transactions ----------
 function applyLocalChanges(upserts,deletes){
