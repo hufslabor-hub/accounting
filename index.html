@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+v1.1
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title> 쇼미더머니 — 한국외국어대학교 노동조합 회계프로그램</title>
@@ -482,11 +483,11 @@ body {
 </style>
 </head>
 <body>
-v1.0
+
 <header class="masthead">
     <div class="masthead-inner">
-    <p class="org">한국외국어대학교 노동조합 회계 프로그램</p>
-    <h1 class="title">쇼미더머니 <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
+    <p class="org">한국외국어대학교 노동조합</p>
+    <h1 class="title">쇼미더머니(노동조합 회계 프로그램) <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
     
     <div class="auth-bar">
       <span id="auth-status">Firebase 연결 확인 중...</span>
@@ -4429,33 +4430,39 @@ async function loadMonthlyBudgetReport(throughMonth) {
   }
 
   if (titleEl) titleEl.textContent = year + '년 1월 ~ ' + n + '월 말 기준 · 관·항·목 예산 대비 실적';
-  if (noteEl) noteEl.textContent = '집계를 불러오는 중…';
+  if (noteEl) noteEl.textContent = '승인 내역을 불러오는 중…';
   if (summaryBox) summaryBox.style.display = 'none';
   if (scrollBox) scrollBox.style.display = 'none';
   tbody.innerHTML = '';
   if (tfoot) tfoot.innerHTML = '';
 
   try {
-    if (!reportSummary) {
-      await loadReportSummary();
-    }
-    if (!reportSummary) {
-      if (noteEl) noteEl.textContent = '보고서 집계를 불러오지 못했습니다. 위쪽 ‘보고서 새로고침’을 눌러 주세요.';
-      return;
-    }
+    // 집계 문서가 아닌 실제 승인 건을 거래 결제일 월 기준으로 합산 (정확도 우선)
+    const snapshot = await entriesRef(year).where('status', 'in', APPROVED_STATES).get();
+    if (year !== currentYear) return;
 
-    const allowed = new Set(monthList.slice(0, n));
-    const cumulative = summaryToEntries(reportSummary).filter(t => allowed.has(t.month));
+    const cumulative = [];
+    snapshot.docs.forEach(doc => {
+      const t = doc.data();
+      // 거래 결제일 기준 월 (승인월 아님)
+      let m = entryTxnMonth(t);
+      if (!m && t.month) m = monthNo(t.month);
+      if (!m) return;
+      if (m < 1 || m > n) return;
+      // 날짜 연도가 있으면 회계연도와 일치하는 건만
+      const dateYear = Number(String(t.date || '').slice(0, 4));
+      if (dateYear && dateYear !== year) return;
+      cumulative.push(t);
+    });
 
     renderMonthlyBudgetSection(cumulative, n);
     if (summaryBox) summaryBox.style.display = '';
     if (scrollBox) scrollBox.style.display = '';
-    const count = cumulative.reduce((s, t) => s + (t._count || 0), 0);
     if (noteEl) {
       noteEl.textContent =
-        year + '년 1월~' + n + '월 승인 실적 누적 · ' + count.toLocaleString('ko-KR') + '건' +
+        year + '년 1월~' + n + '월 승인 실적 누적 · ' + cumulative.length.toLocaleString('ko-KR') + '건' +
         (n <= closedThrough ? ' · ' + n + '월까지 마감됨' : '') +
-        ' · 예산은 연간 예산, 결산액은 해당 기간 승인분 합계입니다.';
+        ' · 예산은 연간 예산, 결산액은 해당 기간 거래일 기준 승인분 합계입니다.';
     }
   } catch (err) {
     console.error('월별 예산 대비 실적 조회 오류:', err);
