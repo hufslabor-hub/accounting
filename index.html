@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<span class="version-tag">v1.9 &lt;meta char&gt;</span>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title> 쇼미더머니 — 한국외국어대학교 노동조합 회계프로그램</title>
@@ -66,6 +65,21 @@ body { background-color:var(--paper); color:var(--ink); }
   .hierarchy-summary-difference{font-weight:700;}
   .hierarchy-summary-difference.mismatch{color:var(--expense);}
   @media(max-width:600px){.type-budget-summary{grid-template-columns:1fr;}}
+
+ .version-tag {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: none; /* ◀ 대문자 강제 변환 해제 */
+            color: var(--ink);
+            opacity: 0.6;
+            border: 1px solid var(--ink);
+            border-radius: 4px;
+            padding: 2px 6px;
+            background-color: rgba(0, 0, 0, 0.03);
+            display: inline-block;
+        }
 
   .view{display:none;}
   .view.active{display:block;}
@@ -639,6 +653,7 @@ body {
 
 <header class="masthead">
     <div class="masthead-inner">
+      <span class="version-tag">v1.9 &lt;meta char&gt;</span>
     <p class="org">한국외국어대학교 노동조합 회계 프로그램</p>
     <h1 class="title">쇼미더머니 <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
     
