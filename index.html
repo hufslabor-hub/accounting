@@ -949,6 +949,7 @@ async function initializeApplicationData(){
 }
 
 async function handleAuthState(user){
+  console.log('[STEP1] handleAuthState 호출됨, user =', user ? user.email : null);
   stopSharedDataWatchers();
   stopLedgerWatcher();
   currentUser = user;
@@ -956,11 +957,14 @@ async function handleAuthState(user){
   document.getElementById('btn-sign-out').classList.toggle('hidden', !user);
   if(!user){
     showAuthGate('로그인이 필요합니다','허가된 담당자 Google 계정으로 로그인해 주세요.');
-    document.getElementById('auth-status').textContent = '로그인 필요';
+    document.getElementById('auth-status').textContent = '로그인 필요 (user=null)';
     return;
   }
+  console.log('[STEP2] allowedUsers 확인 시작', user.uid);
+  document.getElementById('auth-status').textContent = `${user.email || 'Google 계정'} 확인 중... (STEP2)`;
 
-  document.getElementById('auth-status').textContent = `${user.email || 'Google 계정'} 확인 중...`;
+
+  
   try{
 const allowed = await Promise.race([
   db.collection('allowedUsers').doc(user.uid).get(),
