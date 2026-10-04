@@ -36,7 +36,7 @@ body { background-color:var(--paper); color:var(--ink); }
   h1.title{font-family:'Pretendard',sans-serif;font-weight:800;font-size:clamp(24px,4vw,36px);line-height:1.25;margin:0 0 20px;max-width:none;}
   .budget-orphan-row td{color:var(--expense);font-weight:700;}
   .tabs-sticky{
-position: -webkit-sticky; /* Safari 브라우저 호환성 추가 */
+    position: -webkit-sticky; /* Safari 브라우저 호환성 추가 */
     position: sticky;
     top: 0;
     z-index: 1000; /* 다른 본문 콘텐츠보다 위에 오도록 상향 */
@@ -386,10 +386,15 @@ position: -webkit-sticky; /* Safari 브라우저 호환성 추가 */
 .status-approved,
 .status-confirmed{background:none;}
 /* 💡 모바일 화면(768px 미만) 완벽 대응 대응 */
-html, body {
-  width: 100% !important;
-  max-width: 100% !important;
-  overflow-x: hidden !important; /* 오른쪽 거대 여백 완전 차단 */
+html {
+  width: 100%;
+}
+
+body {
+  width: 100%;
+  max-width: 100%;
+  /* sticky 동작을 깨뜨리지 않으면서 가로 스크롤을 방지하는 현대적 속성 */
+  overflow-x: clip; 
 }
 
 @media (max-width: 767px) {
