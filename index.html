@@ -349,6 +349,11 @@ body { background-color:var(--paper); color:var(--ink); }
 #quota-countdown .quota-time{display:block;font-size:26px;font-variant-numeric:tabular-nums;margin:4px 0;}
 #quota-countdown small{font-weight:400;color:var(--ink-soft);}
 #auth-gate-message{white-space:pre-line;}
+/* 로그인 상태/오류 알림 텍스트 숨김 */
+#auth-status {
+  display: none !important;
+}
+  
 /* 차트를 감싸는 기존 박스 클래스 스타일 적용 */
 .chart-box {
   position: relative;
@@ -2219,11 +2224,9 @@ function parseStaffBankDetails(rawValue) {
 async function loadStaffBankDetails() {
   try {
     const res = await storageGet(STAFF_BANK_DETAILS_KEY);
-    staffBankDetails = parseStaffBankDetails(res.value);
-  } catch (e) {
-    if (e.code !== 'accounting/not-found') {
-      console.warn('계좌 정보 불러오기 중 경고:', e);
-    }
+    staffBankDetails = parseStaffBankDetails(res ? res.value : '');
+ } catch (e) {
+    console.warn("계좌 정보 로드 예외 처리됨:", e);
     staffBankDetails = [];
   }
 }
