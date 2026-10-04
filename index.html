@@ -9,35 +9,15 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=2.6">
+<link rel="stylesheet" href="style.css?v=2.9">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<style id="patch-style">
-  /* 버전태그: 테두리를 글자색과 동일하게, 모바일에서는 스크롤하면 위로 사라지게(고정 해제) */
-  .version-tag{border:1px solid currentColor !important;}
-  @media (max-width:768px){
-    .version-tag{position:absolute !important;}
-  }
-  /* 사용자 탭 */
-  .staff-add-grid{display:grid;grid-template-columns:130px 1fr auto;gap:12px;align-items:end;}
-  .staff-toolbar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin-top:16px;}
-  .staff-toolbar label{font-size:.9em;font-weight:600;}
-  .staff-toolbar select{max-width:100%;}
-  .transfer-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:12px;}
-  .transfer-bulk{display:flex;gap:8px;align-items:end;}
-  .transfer-bulk .field{flex:1;}
-  .transfer-table input[type="text"]{width:100%;min-width:90px;text-align:right;}
-  .transfer-table td.num,.transfer-table th.num{text-align:right;}
-  .transfer-summary{margin-top:12px;font-weight:600;}
-  .transfer-actions{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
-  @media (max-width:480px){
-    .staff-add-grid{grid-template-columns:1fr auto;}
-    .staff-add-grid .field:first-child{grid-column:1 / -1;}
-    .transfer-grid{grid-template-columns:1fr;}
-  }
-</style>
 </head>
 <body>
+<<<<<<< HEAD
     <span class="version-tag">v2.8</span>
+=======
+    <span class="version-tag">v2.9</span>
+>>>>>>> f7dad72 (v2.9)
 <header class="masthead">
     <div class="masthead-inner">
 
@@ -353,14 +333,14 @@
   <div id="receipt-drop-zone" class="border border-dashed p-3 text-center bg-light rounded" style="cursor: pointer; border-style: dashed !important;">
     <p class="mb-1 text-muted">클릭하여 영수증 파일을 선택하거나, 캡처한 이미지를 <b>Ctrl+V</b>로 붙여넣으세요.</p>
     <input type="file" id="f-receipt-file" accept="image/*,.pdf" style="display: none;" onchange="handleFileSelect(event)">
-    <button type="button" class="btn btn-sm btn-outline-primary" onclick="document.getElementById('f-receipt-file').click()">파일 선택</button>
+    <button type="button" class="btn btn-sm btn-outline-primary receipt-pick-btn" onclick="document.getElementById('f-receipt-file').click()"><span class="ico" aria-hidden="true">📎</span><span>파일 선택</span></button>
   </div>
 
   <!-- 이미지 미리보기 구역 -->
   <div id="receipt-preview-container" class="mt-2" style="display: none;">
     <div class="d-flex align-items-center gap-2">
-      <img id="receipt-preview-img" src="" alt="영수증 미리보기" style="max-height: 120px; class="img-thumbnail rounded border">
-      <button type="button" class="btn btn-sm btn-danger" onclick="clearReceipt()">삭제</button>
+      <img id="receipt-preview-img" src="" alt="영수증 미리보기" style="max-height: 120px;" class="img-thumbnail rounded border">
+      <button type="button" class="btn btn-sm btn-danger receipt-del-btn" onclick="clearReceipt()">삭제</button>
     </div>
   </div>
 </div>
@@ -508,7 +488,7 @@
 (function(){
   function start(){
     var s = document.createElement('script');
-    s.src = 'app.js?v=2.8';
+    s.src = 'app.js?v=2.9';
     document.body.appendChild(s);
   }
   fetch('data.json', {cache:'no-cache'})

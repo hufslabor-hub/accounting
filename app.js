@@ -3367,9 +3367,9 @@ function renderPendingBox(){
       ${workflowTable(inputComplete,'input-complete',checkedIds)}
       <p class="workflow-summary" data-workflow-summary="input-complete" role="status"></p>
       <div class="workflow-actions">
-        <button class="btn-primary" type="button" data-workflow-action="submit"><span class="lbl-full">선택 내역 결의</span><span class="lbl-short">결의</span></button>
-        <button class="btn-revert" type="button" data-workflow-action="edit-input"><span class="lbl-full">선택 내용 수정</span><span class="lbl-short">수정</span></button>
-        <button class="btn-reject" type="button" data-workflow-action="delete-input"><span class="lbl-full">선택 내역 삭제</span><span class="lbl-short">삭제</span></button>
+        <button class="btn-primary" type="button" data-workflow-action="submit">결의</button>
+        <button class="btn-revert" type="button" data-workflow-action="edit-input">수정</button>
+        <button class="btn-reject" type="button" data-workflow-action="delete-input">삭제</button>
       </div>
     </div>
     <p class="count-note">한 번에 처리하는 선택 내역은 담당자가 모두 같아야 합니다.</p>`;
