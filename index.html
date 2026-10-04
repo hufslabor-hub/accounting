@@ -769,7 +769,7 @@ body {
     </section>
 
     <section>
-      <div class="sec-head"><span class="sec-num">☰</span><h2>결의 내역</h2></div>
+      <div class="sec-head"><span class="sec-num">☰</span><h2>전체 내역</h2></div>
       <div class="card">
         <div class="filter-row" id="status-filters-entry"></div>
         <div class="filter-row" id="month-filters-entry"></div>
@@ -2119,6 +2119,32 @@ function acctPeriod(date=new Date()){
   return {year:Number(p.find(x=>x.type==='year').value), month:Number(p.find(x=>x.type==='month').value)};
 }
 const entryAcctMonth = t => APPROVED_STATES.includes(t.status) ? (t.acctMonth ?? monthNo(t.month)) : null;
+// 거래 결제일 기준 월 (마감 시 전체 내역·결의 대기 숨김에 사용)
+const entryTxnMonth = t => {
+  const fromMonth = monthNo(t.month);
+  if(fromMonth) return fromMonth;
+  const d = String(t.date || '');
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(d);
+  if(iso) return parseInt(iso[2], 10) || 0;
+  const kor = /(\d{1,2})\s*월/.exec(d);
+  if(kor) return parseInt(kor[1], 10) || 0;
+  return 0;
+};
+// 마감된 달의 승인 건인지 — 결산(전체 내역)에서는 거래월(결제일) 우선
+// (승인일이 10월이어도 1월 거래는 1월 마감 시 목록에서 숨김)
+const isClosedApproved = t => {
+  if(!APPROVED_STATES.includes(t.status) || !closedThrough) return false;
+  const txn = entryTxnMonth(t);
+  if(txn > 0) return txn <= closedThrough;
+  const acct = entryAcctMonth(t) ?? 0;
+  return acct > 0 && acct <= closedThrough;
+};
+// 마감된 달의 미승인(입력완료·결의완료) 건인지
+const isClosedOpenItem = t => {
+  if(APPROVED_STATES.includes(t.status) || !closedThrough) return false;
+  const txn = entryTxnMonth(t);
+  return txn > 0 && txn <= closedThrough;
+};
 
 async function loadBudget(){
   try{
@@ -3709,7 +3735,8 @@ const source = ledger;
   const filtered = source
     .filter(t => monthSel==='전체' || t.month===monthSel)
     .filter(t => isReport || currentStatusEntry==='전체' || t.status===currentStatusEntry)
-    .filter(t => isReport || !(APPROVED_STATES.includes(t.status) && (entryAcctMonth(t) ?? 0)<=closedThrough))
+    // 마감된 달의 승인 건은 결산(전체 내역)에서 숨기고 보고서에만 표시
+    .filter(t => isReport || !isClosedApproved(t))
             .slice()
     .sort((a,b) => (b.date||'').localeCompare(a.date||''));
 
@@ -3962,8 +3989,9 @@ function renderPendingBox(){
     ...[...document.querySelectorAll('[data-workflow-group]:checked')].flatMap(input=>(input.dataset.workflowIds||'').split(',').filter(Boolean))
   ]);
   const byDate = (a,b)=>(b.date||'').localeCompare(a.date||'');
-  const inputComplete = ledger.filter(t=>t.status==='input-complete' && !t.locked).sort(byDate);
-  const submitted = ledger.filter(t=>t.status==='submitted' && !t.locked).sort(byDate);
+  // 마감된 달의 미승인 건은 결의·입력 대기 목록에서 제외 (마감 취소 후 다시 처리)
+  const inputComplete = ledger.filter(t=>t.status==='input-complete' && !t.locked && !isClosedOpenItem(t)).sort(byDate);
+  const submitted = ledger.filter(t=>t.status==='submitted' && !t.locked && !isClosedOpenItem(t)).sort(byDate);
   const submittedGroups = groupSubmittedEntries(submitted);
   document.getElementById('pending-count').textContent = inputComplete.length;
   const list = document.getElementById('pending-list');
