@@ -401,33 +401,37 @@ body { background-color:var(--paper); color:var(--ink); }
 <body>
 
 <header class="masthead">
-    <!-- ▼ 상태바 -->
-    <div class="usage-bar hidden" id="usage-bar">
+  <!-- ▼ 상태바 (기본적으로 숨겨져 있으며, JS 로그인 성공 시 hidden 제거됨) -->
+  <div class="usage-bar hidden" id="usage-bar">
     <span class="usage-label">Firestore 사용량</span>
     <div class="usage-track"><div class="usage-fill" id="usage-fill"></div></div>
     <strong id="usage-numbers">-</strong>
     <span id="usage-note" class="usage-note">미조회</span>
     <button class="usage-btn" id="btn-usage-refresh" type="button" title="사용량 조회">↻</button>
   </div>
-  <!-- ▼ 상태바 -->
+
   <div class="masthead-inner">
     <p class="org">한국외국어대학교 노동조합</p>
     <h1 class="title">조합비 수입·지출 결산 <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
+    
     <div class="auth-bar">
       <span id="auth-status">Firebase 연결 확인 중...</span>
       <button class="btn-auth" id="btn-sign-in" type="button">Google 로그인</button>
       <button class="btn-auth hidden" id="btn-sign-out" type="button">로그아웃</button>
     </div>
+
+    <!-- ▼ 앱 조작부 (로그인 완료 시 JS에서 hidden 제거됨) -->
     <div id="app-controls" class="hidden">
       <div class="year-bar">
         <label for="year-select">회계연도</label>
         <select id="year-select"></select>
         <span id="fy-range"></span>
       </div>
-        </div>
     </div>
   </div>
 </header>
+
+  
 
 <div id="app-tabs" class="tabs-sticky hidden">
   <div class="tabs-inner">
