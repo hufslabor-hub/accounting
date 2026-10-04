@@ -4613,7 +4613,6 @@ async function deletePaymentReport(token,fileId){
   }
 }
 
-
 async function approvePaymentReport(){
   const button = document.getElementById('btn-approve-payment-report');
   const status = document.getElementById('payment-report-status');
@@ -4644,11 +4643,9 @@ async function approvePaymentReport(){
     const total = entries.reduce((sum,entry)=>sum+Number(entry.amount||0),0);
     const fileName = `${paymentDateKey(approvalTime)}_${safeFileName(spender)}_${total}원.pdf`;
 
-    // 1) 승인 상태를 먼저 Firestore에 반영 (Drive 실패와 무관하게 상태가 바뀌도록)
     let managementNo = '';
-    let next = null;
     for(let attempt=1; attempt<=3; attempt++){
-      next = await peekPaymentNumber(approvalTime);
+      const next = await peekPaymentNumber(approvalTime);
       try{
         managementNo = await commitPaymentApproval({
           ids,
@@ -4664,7 +4661,6 @@ async function approvePaymentReport(){
       }
     }
 
-    // 화면 즉시 갱신: 결의완료 목록에서 사라지고 전체 내역이 승인으로 바뀜
     paymentReportSourceStatus = 'approved';
     renderReport();
     renderEntryView();
@@ -4673,7 +4669,6 @@ async function approvePaymentReport(){
     status.textContent = `승인 완료 (관리번호 ${managementNo}). PDF 저장을 시도합니다…`;
     button.classList.add('hidden');
 
-    // 2) PDF·Drive는 실패해도 승인 상태는 유지
     try{
       if(typeof window.html2pdf!=='function'){
         throw new Error('PDF 생성 도구를 불러오지 못했습니다.');
@@ -4681,7 +4676,6 @@ async function approvePaymentReport(){
       const token = await getDriveAccessToken();
       const blob = await buildReportPdfBlob(approvedEntries,spender,approval,managementNo);
       const uploadedFile = await uploadPaymentReport(token,blob,fileName);
-      // Drive 파일 정보만 후속 반영 (상태 변경 없음)
       try{
         await entryTransaction(ids,(found,api)=>{
           ids.forEach(id=>{
@@ -4694,7 +4688,7 @@ async function approvePaymentReport(){
             });
           });
         });
-      }catch(_e){ /* 파일 링크 저장 실패는 승인에 영향 없음 */ }
+      }catch(_e){ /* ignore */ }
       status.textContent = `승인 및 PDF 저장 완료: ${fileName} (관리번호 ${managementNo})`;
       if(uploadedFile.webViewLink){
         const link = document.createElement('a');
@@ -4712,74 +4706,8 @@ async function approvePaymentReport(){
   }
 }
 
-  const button = document.getElementById('btn-approve-payment-report');
-  const status = document.getElementById('payment-report-status');
-  const ids = paymentReportEntryIds.slice();
-  const entries = ids.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
-  if(paymentReportSourceStatus!=='submitted'){
-    status.textContent = '선택 내역 승인과 PDF 저장은 결의완료된 내역만 가능합니다.';
-    return;
-  }
-  if(!entries.length || entries.length!==ids.length || entries.some(entry=>entry.status!=='submitted')){
-    status.textContent = '선택 내역 상태가 바뀌었습니다. 보고서를 닫고 목록을 새로 확인해 주세요.';
-    return;
-  }
-  let spender;
-  try{ spender = requireSingleSpender(entries); }
-  catch(error){ status.textContent = error.message; return; }
-  if(typeof window.html2pdf!=='function'){
-    status.textContent = 'PDF 생성 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침해 주세요.';
-    return;
-  }
-  button.disabled = true;
-  status.textContent = 'Google Drive 권한을 확인하고 PDF를 저장하는 중입니다…';
-  let uploadedFile = null;
-  try{
-    const token = await getDriveAccessToken();
-    const approvalTime = new Date();
-    const approver = currentUser.displayName || currentUser.email || '로그인 사용자';
-    const approvalDate = `${approvalTime.getFullYear()}-${String(approvalTime.getMonth()+1).padStart(2,'0')}-${String(approvalTime.getDate()).padStart(2,'0')}`;
-    const approval = {
-      date:`${formatEntryDate(approvalDate)} ${approvalTime.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}`,
-      approver, label:'승인 완료'
-    };
-    const total = entries.reduce((sum,entry)=>sum+Number(entry.amount||0),0);
-    const fileName = `${paymentDateKey(approvalTime)}_${safeFileName(spender)}_${total}원.pdf`;
-    let managementNo = '';
-    for(let attempt=1;;attempt++){
-      const next = await peekPaymentNumber(approvalTime);
-      const blob = await buildReportPdfBlob(entries,spender,approval,next.managementNo);
-      uploadedFile = await uploadPaymentReport(token,blob,fileName);
-      try{
-        managementNo = await commitPaymentApproval({ids,dateKey:next.dateKey,sequence:next.sequence,approvalTime,uploadedFile});
-        break;
-      }catch(error){
-        const failedFile = uploadedFile;
-        uploadedFile = null;
-        try{ await deletePaymentReport(token,failedFile.id); }
-        catch(cleanupError){ throw new Error(`${error.message} (Drive 임시 파일 정리 실패: ${cleanupError.message})`); }
-        if(error.code!=='accounting/sequence-conflict' || attempt>=3) throw error;
-        status.textContent = '다른 담당자와 관리번호가 겹쳐 PDF를 다시 만드는 중입니다…';
-      }
-    }
-    const approvedEntries = ids.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
-    renderPaymentReport(approvedEntries,spender,approval,managementNo);
-    status.textContent = `선택 내역 승인 및 PDF 저장을 마쳤습니다: ${fileName} (관리번호 ${managementNo})`;
-    if(uploadedFile.webViewLink){
-      const link = document.createElement('a');
-      link.href = uploadedFile.webViewLink; link.target = '_blank'; link.rel = 'noopener';
-      link.textContent = 'Google Drive에서 PDF 열기';
-      status.append(' ',link);
-    }
-    button.classList.add('hidden');
-    renderReport();
-    renderEntryView();
-  }catch(error){
-    status.textContent = `선택 내역 처리 실패: ${error.message || String(error)}`;
-  }finally{
-    button.disabled = false;
-  }
-}
+function renderEntryView(){
+
 
 function renderEntryView(){
     renderClosing();      // ← 추가
