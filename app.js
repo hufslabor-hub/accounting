@@ -686,6 +686,16 @@ document.getElementById('auth-status').textContent = user.email || '로그인됨
       document.getElementById('auth-status').textContent = '일일 사용량 한도 초과';
       return;
     }
+    if(e.code==='permission-denied'){
+      showAuthGate(
+        '접근 권한을 확인하지 못했습니다',
+        'Firestore가 요청을 거부했습니다. 아래 두 가지를 확인해 주세요.\n1) 수정된 firestore.rules가 Firebase 콘솔에서 게시되었는지\n2) allowedEmails 컬렉션에 이 이메일(소문자)이 문서 ID로 등록되었는지',
+        user.email || ''
+      );
+      document.getElementById('gate-sign-in').classList.add('hidden');
+      document.getElementById('auth-status').textContent = '권한 거부';
+      return;
+    }
     showAuthGate(
     '서버 응답이 없습니다 (일일 한도 초과 가능성)',
   '로그인은 성공했지만 Firestore가 응답하지 않습니다. 무료 일일 읽기 한도를 모두 사용했을 가능성이 가장 높습니다. 한도가 초기화된 뒤 다시 접속해 주세요. (인터넷 연결이 불안정해도 같은 화면이 나올 수 있습니다.)'
