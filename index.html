@@ -465,7 +465,7 @@ body {
 <header class="masthead">
     <div class="masthead-inner">
     <p class="org">한국외국어대학교 노동조합</p>
-    <h1 class="title">쇼미더머니 (노동조합 회계 프로그램) <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
+    <h1 class="title">쇼미더머니(노동조합 회계 프로그램) <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
     
     <div class="auth-bar">
       <span id="auth-status">Firebase 연결 확인 중...</span>
@@ -769,7 +769,7 @@ body {
     </section>
 
     <section>
-      <div class="sec-head"><span class="sec-num">☰</span><h2>결의 내역</h2></div>
+      <div class="sec-head"><span class="sec-num">☰</span><h2>전체 내역</h2></div>
       <div class="card">
         <div class="filter-row" id="status-filters-entry"></div>
         <div class="filter-row" id="month-filters-entry"></div>
@@ -2897,7 +2897,7 @@ async function loadLedger(){
   const year = currentYear;
 reportSummary = null; reportMonthCache = {}; reportLoading = false; reportLoadToken++;
   ledgerSources = {recent:new Map(), pending:new Map(), older:new Map()};
-  localOverrides = new Map();   // ← 이 줄 추가
+  localOverrides = new Map();
   olderCursor = null; cursorSet = false; olderHasMore = false; olderLoading = false;
   await ensureLedgerMigrated(year);
   const col = entriesRef(year);
@@ -3167,11 +3167,6 @@ function applyLocalChanges(upserts,deletes){
   rebuildLedger();
   setFooter('저장됨');
 }
-
-
-
-
-
 // Locks the given entry ids, hands the latest data to work(found, api).
 // In work(): do any extra api.tx.get(...) reads FIRST, then api.set / api.remove.
 async function entryTransaction(ids,work){
@@ -4146,7 +4141,7 @@ async function commitPaymentApproval({ids,dateKey,sequence,approvalTime,uploaded
   const fileId = uploadedFile?.id || '';
   const fileUrl = uploadedFile?.webViewLink || '';
   await entryTransaction(ids,async (found,api)=>{
-    const sequenceSnapshot = await api.tx.get(sequenceRef);
+    const sequenceSnapshot = await api.tx.get(sequenceRef);                       // read before any write
     const stored = checkSequence(
       sequenceSnapshot.exists ? Number(sequenceSnapshot.data().value) : highestPaymentSequence(ledger,dateKey),
       '지급 관리번호');
@@ -4160,19 +4155,19 @@ async function commitPaymentApproval({ids,dateKey,sequence,approvalTime,uploaded
       throw stateChangedError('선택 내역의 상태가 바뀌었습니다. 보고서를 닫고 목록을 새로 확인해 주세요.');
     }
     requireSingleSpender(targets);
-    const ap = acctPeriod(approvalTime);
-    if(ap.year===currentYear && ap.month<=closedThrough){
-      throw stateChangedError(`${ap.month}월은 이미 마감되어 승인할 수 없습니다. 마감을 취소하거나 열린 달에 승인해 주세요.`);
-    }
-
+const ap = acctPeriod(approvalTime);
+if(ap.year===currentYear && ap.month<=closedThrough){
+  throw stateChangedError(`${ap.month}월은 이미 마감되어 승인할 수 없습니다. 마감을 취소하거나 열린 달에 승인해 주세요.`);
+}
+        
     const at = approvalTime.toISOString();
     targets.forEach(entry=>{
       const next = {
-        ...entry, status:'approved', approvedAt:at, approvedBy,
-        acctYear:acctPeriod(approvalTime).year,
-        acctMonth:acctPeriod(approvalTime).month,
-        managementNo
-      };
+     ...entry, status:'approved', approvedAt:at, approvedBy,
+  acctYear:acctPeriod(approvalTime).year,
+  acctMonth:acctPeriod(approvalTime).month,
+  managementNo
+};
       if(fileId) next.paymentReportFileId = fileId;
       if(fileUrl) next.paymentReportUrl = fileUrl;
       if(entry.gubun==='수입'){ next.confirmedAt = at; next.confirmedBy = approvedBy; }
@@ -4182,8 +4177,7 @@ async function commitPaymentApproval({ids,dateKey,sequence,approvalTime,uploaded
     api.tx.set(sequenceRef,{value:String(sequence),...writeMeta()});
   });
   return managementNo;
-
-
+}
 const PDF_OPTIONS = {
   margin:8,
   image:{type:'jpeg',quality:0.98},
@@ -4643,9 +4637,11 @@ async function approvePaymentReport(){
     const total = entries.reduce((sum,entry)=>sum+Number(entry.amount||0),0);
     const fileName = `${paymentDateKey(approvalTime)}_${safeFileName(spender)}_${total}원.pdf`;
 
+    // 1) 승인 상태를 먼저 Firestore에 반영 (Drive 실패와 무관하게 상태가 바뀌도록)
     let managementNo = '';
+    let next = null;
     for(let attempt=1; attempt<=3; attempt++){
-      const next = await peekPaymentNumber(approvalTime);
+      next = await peekPaymentNumber(approvalTime);
       try{
         managementNo = await commitPaymentApproval({
           ids,
@@ -4661,6 +4657,7 @@ async function approvePaymentReport(){
       }
     }
 
+    // 화면 즉시 갱신: 결의완료 목록에서 사라지고 전체 내역이 승인으로 바뀜
     paymentReportSourceStatus = 'approved';
     renderReport();
     renderEntryView();
@@ -4669,6 +4666,7 @@ async function approvePaymentReport(){
     status.textContent = `승인 완료 (관리번호 ${managementNo}). PDF 저장을 시도합니다…`;
     button.classList.add('hidden');
 
+    // 2) PDF·Drive는 실패해도 승인 상태는 유지
     try{
       if(typeof window.html2pdf!=='function'){
         throw new Error('PDF 생성 도구를 불러오지 못했습니다.');
@@ -4676,6 +4674,7 @@ async function approvePaymentReport(){
       const token = await getDriveAccessToken();
       const blob = await buildReportPdfBlob(approvedEntries,spender,approval,managementNo);
       const uploadedFile = await uploadPaymentReport(token,blob,fileName);
+      // Drive 파일 정보만 후속 반영 (상태 변경 없음)
       try{
         await entryTransaction(ids,(found,api)=>{
           ids.forEach(id=>{
@@ -4688,7 +4687,7 @@ async function approvePaymentReport(){
             });
           });
         });
-      }catch(_e){ /* ignore */ }
+      }catch(_e){ /* 파일 링크 저장 실패는 승인에 영향 없음 */ }
       status.textContent = `승인 및 PDF 저장 완료: ${fileName} (관리번호 ${managementNo})`;
       if(uploadedFile.webViewLink){
         const link = document.createElement('a');
@@ -4705,7 +4704,6 @@ async function approvePaymentReport(){
     button.disabled = false;
   }
 }
-
 
 function renderEntryView(){
     renderClosing();      // ← 추가
