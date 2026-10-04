@@ -390,7 +390,8 @@ body { background-color:var(--paper-2); color:var(--ink); }
       <button class="tab-btn active" data-view="report">보고서</button>
       <button class="tab-btn" data-view="budget">예산 관리</button>
       <button class="tab-btn" data-view="staff">사용자 관리</button>
-    </nav>
+<button class="tab-btn" data-view="fund">기금</button>
+          </nav>
   </div>
 </div>
 
@@ -430,6 +431,11 @@ body { background-color:var(--paper-2); color:var(--ink); }
             <label>계산된 잔액(총 수입 − 총 지출)</label>
             <strong id="account-balance-calculated">-</strong>
           </div>
+<div class="field">
+  <label>예치 중인 원금</label>
+  <strong id="account-balance-parked">-</strong>
+</div>
+         
           <div class="field">
             <label>차액(실제 − 계산)</label>
             <strong id="account-balance-difference">-</strong>
@@ -438,6 +444,19 @@ body { background-color:var(--paper-2); color:var(--ink); }
           <span id="account-balance-save-status" role="status"></span>
           <div id="account-balance-result" class="balance-check-result unset" role="status">실제 계좌 잔액을 입력해 주세요.</div>
         </div>
+        <div id="deposit-box" style="margin-top:22px;border-top:1px solid var(--line);padding-top:16px;">
+  <h3 style="font-size:16px;margin:0 0 6px;">단기예치 (활동비 안의 미니 기금계좌)</h3>
+  <p class="count-note" style="margin:0 0 10px;">입출금통장에서 1개월 정기예금 등으로 옮겨 둔 돈입니다. 수입·지출이 아니므로 결산에는 넣지 않고, 위 잔액 대조에만 더해집니다. 회수할 때 붙은 이자는 결산 관리에 이자수입으로 따로 입력하세요.</p>
+  <div id="deposit-list"></div>
+  <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr 1.4fr auto;align-items:end;margin-top:12px;">
+    <div class="field"><label for="dp-date">예치일</label><input type="text" id="dp-date" placeholder="YYYY-MM-DD"></div>
+    <div class="field"><label for="dp-amount">원금(원)</label><input type="text" id="dp-amount" inputmode="numeric"></div>
+    <div class="field"><label for="dp-maturity">만기 예정일</label><input type="text" id="dp-maturity" placeholder="YYYY-MM-DD"></div>
+    <div class="field"><label for="dp-memo">메모(은행·계좌 등)</label><input type="text" id="dp-memo"></div>
+    <button class="btn-primary" id="btn-add-deposit" type="button">예치 등록</button>
+  </div>
+  <span id="deposit-msg" role="status"></span>
+</div>
       </div>
     </section>
 
@@ -620,7 +639,69 @@ body { background-color:var(--paper-2); color:var(--ink); }
       </div>
     </section>
   </div>
+<div class="view" id="view-fund">
+  <div class="notice" style="margin-top:28px;">
+    기금 회계입니다. 입력한 내역은 <b>바로 확정</b>되며(제출·승인 없음), 잘못 입력하면 수정·삭제할 수 있습니다. 연도는 위의 회계연도 선택을 따르고, 담당자 정보는 활동비와 공유합니다.
+  </div>
 
+  <section>
+    <div class="sec-head"><span class="sec-num">01</span><h2>기금 요약</h2></div>
+    <div class="card" id="fund-summary"></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">02</span><h2>계좌</h2></div>
+    <div class="card">
+      <div id="fund-accounts"></div>
+      <div class="form-grid" style="margin-top:16px;">
+        <div class="field"><label for="fa-bank">은행</label><input type="text" id="fa-bank" placeholder="예: 전북은행"></div>
+        <div class="field"><label for="fa-number">계좌번호</label><input type="text" id="fa-number"></div>
+        <div class="field"><label for="fa-kind">종류</label><select id="fa-kind"><option>정기예금</option><option>자유입출금</option></select></div>
+        <div class="field"><label for="fa-rate">금리(%)</label><input type="text" id="fa-rate" placeholder="예: 3.2"></div>
+        <div class="field"><label for="fa-maturity">만기일</label><input type="text" id="fa-maturity" placeholder="YYYY-MM-DD"></div>
+        <div class="field"><label for="fa-note">비고</label><input type="text" id="fa-note"></div>
+      </div>
+      <button class="btn-primary" id="btn-fund-add-account" type="button">계좌 추가</button>
+      <span id="fund-account-msg" role="status"></span>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">03</span><h2>거래 입력</h2></div>
+    <div class="card">
+      <div class="form-grid">
+        <div class="field"><label for="fe-date">날짜</label><input type="text" id="fe-date" placeholder="YYYY-MM-DD"></div>
+        <div class="field"><label for="fe-type">유형</label><select id="fe-type"></select></div>
+        <div class="field"><label for="fe-account" id="fe-account-label">계좌</label><select id="fe-account"></select></div>
+        <div class="field hidden" id="fe-to-field"><label for="fe-to">받는 계좌</label><select id="fe-to"></select></div>
+        <div class="field"><label for="fe-amount">금액(원)</label><input type="text" id="fe-amount" inputmode="numeric"></div>
+        <div class="field"><label for="fe-memo">메모</label><input type="text" id="fe-memo" placeholder="예: 신규 3.2% 금리"></div>
+      </div>
+      <button class="btn-primary" id="btn-fund-save-event" type="button">거래 추가</button>
+      <button class="btn-revert hidden" id="btn-fund-cancel-edit" type="button">수정 취소</button>
+      <span id="fund-event-msg" role="status"></span>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">04</span><h2>거래 내역</h2></div>
+    <div class="card">
+      <div class="table-scroll"><table class="transaction-table" style="min-width:640px;table-layout:auto;">
+        <thead><tr><th>날짜</th><th>유형</th><th>계좌</th><th class="num">금액</th><th>메모</th><th></th></tr></thead>
+        <tbody id="fund-events"></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">05</span><h2>활동비 전입 대조</h2></div>
+    <p class="sec-desc">기금에서 "활동비로 전출"한 금액과, 활동비 결산의 "기금회계 전입금" 수입이 맞는지 확인합니다.</p>
+    <div class="card">
+      <button class="btn-primary" id="btn-fund-compare" type="button">대조하기</button>
+      <div id="fund-compare" style="margin-top:14px;"></div>
+    </div>
+  </section>
+</div>
   <dialog class="payment-report-dialog" id="payment-report-dialog" aria-labelledby="payment-report-dialog-title">
     <div class="payment-dialog-header">
       <h2 id="payment-report-dialog-title">지급 보고서</h2>
@@ -1131,6 +1212,382 @@ const reportSummaryKey = y => 'report-summary:' + y;
 const reportSummaryRef = year => db.collection('accountingData').doc(reportSummaryKey(year));
   let appReady = false;
 const APPROVED_STATES = ['approved','paid','confirmed'];
+
+async function docMutate(key,def,mutator){
+  const ref = db.collection('accountingData').doc(key);
+  let out;
+  await db.runTransaction(async tx=>{
+    const snap = await tx.get(ref);
+    const data = snap.exists ? JSON.parse(snap.data().value) : JSON.parse(JSON.stringify(def));
+    mutator(data);
+    tx.set(ref,{value:JSON.stringify(data),...writeMeta()});
+    out = data;
+  });
+  return out;
+}
+const fv = id => document.getElementById(id).value.trim();
+
+  // ---------- 기금 회계 ----------
+const FUND_KEY = 'fund:data';
+const FUND_DEFAULT = {accounts:[],events:[]};
+const FUND_TYPES = {
+  opening:{label:'기초 잔액',sign:1},
+  deposit:{label:'예치(신규·추가)',sign:1},
+  interest:{label:'이자',sign:1},
+  withdraw:{label:'인출·해지',sign:-1},
+  toActivity:{label:'활동비로 전출',sign:-1},
+  fromActivity:{label:'활동비에서 입금',sign:1},
+  move:{label:'계좌 간 이동',sign:0}
+};
+let fundData = JSON.parse(JSON.stringify(FUND_DEFAULT));
+let fundEditingEventId = '';
+let fundShowClosed = false;
+  
+async function loadFund(){
+  try{
+    const res = await storageGet(FUND_KEY);
+    fundData = JSON.parse(res.value);
+    fundData.accounts = fundData.accounts || [];
+    fundData.events = fundData.events || [];
+  }catch(e){
+    if(e.code !== 'accounting/not-found') throw e;
+    fundData = JSON.parse(JSON.stringify(FUND_DEFAULT));
+  }
+}
+
+function fundBalances(upTo='9999-12-31'){
+  const bal = {};
+  fundData.accounts.forEach(a=>bal[a.id]=0);
+  fundData.events.filter(e=>(e.date||'')<=upTo).forEach(e=>{
+    const amount = Number(e.amount)||0;
+    if(e.type==='move'){
+      bal[e.accountId] = (bal[e.accountId]||0) - amount;
+      bal[e.toAccountId] = (bal[e.toAccountId]||0) + amount;
+    }else if(FUND_TYPES[e.type]){
+      bal[e.accountId] = (bal[e.accountId]||0) + FUND_TYPES[e.type].sign*amount;
+    }
+  });
+  return bal;
+}
+
+const fundAccountLabel = a => a ? `${a.bank||''} ${a.number||''}`.trim() : '(삭제된 계좌)';
+
+function renderFund(){
+  const summary = document.getElementById('fund-summary');
+  if(!summary) return;
+  const y = String(currentYear);
+  const open = fundBalances(`${currentYear-1}-12-31`);
+  const close = fundBalances(`${y}-12-31`);
+  const sumOf = obj => Object.values(obj).reduce((s,v)=>s+v,0);
+  const yearEvents = fundData.events.filter(e=>(e.date||'').startsWith(y+'-'))
+    .sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
+  const total = type => yearEvents.filter(e=>e.type===type).reduce((s,e)=>s+Number(e.amount||0),0);
+
+  // 요약
+  const lines = [
+    ['전년도 말 잔액',sumOf(open)],
+    ['기초 잔액 입력',total('opening')],
+    ['+ 예치(신규·추가)',total('deposit')],
+    ['+ 이자',total('interest')],
+    ['+ 활동비에서 입금',total('fromActivity')],
+    ['− 인출·해지',-total('withdraw')],
+    ['− 활동비로 전출',-total('toActivity')]
+  ];
+  const ending = sumOf(close);
+  summary.innerHTML = `<table style="max-width:480px;"><tbody>
+    ${lines.map(([label,v])=>`<tr><td style="text-align:left;">${label}</td><td class="num">${fmtShort(v)}</td></tr>`).join('')}
+    </tbody><tfoot><tr class="report-total-row"><th style="text-align:left;">${y}년 말 기금 합계</th><td class="num">${fmt(ending)}</td></tr></tfoot></table>
+    <p class="count-note">계좌 간 이동은 합계에 영향을 주지 않아 표에 나타나지 않습니다.</p>`;
+
+ // 계좌 표
+  const accBox = document.getElementById('fund-accounts');
+  const touched = new Set(yearEvents.flatMap(e=>[e.accountId,e.toAccountId]));
+  const visible = fundData.accounts.filter(a=>
+    fundShowClosed || !a.closed || (open[a.id]||0)!==0 || touched.has(a.id));
+  const hiddenCount = fundData.accounts.length - visible.length;
+  if(!fundData.accounts.length){
+    accBox.innerHTML = '<p class="pending-empty">등록된 계좌가 없습니다. 아래에서 계좌를 추가해 주세요.</p>';
+  }else{
+    const used = new Set(fundData.events.flatMap(e=>[e.accountId,e.toAccountId]));
+    accBox.innerHTML = `<div class="table-scroll"><table style="min-width:700px;">
+      <thead><tr><th>계좌</th><th>종류</th><th>금리</th><th>만기</th><th class="num">${y} 기초</th><th class="num">${y} 기말</th><th>비고</th><th></th></tr></thead>
+      <tbody>${visible.map(a=>`<tr style="${a.closed?'opacity:.5;':''}">
+        <td>${escapeHTML(fundAccountLabel(a))}${a.closed?' (종료)':''}</td>
+        <td>${escapeHTML(a.kind||'')}</td>
+        <td>${a.rate?escapeHTML(a.rate)+'%':'-'}</td>
+        <td>${escapeHTML(a.maturity||'-')}</td>
+        <td class="num">${fmtShort(open[a.id]||0)}</td>
+        <td class="num" style="${(close[a.id]||0)<0?'color:var(--expense);font-weight:700;':''}">${fmtShort(close[a.id]||0)}</td>
+        <td>${escapeHTML(a.note||'')}</td>
+        <td><div class="action-row">
+          <button class="btn-revert" data-fund-act="toggle-account" data-id="${escapeHTML(a.id)}">${a.closed?'재개':'종료'}</button>
+          ${used.has(a.id)?'':`<button class="del-btn" data-fund-act="delete-account" data-id="${escapeHTML(a.id)}">삭제</button>`}
+        </div></td></tr>`).join('')}</tbody></table></div>
+      ${(hiddenCount>0 || fundShowClosed) && fundData.accounts.some(a=>a.closed)
+        ? `<button class="btn-text" id="btn-fund-toggle-closed" type="button" style="margin-top:8px;">${fundShowClosed?'종료된 계좌 숨기기':`종료된 계좌 ${hiddenCount}개 더 보기`}</button>`
+        : ''}`;
+    const toggleClosed = document.getElementById('btn-fund-toggle-closed');
+    if(toggleClosed) toggleClosed.addEventListener('click',()=>{ fundShowClosed = !fundShowClosed; renderFund(); });
+  }
+
+  // 거래 입력용 선택 목록
+  const typeSel = document.getElementById('fe-type');
+  if(!typeSel.options.length){
+    typeSel.innerHTML = Object.entries(FUND_TYPES).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('');
+    typeSel.value = 'deposit';
+  }
+  const opts = fundData.accounts.filter(a=>!a.closed)
+    .map(a=>`<option value="${escapeHTML(a.id)}">${escapeHTML(fundAccountLabel(a))} (${escapeHTML(a.kind||'')})</option>`).join('');
+  ['fe-account','fe-to'].forEach(id=>{
+    const sel = document.getElementById(id);
+    const prev = sel.value;
+    sel.innerHTML = opts || '<option value="">계좌를 먼저 추가해 주세요</option>';
+    if(prev) sel.value = prev;
+  });
+  updateFundTypeFields();
+
+  // 거래 목록
+  document.getElementById('fund-events').innerHTML = yearEvents.length
+    ? yearEvents.map(e=>{
+        const acc = fundData.accounts.find(a=>a.id===e.accountId);
+        const to = e.type==='move' ? ` → ${escapeHTML(fundAccountLabel(fundData.accounts.find(a=>a.id===e.toAccountId)))}` : '';
+        return `<tr>
+          <td>${escapeHTML(formatEntryDate(e.date))}</td>
+          <td>${escapeHTML(FUND_TYPES[e.type]?.label||e.type)}</td>
+          <td>${escapeHTML(fundAccountLabel(acc))}${to}</td>
+          <td class="num">${fmtShort(e.amount)}</td>
+          <td>${escapeHTML(e.memo||'')}</td>
+          <td><div class="action-row">
+            <button class="btn-revert" data-fund-act="edit-event" data-id="${escapeHTML(e.id)}">수정</button>
+            <button class="del-btn" data-fund-act="delete-event" data-id="${escapeHTML(e.id)}">삭제</button>
+          </div></td></tr>`;
+      }).join('')
+    : '<tr><td colspan="6" class="pending-empty">이 연도의 기금 거래가 없습니다.</td></tr>';
+}
+
+function updateFundTypeFields(){
+  const isMove = document.getElementById('fe-type').value==='move';
+  document.getElementById('fe-to-field').classList.toggle('hidden',!isMove);
+  document.getElementById('fe-account-label').textContent = isMove ? '보내는 계좌' : '계좌';
+}
+
+async function addFundAccount(){
+  const msg = document.getElementById('fund-account-msg');
+  const bank = fv('fa-bank'), number = fv('fa-number');
+  if(!bank || !number){ msg.textContent = '은행과 계좌번호를 입력해 주세요.'; return; }
+  const maturityRaw = fv('fa-maturity');
+  const maturity = maturityRaw ? parseEntryDate(maturityRaw) : '';
+  if(maturityRaw && !maturity){ msg.textContent = '만기일을 YYYY-MM-DD 형식으로 입력해 주세요.'; return; }
+  const account = {
+    id:'fa_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
+    bank, number, kind:document.getElementById('fa-kind').value,
+    rate:fv('fa-rate'), maturity, note:fv('fa-note'), closed:false
+  };
+  try{
+    fundData = await docMutate(FUND_KEY,FUND_DEFAULT,d=>{ d.accounts.push(account); });
+    ['fa-bank','fa-number','fa-rate','fa-maturity','fa-note'].forEach(id=>document.getElementById(id).value='');
+    msg.textContent = '계좌를 추가했습니다.';
+    renderFund();
+  }catch(e){ msg.textContent = `저장 실패: ${e.message||e}`; }
+}
+
+function resetFundEventForm(){
+  fundEditingEventId = '';
+  ['fe-date','fe-amount','fe-memo'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('btn-fund-save-event').textContent = '거래 추가';
+  document.getElementById('btn-fund-cancel-edit').classList.add('hidden');
+}
+
+async function saveFundEvent(){
+  const msg = document.getElementById('fund-event-msg');
+  const date = parseEntryDate(fv('fe-date'));
+  const type = fv('fe-type'), accountId = fv('fe-account'), toAccountId = fv('fe-to');
+  const amount = Number(fv('fe-amount').replace(/,/g,''));
+  if(!date){ msg.textContent = '날짜를 YYYY-MM-DD 형식으로 입력해 주세요.'; return; }
+  if(!accountId){ msg.textContent = '계좌를 선택해 주세요.'; return; }
+  if(!Number.isInteger(amount) || amount<=0){ msg.textContent = '금액은 0보다 큰 정수로 입력해 주세요.'; return; }
+  if(type==='move' && (!toAccountId || toAccountId===accountId)){ msg.textContent = '보내는 계좌와 다른 받는 계좌를 선택해 주세요.'; return; }
+  const id = fundEditingEventId || 'fe_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
+  const event = {id,date,type,accountId,amount,memo:fv('fe-memo'),...(type==='move'?{toAccountId}:{})};
+  try{
+    fundData = await docMutate(FUND_KEY,FUND_DEFAULT,d=>{
+      const i = d.events.findIndex(e=>e.id===id);
+      if(i>=0) d.events[i] = event; else d.events.push(event);
+    });
+    msg.textContent = fundEditingEventId ? '거래를 수정했습니다.' : '거래를 추가했습니다.';
+    resetFundEventForm();
+    renderFund();
+  }catch(e){ msg.textContent = `저장 실패: ${e.message||e}`; }
+}
+
+async function handleFundAction(act,id){
+  const msg = document.getElementById('fund-event-msg');
+  try{
+    if(act==='edit-event'){
+      const e = fundData.events.find(x=>x.id===id); if(!e) return;
+      fundEditingEventId = id;
+      document.getElementById('fe-date').value = e.date;
+      document.getElementById('fe-type').value = e.type;
+      updateFundTypeFields();
+      document.getElementById('fe-account').value = e.accountId;
+      if(e.toAccountId) document.getElementById('fe-to').value = e.toAccountId;
+      document.getElementById('fe-amount').value = e.amount;
+      document.getElementById('fe-memo').value = e.memo||'';
+      document.getElementById('btn-fund-save-event').textContent = '수정 저장';
+      document.getElementById('btn-fund-cancel-edit').classList.remove('hidden');
+      msg.textContent = '수정한 뒤 "수정 저장"을 눌러 주세요.';
+      document.getElementById('fe-date').scrollIntoView({behavior:'smooth',block:'center'});
+      return;
+    }
+    if(act==='delete-event'){
+      if(!window.confirm('이 거래를 삭제할까요?')) return;
+      fundData = await docMutate(FUND_KEY,FUND_DEFAULT,d=>{ d.events = d.events.filter(e=>e.id!==id); });
+     }else if(act==='toggle-account'){
+      const target = fundData.accounts.find(a=>a.id===id);
+      const balance = fundBalances()[id] || 0;
+      if(target && !target.closed && balance!==0 &&
+        !window.confirm(`이 계좌에 아직 ${fmt(balance)}이 남아 있습니다. 그래도 종료할까요?\n(해지·갈아타기라면 먼저 "인출·해지" 또는 "계좌 간 이동"을 입력해 잔액을 0으로 만드세요.)`)) return;
+      fundData = await docMutate(FUND_KEY,FUND_DEFAULT,d=>{ const a=d.accounts.find(x=>x.id===id); if(a) a.closed=!a.closed; });
+    }else if(act==='delete-account'){
+      if(!window.confirm('이 계좌를 삭제할까요?')) return;
+      fundData = await docMutate(FUND_KEY,FUND_DEFAULT,d=>{
+        if(d.events.some(e=>e.accountId===id||e.toAccountId===id)) throw new Error('거래가 있는 계좌는 삭제할 수 없습니다. "종료"를 사용해 주세요.');
+        d.accounts = d.accounts.filter(a=>a.id!==id);
+      });
+    }
+    renderFund();
+
+    //만기 갈아타기 입력 순서
+    //이자가 붙었으면 옛 계좌에 이자 입력 (예: 38,894원)
+    //옛 계좌에서 새 계좌로 계좌 간 이동으로 원금+이자 전액 입력
+    //새 계좌의 만기·금리를 계좌 추가에서 등록 (옛 계좌는 종료)
+  }catch(e){ msg.textContent = `처리 실패: ${e.message||e}`; }
+}
+
+async function compareFundWithActivity(){
+  const box = document.getElementById('fund-compare');
+  box.textContent = '활동비 집계를 확인하는 중…';
+  try{
+    if(!reportSummary) await loadReportSummary();
+    if(!reportSummary){ box.textContent = '활동비 집계를 불러오지 못했습니다. 보고서 탭을 한 번 열어 주세요.'; return; }
+    const fundByMonth = {}, actByMonth = {};
+    let fundTotal = 0, actTotal = 0;
+    fundData.events.filter(e=>e.type==='toActivity' && (e.date||'').startsWith(currentYear+'-')).forEach(e=>{
+      const m = parseInt(e.date.split('-')[1],10)+'월';
+      fundByMonth[m] = (fundByMonth[m]||0) + Number(e.amount||0);
+      fundTotal += Number(e.amount||0);
+    });
+    Object.entries(reportSummary.cells).forEach(([key,cell])=>{
+      const [month,gubun,,,category] = JSON.parse(key);
+      if(gubun==='수입' && category==='기금회계 전입금'){
+        actByMonth[month] = (actByMonth[month]||0) + cell.a;
+        actTotal += cell.a;
+      }
+    });
+    const months = monthList.filter(m=>fundByMonth[m]||actByMonth[m]);
+    const diff = fundTotal-actTotal;
+    box.innerHTML = `<table style="max-width:560px;">
+      <thead><tr><th>월</th><th class="num">기금 전출</th><th class="num">활동비 전입</th><th class="num">차이</th></tr></thead>
+      <tbody>${months.map(m=>`<tr><td>${m}</td><td class="num">${fmtShort(fundByMonth[m]||0)}</td><td class="num">${fmtShort(actByMonth[m]||0)}</td><td class="num">${fmtShort((fundByMonth[m]||0)-(actByMonth[m]||0))}</td></tr>`).join('')||'<tr><td colspan="4">해당 연도에 전출·전입 내역이 없습니다.</td></tr>'}</tbody>
+      <tfoot><tr class="report-total-row"><th>합계</th><td class="num">${fmtShort(fundTotal)}</td><td class="num">${fmtShort(actTotal)}</td><td class="num">${fmtShort(diff)}</td></tr></tfoot></table>
+      <p class="workflow-summary ${diff===0?'':'warn'}">${diff===0
+        ? '일치합니다. 기금 전출과 활동비 전입 합계가 같습니다.'
+        : `불일치합니다. 기금 전출이 활동비 전입보다 ${fmt(Math.abs(diff))} ${diff>0?'많습니다 (활동비에 입력이 빠졌거나 아직 승인 전일 수 있습니다).':'적습니다 (기금 쪽 입력이 빠졌을 수 있습니다).'}`}</p>
+      <p class="count-note">월별 차이는 활동비 쪽이 <b>승인한 달</b> 기준이라 달이 어긋날 수 있습니다. 연 합계를 기준으로 보세요.</p>`;
+  }catch(e){ box.textContent = `대조 실패: ${e.message||e}`; }
+}
+
+document.getElementById('btn-fund-add-account').addEventListener('click',addFundAccount);
+document.getElementById('btn-fund-save-event').addEventListener('click',saveFundEvent);
+document.getElementById('btn-fund-cancel-edit').addEventListener('click',()=>{ resetFundEventForm(); document.getElementById('fund-event-msg').textContent=''; });
+document.getElementById('btn-fund-compare').addEventListener('click',compareFundWithActivity);
+document.getElementById('fe-type').addEventListener('change',updateFundTypeFields);
+document.getElementById('view-fund').addEventListener('click',event=>{
+  const button = event.target.closest('[data-fund-act]');
+  if(button) handleFundAction(button.dataset.fundAct,button.dataset.id);
+});
+
+// ---------- 활동비 단기예치 ----------
+const DEPOSITS_KEY = 'activity-deposits:list';
+let deposits = [];
+
+async function loadDeposits(){
+  try{
+    const res = await storageGet(DEPOSITS_KEY);
+    deposits = JSON.parse(res.value);
+    if(!Array.isArray(deposits)) deposits = [];
+  }catch(e){
+    if(e.code !== 'accounting/not-found') throw e;
+    deposits = [];
+  }
+}
+
+const activeDepositTotal = () =>
+  deposits.filter(d=>d.status==='active').reduce((s,d)=>s+Number(d.amount||0),0);
+
+function renderDeposits(){
+  const box = document.getElementById('deposit-list');
+  if(!box) return;
+  if(!deposits.length){
+    box.innerHTML = '<p class="pending-empty">등록된 단기예치가 없습니다.</p>';
+    return;
+  }
+  const sorted = deposits.slice().sort((a,b)=>(a.status===b.status?0:a.status==='active'?-1:1)||(b.date||'').localeCompare(a.date||''));
+  box.innerHTML = `<div class="table-scroll"><table style="min-width:620px;">
+    <thead><tr><th>상태</th><th>예치일</th><th>만기 예정</th><th class="num">원금</th><th>메모</th><th></th></tr></thead>
+    <tbody>${sorted.map(d=>`<tr style="${d.status==='returned'?'opacity:.55;':''}">
+      <td>${d.status==='active'?'<b>예치 중</b>':'회수 '+escapeHTML(d.returnDate||'')}</td>
+      <td>${escapeHTML(formatEntryDate(d.date))}</td>
+      <td>${escapeHTML(d.maturity?formatEntryDate(d.maturity):'-')}</td>
+      <td class="num">${fmtShort(d.amount)}</td>
+      <td>${escapeHTML(d.memo||'')}</td>
+      <td><div class="action-row">
+        ${d.status==='active'?`<button class="btn-revert" data-deposit-act="return" data-id="${escapeHTML(d.id)}">회수 처리</button>`:`<button class="btn-revert" data-deposit-act="reopen" data-id="${escapeHTML(d.id)}">되돌리기</button>`}
+        <button class="del-btn" data-deposit-act="delete" data-id="${escapeHTML(d.id)}">삭제</button>
+      </div></td></tr>`).join('')}</tbody></table></div>`;
+}
+
+async function addDeposit(){
+  const msg = document.getElementById('deposit-msg');
+  const date = parseEntryDate(fv('dp-date'));
+  const amount = Number(fv('dp-amount').replace(/,/g,''));
+  const maturityRaw = fv('dp-maturity');
+  const maturity = maturityRaw ? parseEntryDate(maturityRaw) : '';
+  if(!date){ msg.textContent = '예치일을 YYYY-MM-DD 형식으로 입력해 주세요.'; return; }
+  if(!Number.isInteger(amount) || amount<=0){ msg.textContent = '원금은 0보다 큰 정수로 입력해 주세요.'; return; }
+  if(maturityRaw && !maturity){ msg.textContent = '만기 예정일 형식이 올바르지 않습니다.'; return; }
+  const item = {id:'dp_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),date,amount,maturity,memo:fv('dp-memo'),status:'active'};
+  try{
+    deposits = await docMutate(DEPOSITS_KEY,[],list=>{ list.push(item); });
+    ['dp-date','dp-amount','dp-maturity','dp-memo'].forEach(id=>document.getElementById(id).value='');
+    msg.textContent = '예치를 등록했습니다. 잔액 대조에 반영됩니다.';
+    renderReport();
+  }catch(e){ msg.textContent = `저장 실패: ${e.message||e}`; }
+}
+
+async function handleDepositAction(act,id){
+  const msg = document.getElementById('deposit-msg');
+  if(act==='delete' && !window.confirm('이 예치 기록을 삭제할까요?')) return;
+  try{
+    deposits = await docMutate(DEPOSITS_KEY,[],list=>{
+      const i = list.findIndex(d=>d.id===id);
+      if(i<0) return;
+      if(act==='delete') list.splice(i,1);
+      else if(act==='return'){ list[i].status='returned'; list[i].returnDate=new Date().toISOString().slice(0,10); }
+      else if(act==='reopen'){ list[i].status='active'; delete list[i].returnDate; }
+    });
+    msg.textContent = act==='return' ? '회수 처리했습니다. 붙은 이자는 결산 관리에 이자수입으로 입력해 주세요.' : '';
+    renderReport();
+  }catch(e){ msg.textContent = `처리 실패: ${e.message||e}`; }
+}
+
+document.getElementById('btn-add-deposit').addEventListener('click',addDeposit);
+document.getElementById('deposit-box').addEventListener('click',event=>{
+  const button = event.target.closest('[data-deposit-act]');
+  if(button) handleDepositAction(button.dataset.depositAct,button.dataset.id);
+});
+
+
   
 function stopLedgerWatcher(){
   if(ledgerUnsubscribe){ ledgerUnsubscribe(); ledgerUnsubscribe = null; }
@@ -1515,32 +1972,40 @@ async function saveStaffBankDetails(name){
 }
 
 function renderAccountBalanceCheck(calculatedBalance){
+  renderDeposits();
   const input = document.getElementById('account-balance-input');
   const calculated = document.getElementById('account-balance-calculated');
   const difference = document.getElementById('account-balance-difference');
   const result = document.getElementById('account-balance-result');
+  const parkedEl = document.getElementById('account-balance-parked');
+  const parked = activeDepositTotal();
   if(document.activeElement!==input){
     input.value = accountBalance===null ? '' : formatBudgetAmount(accountBalance);
   }
+  parkedEl.textContent = fmt(parked);
   calculated.textContent = fmt(calculatedBalance);
   result.classList.remove('match','mismatch','unset');
   if(accountBalance===null){
     difference.textContent = '-';
     result.classList.add('unset');
-    result.textContent = '실제 활동비 계좌 잔액을 입력하고 저장해 주세요.';
+    result.textContent = '실제 입출금통장 잔액을 입력하고 저장해 주세요.';
     return;
   }
-  const delta = accountBalance - calculatedBalance;
+  const actual = accountBalance + parked;           // 통장 잔액 + 예치 중 원금
+  const delta = actual - calculatedBalance;
   difference.textContent = `${delta>0?'+':''}${fmt(delta)}`;
   if(delta===0){
     result.classList.add('match');
-    result.textContent = '일치합니다. 실제 계좌 잔액과 계산된 잔액이 같습니다.';
-  } else {
+    result.textContent = parked
+      ? `일치합니다. 통장 잔액과 예치 중인 원금(${fmt(parked)})의 합이 계산된 잔액과 같습니다.`
+      : '일치합니다. 실제 계좌 잔액과 계산된 잔액이 같습니다.';
+  }else{
     result.classList.add('mismatch');
-    result.textContent = `불일치합니다. 실제 계좌 잔액이 계산된 잔액보다 ${fmt(Math.abs(delta))} ${delta>0?'많습니다.':'적습니다.'}`;
+    result.textContent = `불일치합니다. 통장 잔액 + 예치 원금이 계산된 잔액보다 ${fmt(Math.abs(delta))} ${delta>0?'많습니다.':'적습니다.'}`;
   }
 }
 
+  
 async function saveAccountBalance(){
   const input = document.getElementById('account-balance-input');
   const status = document.getElementById('account-balance-save-status');
@@ -1839,6 +2304,8 @@ async function loadYearData(){
   await loadStaffNames();
   await loadStaffBankDetails();
   await loadAccountCategories();
+    await loadFund();
+  await loadDeposits();   // B 단계에서 만드는 함수
   if(migrateBudgetToMok() && !await persistBudget()){
     throw new Error(`목별 예산을 Firestore로 이전하지 못했습니다: ${lastStorageError}`);
   }
@@ -1862,6 +2329,7 @@ function renderAll(){
   renderEntryView();
   renderHierarchyForm();
   renderStaffNames();
+    renderFund();
 }
 
 let yearSwitching = false;
