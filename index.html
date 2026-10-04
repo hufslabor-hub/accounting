@@ -622,6 +622,26 @@ body { background-color:var(--paper); color:var(--ink); }
         </div>
         <datalist id="dl-desc"></datalist>
 
+<!-- 영수증 첨부 영역 -->
+<div class="mb-3">
+  <label class="form-label font-weight-bold">🧾 영수증 증빙 첨부</label>
+  
+  <!-- 파일 선택 버튼 & 붙여넣기 안내 영역 -->
+  <div id="receipt-drop-zone" class="border border-dashed p-3 text-center bg-light rounded" style="cursor: pointer; border-style: dashed !important;">
+    <p class="mb-1 text-muted">클릭하여 영수증 파일을 선택하거나, 캡처한 이미지를 <b>Ctrl+V</b>로 붙여넣으세요.</p>
+    <input type="file" id="f-receipt-file" accept="image/*,.pdf" style="display: none;" onchange="handleFileSelect(event)">
+    <button type="button" class="btn btn-sm btn-outline-primary" onclick="document.getElementById('f-receipt-file').click()">파일 선택</button>
+  </div>
+
+  <!-- 이미지 미리보기 구역 -->
+  <div id="receipt-preview-container" class="mt-2" style="display: none;">
+    <div class="d-flex align-items-center gap-2">
+      <img id="receipt-preview-img" src="" alt="영수증 미리보기" style="max-height: 120px; class="img-thumbnail rounded border">
+      <button type="button" class="btn btn-sm btn-danger" onclick="clearReceipt()">삭제</button>
+    </div>
+  </div>
+</div>
+        
         <button class="btn-primary" id="btn-add">내역 추가</button>
         <button class="btn-revert hidden" id="btn-cancel-entry-edit" type="button">수정 취소</button>
         <span id="save-status"></span>
@@ -2598,6 +2618,51 @@ reportSummary = null; reportMonthCache = {}; reportLoading = false; reportLoadTo
   setFooter('최근 내역만 불러옴');
 }
 
+// 현재 선택/붙여넣어진 영수증 파일 객체
+let selectedReceiptFile = null;
+
+// 1. 파일 선택 이벤트 처리
+function handleFileSelect(event) {
+  const file = event.target.files[0];
+  if (file) setReceiptFile(file);
+}
+
+// 2. 클립보드(Ctrl+V) 붙여넣기 이벤트 처리
+document.addEventListener('paste', function (event) {
+  const items = (event.clipboardData || event.originalEvent.clipboardData).items;
+  
+  for (let item of items) {
+    if (item.type.indexOf('image') !== -1) {
+      const blob = item.getAsFile();
+      // 파일 이름 임의 지정 (예: paste_20261004.png)
+      const file = new File([blob], `receipt_paste_${Date.now()}.png`, { type: blob.type });
+      setReceiptFile(file);
+      break;
+    }
+  }
+});
+
+// 3. 영수증 파일 설정 및 미리보기 출력
+function setReceiptFile(file) {
+  selectedReceiptFile = file;
+  
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    document.getElementById('receipt-preview-img').src = e.target.result;
+    document.getElementById('receipt-preview-container').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+// 4. 첨부된 영수증 취소/삭제
+function clearReceipt() {
+  selectedReceiptFile = null;
+  document.getElementById('f-receipt-file').value = '';
+  document.getElementById('receipt-preview-img').src = '';
+  document.getElementById('receipt-preview-container').style.display = 'none';
+}
+
+  
 async function loadMoreEntries(){
   if(olderLoading || !olderHasMore || !olderCursor) return;
   const year = currentYear;
