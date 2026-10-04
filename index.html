@@ -453,6 +453,23 @@ body { background-color:var(--paper); color:var(--ink); }
 .status-submitted,
 .status-approved,
 .status-confirmed{background:none;}
+
+
+.version-tag {
+  font-family: 'Courier New', Courier, monospace; /* 개발자 감성 폰트 */
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--ink);
+  opacity: 0.6; /* 살짝 투명하게 처리하여 본문을 방해하지 않음 */
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  padding: 2px 6px;
+  background-color: rgba(0, 0, 0, 0.03); /* 아주 옅은 배경색 */
+}
+
+
 /* 💡 모바일 화면(768px 미만) 완벽 대응 대응 */
 html {
   width: 100%;
