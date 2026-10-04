@@ -547,6 +547,16 @@ body { background-color:var(--paper-2); color:var(--ink); }
   </div>
   <div class="view" id="view-entry">
     <div class="notice" style="margin-top:28px;">
+      <section style="margin-top:28px;">
+  <div class="sec-head"><span class="sec-num">✓</span><h2>월 마감</h2></div>
+  <div class="card">
+    <p id="closing-status" style="margin:0 0 6px;font-weight:700;"></p>
+    <p id="closing-detail" class="count-note" style="margin:0 0 14px;"></p>
+    <button class="btn-primary" id="btn-close-month" type="button"></button>
+    <button class="btn-revert" id="btn-reopen-month" type="button">마지막 마감 취소</button>
+    <span id="closing-msg" role="status"></span>
+  </div>
+</section>
       이 화면에 입력한 내역은 <b>이 페이지를 함께 보는 재정담당자 전원에게 공유</b>됩니다. 새 내역은 <b>입력완료</b>로 등록되며, 같은 담당자의 내역을 선택해 제출·처리할 수 있습니다. 승인된 내역은 보고서 탭 집계에 반영됩니다. 기존 엑셀에서 가져온 내역(8월 24일 이전)은 원본 보존을 위해 삭제할 수 없습니다.
       <b id="entry-storage-warning"></b>
     </div>
@@ -651,6 +661,9 @@ let dataUnsubscribers = [];
 let ledger = [];
 let budget = {};
 let accountBalance = null;
+  let closedThrough = 0;   // N월까지 마감 (0 = 없음)
+const closureKey = y => 'month-closure:' + y;
+const monthNo = m => parseInt(m,10) || 0;
 let staffNames = [];
 let staffBankDetails = [];
 let paymentReportEntryIds = [];
@@ -1233,7 +1246,12 @@ async function ensureLedgerMigrated(year){
   throw new Error('장부 이전이 오래 걸리고 있습니다. 잠시 후 새로고침해 주세요.');
 }
 
-
+// 승인 시각 → 회계월. 한국 시간 기준 연/월
+function acctPeriod(date=new Date()){
+  const p = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit'}).formatToParts(date);
+  return {year:Number(p.find(x=>x.type==='year').value), month:Number(p.find(x=>x.type==='month').value)};
+}
+const entryAcctMonth = t => APPROVED_STATES.includes(t.status) ? (t.acctMonth ?? monthNo(t.month)) : null;
 
 
 
@@ -1261,6 +1279,22 @@ async function loadAccountBalance(){
   }
 }
 
+async function loadClosure(){
+  try{
+    const res = await storageGet(closureKey(currentYear));
+    const n = JSON.parse(res.value).closedThrough;
+    closedThrough = Number.isInteger(n) && n>=0 && n<=12 ? n : 0;
+  }catch(e){
+    if(e.code !== 'accounting/not-found') throw e;
+    closedThrough = 0;
+  }
+}
+
+// 마감된 달 이후 날짜만 읽는 쿼리 (읽기 절감의 핵심)
+function entryListQuery(year){
+  return entriesRef(year).orderBy('date','desc');
+}
+  
 function normalizeLedgerSuffixes(list=ledger){
   let changed = false;
   list.forEach(entry=>{
@@ -1796,6 +1830,7 @@ function renderYearSelect(){
 }
 
 async function loadYearData(){
+  await loadClosure();      // ← 추가
   await loadLedger();
   await loadBudget();
   await loadAccountBalance();
@@ -1923,7 +1958,7 @@ reportSummary = null; reportMonthCache = {}; reportLoading = false; reportLoadTo
   await ensureLedgerMigrated(year);
   const col = entriesRef(year);
 
-  const recent = watchLedgerQuery(col.orderBy('date','desc').limit(ENTRY_PAGE_SIZE), year, snapshot=>{
+      const recent = watchLedgerQuery(entryListQuery(year).limit(ENTRY_PAGE_SIZE), year, snapshot=>{
     ledgerSources.recent = new Map(snapshot.docs.map(doc=>[doc.id,doc.data()]));
     if(!cursorSet){
       cursorSet = true;
@@ -1948,8 +1983,8 @@ async function loadMoreEntries(){
   olderLoading = true;
   updateLoadMoreButton();
   try{
-    const snapshot = await entriesRef(year).orderBy('date','desc').startAfter(olderCursor).limit(ENTRY_PAGE_SIZE).get();
-    if(year!==currentYear) return;
+    const snapshot = await entryListQuery(year).startAfter(olderCursor).limit(ENTRY_PAGE_SIZE).get();
+        if(year!==currentYear) return;
     snapshot.docs.forEach(doc=>ledgerSources.older.set(doc.id,doc.data()));
     if(snapshot.docs.length) olderCursor = snapshot.docs[snapshot.docs.length-1];
     olderHasMore = snapshot.size>=ENTRY_PAGE_SIZE;
@@ -1984,8 +2019,9 @@ function parseSummary(raw){
 function emptySummary(){ return {version:SUMMARY_VERSION, cells:{}}; }
 
 function cellKey(entry){
-  return JSON.stringify([entry.month||'기타', entry.gubun, entry.gwan||'', entry.hang||'', entry.category||'']);
+  return JSON.stringify([String(entryAcctMonth(entry) ?? monthNo(entry.month))+'월', entry.gubun, entry.gwan||'', entry.hang||'', entry.category||'']);
 }
+  
 
 function applyToSummary(summary, entry, sign){
   const key = cellKey(entry);
@@ -2058,15 +2094,20 @@ async function loadReportSummary(force=false){
 // ---------- 세부 거래 내역: 선택한 월만 읽기 ----------
 async function loadReportMonth(month){
   if(reportMonthCache[month]) return;
-  const year = currentYear;
-  const snapshot = await entriesRef(year)
-    .where('status','in',APPROVED_STATES)
-    .where('month','==',month)
-    .get();
+  const year = currentYear, n = monthNo(month);
+  const base = () => entriesRef(year).where('status','in',APPROVED_STATES);
+  const [byAcct, legacy] = await Promise.all([
+    base().where('acctMonth','==',n).get(),
+    base().where('month','==',month).get()
+  ]);
   if(year!==currentYear) return;
-  reportMonthCache[month] = snapshot.docs.map(doc=>doc.data());
+  const map = new Map();
+  byAcct.docs.forEach(d=>map.set(d.id,d.data()));
+  legacy.docs.forEach(d=>{ if(d.data().acctMonth===undefined) map.set(d.id,d.data()); });  // 회계월 없는 기존 건만
+  reportMonthCache[month] = [...map.values()];
 }
 
+  
 function renderReportMonthFilters(approved){
   const el = document.getElementById('month-filters-report');
   el.innerHTML = '';
@@ -2075,7 +2116,7 @@ function renderReportMonthFilters(approved){
   months.forEach(m=>{
     const btn = document.createElement('button');
     btn.className = 'filter-btn' + (m===currentMonthReport ? ' active' : '');
-    btn.textContent = m;
+btn.textContent = m + (monthNo(m)<=closedThrough ? ' ✓' : '');
     btn.addEventListener('click',()=>{
       currentMonthReport = m;
       renderReportMonthFilters(approved);
@@ -2160,10 +2201,10 @@ async function entryTransaction(ids,work){
     const track = (before,after)=>{
       const was = before && APPROVED_STATES.includes(before.status);
       const will = after && APPROVED_STATES.includes(after.status);
-      if(was){ applyToSummary(summary,before,-1); touchedMonths.add(before.month||'기타'); changed = true; }
-      if(will){ applyToSummary(summary,after,+1); touchedMonths.add(after.month||'기타'); changed = true; }
+      if(was){ applyToSummary(summary,before,-1); touchedMonths.add(String(entryAcctMonth(before) ?? monthNo(before.month))+'월'); changed = true; }
+      if(will){ applyToSummary(summary,after,+1); touchedMonths.add(String(entryAcctMonth(after) ?? monthNo(after.month))+'월'); changed = true; }
     };
-    upserts.forEach((entry,id)=>track(found.get(id),entry));
+        upserts.forEach((entry,id)=>track(found.get(id),entry));
     deletes.forEach(id=>track(found.get(id),null));
     if(changed){
       tx.set(sumRef,{value:JSON.stringify(summary),...writeMeta()});
@@ -2670,7 +2711,8 @@ const source = ledger;
   const filtered = source
     .filter(t => monthSel==='전체' || t.month===monthSel)
     .filter(t => isReport || currentStatusEntry==='전체' || t.status===currentStatusEntry)
-    .slice()
+    .filter(t => isReport || !(APPROVED_STATES.includes(t.status) && (entryAcctMonth(t) ?? 0)<=closedThrough))
+            .slice()
     .sort((a,b) => (b.date||'').localeCompare(a.date||''));
 
   const shown = filtered;
@@ -2748,8 +2790,14 @@ function bindRowActions(container){
           }else if(act==='input-complete'){
             if(entry.status!=='rejected') throw stateChangedError('반려된 내역만 복원할 수 있습니다.');
             api.set({...entry,status:'input-complete'});
-          }else if(act==='unapprove'){
-            if(!approvedStates.includes(entry.status)) throw stateChangedError('이미 승인 상태가 아닙니다.');
+}else if(act==='unapprove'){
+  if(!approvedStates.includes(entry.status)) throw stateChangedError('이미 승인 상태가 아닙니다.');
+  if(entry.acctMonth && monthNo(entry.acctMonth)<=closedThrough) throw stateChangedError(`${entry.acctMonth}월은 마감되어 승인 취소할 수 없습니다. 마감을 취소한 뒤 시도해 주세요.`);
+  ...
+  ['approvedAt','approvedBy','paidAt','paidBy','confirmedAt','confirmedBy','managementNo','submissionSequence','acctMonth','acctYear']
+    .forEach(key=>delete next[key]);
+
+            
             const next = {
               ...entry, status:'submitted', locked:false,
               approvalCancelledAt:new Date().toISOString(),
@@ -3091,12 +3139,19 @@ async function commitPaymentApproval({ids,dateKey,sequence,approvalTime,uploaded
       throw stateChangedError('선택 내역의 상태가 바뀌었습니다. 보고서를 닫고 목록을 새로 확인해 주세요.');
     }
     requireSingleSpender(targets);
+const ap = acctPeriod(approvalTime);
+if(ap.year===currentYear && ap.month<=closedThrough){
+  throw stateChangedError(`${ap.month}월은 이미 마감되어 승인할 수 없습니다. 마감을 취소하거나 열린 달에 승인해 주세요.`);
+}
+        
     const at = approvalTime.toISOString();
     targets.forEach(entry=>{
       const next = {
-        ...entry, status:'approved', approvedAt:at, approvedBy,
-        managementNo, paymentReportFileId:uploadedFile.id, paymentReportUrl:uploadedFile.webViewLink || ''
-      };
+     ...entry, status:'approved', approvedAt:at, approvedBy,
+  acctYear:acctPeriod(approvalTime).year,
+  acctMonth:acctPeriod(approvalTime).month,
+  managementNo, paymentReportFileId:uploadedFile.id, paymentReportUrl:uploadedFile.webViewLink || ''
+};
       if(entry.gubun==='수입'){ next.confirmedAt = at; next.confirmedBy = approvedBy; }
       else{ next.paidAt = at; next.paidBy = approvedBy; }
       api.set(next);
@@ -3430,6 +3485,7 @@ async function approvePaymentReport(){
 }
 
 function renderEntryView(){
+    renderClosing();      // ← 추가
   renderPendingBox();
   renderStatusFilters();
   renderMonthFilters('month-filters-entry', ledger, currentMonthEntry, m=>{ currentMonthEntry=m; renderTxTable('entry'); });
@@ -3439,6 +3495,52 @@ function renderEntryView(){
     updateLoadMoreButton();
 }
 
+function renderClosing(){
+  const status = document.getElementById('closing-status');
+  if(!status) return;
+  const next = closedThrough+1;
+  const unapproved = t=>!APPROVED_STATES.includes(t.status);
+  const inNext = ledger.filter(t=>unapproved(t) && monthNo(t.month)===next && (t.date||'').startsWith(currentYear+'-')).length;
+  const late = ledger.filter(t=>unapproved(t) && (t.date||'').startsWith(currentYear+'-') && monthNo(t.month)<=closedThrough).length;
+  status.textContent = closedThrough ? `${currentYear}년 ${closedThrough}월까지 마감됨` : '마감된 달이 없습니다';
+  let detail = next<=12 ? `${next}월 미승인 ${inNext}건 (마감해도 결산 관리에 그대로 남습니다)` : '12월까지 모두 마감되었습니다.';
+  if(late) detail += ` · 마감된 달의 미승인 ${late}건이 남아 있습니다`;
+  document.getElementById('closing-detail').textContent = detail;
+  const closeBtn = document.getElementById('btn-close-month');
+  closeBtn.textContent = `${next}월 마감하기`;
+  closeBtn.classList.toggle('hidden', next>12);
+  document.getElementById('btn-reopen-month').classList.toggle('hidden', closedThrough===0);
+}
+
+async function changeClosure(delta){
+  const msg = document.getElementById('closing-msg');
+  const expected = closedThrough, target = expected+delta;
+  if(target<0 || target>12) return;
+  const question = delta>0
+    ? `${target}월을 마감합니다. ${target}월의 승인 내역은 결산 관리에서 숨겨지고 보고서에서만 보입니다. 계속할까요?`
+    : `${expected}월 마감을 취소합니다. 계속할까요?`;
+  if(!window.confirm(question)) return;
+  const ref = db.collection('accountingData').doc(closureKey(currentYear));
+  try{
+    await db.runTransaction(async tx=>{
+      const snap = await tx.get(ref);
+      const cur = snap.exists ? (JSON.parse(snap.data().value).closedThrough||0) : 0;
+      if(cur!==expected) throw stateChangedError('다른 담당자가 마감 상태를 이미 바꿨습니다. 새로고침 후 다시 시도해 주세요.');
+      tx.set(ref,{value:JSON.stringify({closedThrough:target,updatedAt:new Date().toISOString(),updatedBy:currentUser.email||''}),...writeMeta()});
+    });
+    closedThrough = target;
+    await loadLedger();        // 새 기준으로 목록 다시 읽기
+    renderReport();
+    renderEntryView();
+    msg.textContent = delta>0 ? `${target}월을 마감했습니다.` : `${expected}월 마감을 취소했습니다.`;
+  }catch(error){
+    msg.textContent = `처리 실패: ${error.message || String(error)}`;
+  }
+}
+
+document.getElementById('btn-close-month').addEventListener('click',()=>changeClosure(+1));
+document.getElementById('btn-reopen-month').addEventListener('click',()=>changeClosure(-1));
+  
 function renderStatusFilters(){
   const el = document.getElementById('status-filters-entry');
   el.innerHTML = '';
@@ -3654,6 +3756,7 @@ if(!Number.isFinite(amount) || !Number.isInteger(amount) || amount===0){
     return;
   }
      const month = (parseInt(date.split('-')[1],10)) + '월';
+  
   const values = {
     date, month, gubun:currentGubun, desc, payee, spender, amount,
     gwan:classification.gwan, hang:classification.hang, category:classification.mok
