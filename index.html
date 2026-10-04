@@ -2058,72 +2058,136 @@ function normalizeStaffBankDetails(details){
   return [...byName.values()].sort((a,b)=>a.name.localeCompare(b.name,'ko'));
 }
 
-async function loadStaffNames(){
-  const fromLedger = [...BASE_LEDGER,...ledger].map(entry=>entry.spender || '');
-  try{
-    const res = await storageGet(STAFF_NAMES_KEY);
-    const names = JSON.parse(res.value);
-    if(!Array.isArray(names) || !names.every(name=>typeof name==='string')){
-      throw new Error('저장된 담당자 이름 목록이 올바르지 않습니다.');
+/**
+ * 1. 담당자 이름 만능 파서
+ * JSON 형태든 일반 텍스트(띄어쓰기, 줄바꿈, 쉼표)든 구분하여 배열로 변환
+ */
+function parseStaffNames(rawValue) {
+  if (!rawValue || typeof rawValue !== 'string') return [];
+  const trimmed = rawValue.trim();
+  if (!trimmed) return [];
+
+  // JSON 배열 시도
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.map(n => String(n).trim()).filter(Boolean);
+      }
+    } catch (e) {
+      // JSON 파싱 실패 시 아래 텍스트 분할로 진행
     }
-    // 저장된 목록 + 거래 내역에 있던 담당자(임창석, 임주리, 조미정 등)를 합쳐서 복원
-    staffNames = normalizeStaffNames([...names, ...fromLedger]);
-  }catch(e){
-    if(e.code !== 'accounting/not-found') throw e;
+  }
+
+  // 쉼표, 줄바꿈, 공백(띄어쓰기) 기준으로 이름 추출
+  return trimmed
+    .split(/[\s,\n]+/)
+    .map(name => name.trim())
+    .filter(name => name.length > 0);
+}
+
+/**
+ * 담당자 이름 목록 로드 (장부 데이터와 자동 합성 및 안전 예외 처리)
+ */
+async function loadStaffNames() {
+  const fromLedger = [...BASE_LEDGER, ...ledger].map(entry => entry.spender || '');
+
+  try {
+    const res = await storageGet(STAFF_NAMES_KEY);
+    const savedNames = parseStaffNames(res.value);
+
+    // 저장된 이름 + 거래 내역에 있던 담당자 합쳐서 복원
+    staffNames = normalizeStaffNames([...savedNames, ...fromLedger]);
+  } catch (e) {
+    // 키가 없거나 에러가 나더라도 앱이 멈추지 않고 장부 데이터 기반으로 복구
+    if (e.code !== 'accounting/not-found') {
+      console.warn('담당자 목록 불러오기 중 경고 (기본 장부 데이터로 대체):', e);
+    }
     staffNames = normalizeStaffNames(fromLedger);
   }
 }
 
-// JSON과 일반 텍스트(메모장/엑셀)를 모두 자동으로 알아채고 해석하는 만능 파서
+/**
+ * 2. 담당자 은행/계좌 정보 만능 파서 (은행명 자유 수정 가능)
+ * - JSON 구조 지원
+ * - 엑셀/메모장 복사 텍스트 지원 (탭, 쉼표, 공백 구분)
+ * - 은행명 띄어쓰기(예: 카카오 뱅크, NH 농협) 및 자유로운 변경 가능
+ */
 function parseStaffBankDetails(rawValue) {
   if (!rawValue || typeof rawValue !== 'string') return [];
-  
   const trimmed = rawValue.trim();
-  
-  // 1. 만약 대괄호([)나 중괄호({)로 시작하면 JSON으로 해석을 시도합니다.
+  if (!trimmed) return [];
+
+  // 1. JSON 형식 시도
   if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
     try {
-      return normalizeStaffBankDetails(JSON.parse(trimmed));
+      const parsed = JSON.parse(trimmed);
+      return normalizeStaffBankDetails(parsed);
     } catch (e) {
-      // JSON 해석에 실패하면 아래 일반 텍스트 파싱으로 넘어갑니다.
+      // JSON 해석 실패 시 아래 텍스트 파싱으로 자동 전환
     }
   }
-  
-  // 2. JSON이 아니라면 메모장/엑셀 텍스트(줄바꿈 + 탭/공백 구분)로 해석합니다.
+
+  // 2. 텍스트/엑셀 데이터 파싱 (줄바꿈 기준)
   const lines = trimmed.split('\n');
   const details = [];
-  
+
   for (const line of lines) {
     const cleanLine = line.trim();
-    if (!cleanLine) continue; // 빈 줄은 패스
-    
-    // 탭(\t)이나 공백 문자열 기준으로 글자를 쪼갭니다 (이름, 은행, 계좌)
-    const parts = cleanLine.split(/\s+/); 
-    
-    if (parts.length >= 3) {
+    if (!cleanLine) continue;
+
+    let name = '', bank = '', accountNumber = '';
+
+    // A. 쉼표(,)나 탭(\t) 구분이 명확한 경우
+    if (cleanLine.includes(',') || cleanLine.includes('\t')) {
+      const parts = cleanLine.split(/[\t,]+/).map(p => p.trim());
+      name = parts[0] || '';
+      bank = parts[1] || '';
+      accountNumber = parts[2] || '';
+    } 
+    // B. 공백(띄어쓰기)으로 구분된 경우 (은행명 자유 수정 대응)
+    else {
+      const parts = cleanLine.split(/\s+/);
+      if (parts.length >= 2) {
+        name = parts[0];
+        // 마지막 요소는 계좌번호(숫자/하이픈)일 확률이 높음
+        accountNumber = parts[parts.length - 1];
+        // 중간에 있는 모든 글자를 은행명으로 합침 (예: "NH 농협", "우리 은행")
+        bank = parts.slice(1, parts.length - 1).join(' ') || '기타';
+      } else {
+        name = parts[0];
+      }
+    }
+
+    if (name) {
       details.push({
-        name: parts[0],
-        bank: parts[1],
-        accountNumber: parts[2]
+        name: name,
+        bank: bank || '미지정',
+        accountNumber: accountNumber || ''
       });
     }
   }
-  
+
   return normalizeStaffBankDetails(details);
 }
 
-// 데이터를 불러오는 핵심 함수를 새 파서 기반으로 업그레이드합니다.
-async function loadStaffBankDetails(){
+/**
+ * 담당자 계좌 정보 로드
+ */
+async function loadStaffBankDetails() {
   try {
     const res = await storageGet(STAFF_BANK_DETAILS_KEY);
-    // 무조건 JSON.parse를 하던 구조에서 '자동 감지 파서'를 거치도록 변경합니다.
     staffBankDetails = parseStaffBankDetails(res.value);
-  } catch(e) {
-    if(e.code !== 'accounting/not-found') throw e;
+  } catch (e) {
+    if (e.code !== 'accounting/not-found') {
+      console.warn('계좌 정보 불러오기 중 경고:', e);
+    }
     staffBankDetails = [];
   }
 }
 
+
+  
 function renderStaffNames(){
   const datalist = document.getElementById('staff-name-options');
   const list = document.getElementById('staff-name-list');
