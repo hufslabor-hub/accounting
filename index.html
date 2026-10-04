@@ -374,28 +374,46 @@ body { background-color:var(--paper); color:var(--ink); }
 .status-submitted,
 .status-approved,
 .status-confirmed{background:none;}
+/* 💡 모바일 화면(768px 미만) 완벽 대응 대응 */
+html, body {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important; /* 오른쪽 거대 여백 완전 차단 */
+}
 
-/* 💡 모바일 화면(768px 미만)에서 모든 입력 폼과 카드를 100% 한 줄 전체로 펼침 */
 @media (max-width: 767px) {
-  /* 폼 내의 2열/3열 구조를 모바일에서는 무조건 1열 100%로 변경 */
-  .row > [class*="col-"] {
+  /* 1. 폼 및 카드 레이아웃 100% 모바일 너비 맞춤 */
+  .card, .sec-head, form, container, main, section {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* 2. 2열/3열 구조 (부트스트랩 + 커스텀 클래스) 무조건 1열로 세움 */
+  .row > [class*="col-"],
+  .grid-2,
+  .two-col,
+  .form-row {
+    display: block !important;
     width: 100% !important;
     max-width: 100% !important;
     flex: 0 0 100% !important;
   }
 
-  /* 카드 및 주요 세션 좌우 여백 정리 */
-  .card, .sec-head, form {
+  /* 3. ⭐ 핵심: 표(Table)가 화면을 뚫고 나가 전체를 찌그러뜨리는 것 방지 */
+  .table-responsive, table, .card table {
+    display: block !important;
+    width: 100% !important;
+    overflow-x: auto !important; /* 표가 넓으면 표 자체만 가로 스크롤 생성 */
+    white-space: nowrap !important;
+  }
+
+  /* 4. 입력 상자 및 버튼 전체 너비 확대 */
+  .form-control, .form-select, .btn, input, select {
     width: 100% !important;
     box-sizing: border-box !important;
   }
-
-  /* 입력 상자 및 버튼들도 모바일 폭에 딱 맞게 확대 */
-  .form-control, .form-select, .btn {
-    width: 100% !important;
-  }
 }
-  
 </style>
 </head>
 <body>
