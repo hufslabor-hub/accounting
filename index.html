@@ -4182,7 +4182,6 @@ async function commitPaymentApproval({ids,dateKey,sequence,approvalTime,uploaded
     api.tx.set(sequenceRef,{value:String(sequence),...writeMeta()});
   });
   return managementNo;
-}
 
 
 const PDF_OPTIONS = {
