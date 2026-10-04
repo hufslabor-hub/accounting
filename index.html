@@ -25,7 +25,7 @@ body { background-color:var(--paper); color:var(--ink); }
   header.masthead{
     max-width:1200px;width:calc(100% - 32px);margin:0 auto;
     background:linear-gradient(180deg, var(--navy) 0%, var(--navy-2) 100%);
-    color:var(--paper-2); padding:44px 24px 28px; position:relative; overflow:hidden;
+    color:var(--paper-2); padding:44px 24px 28px; position:relative;
   }
   header.masthead::after{
     content:""; position:absolute; left:0; right:0; bottom:0; height:6px;
@@ -36,10 +36,16 @@ body { background-color:var(--paper); color:var(--ink); }
   h1.title{font-family:'Pretendard',sans-serif;font-weight:800;font-size:clamp(24px,4vw,36px);line-height:1.25;margin:0 0 20px;max-width:none;}
   .budget-orphan-row td{color:var(--expense);font-weight:700;}
   .tabs-sticky{
-    position:sticky;top:0;z-index:30;
-    max-width:1200px;width:calc(100% - 32px);margin:0 auto;
-    background:var(--navy);border-bottom:4px solid var(--gold);
-    box-shadow:0 4px 12px rgba(17,45,78,.12);
+position: -webkit-sticky; /* Safari 브라우저 호환성 추가 */
+    position: sticky;
+    top: 0;
+    z-index: 1000; /* 다른 본문 콘텐츠보다 위에 오도록 상향 */
+    max-width: 1200px;
+    width: calc(100% - 32px);
+    margin: 0 auto;
+    background: var(--navy);
+    border-bottom: 4px solid var(--gold);
+    box-shadow: 0 4px 12px rgba(17,45,78,.12);
   }
   .tabs-inner{max-width:1040px;margin:0 auto;padding:0 24px;}
   nav.tabs{display:flex;gap:2px;margin:0;}
