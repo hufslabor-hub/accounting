@@ -5052,7 +5052,9 @@ function renderUsage(total,start){
     `초기화 ${fmtTime(reset)} · 조회 ${fmtTime(new Date())}`;
 }
 
-document.getElementById('some-button').addEventListener('click', function() { ... });
+
+document.getElementById('some-button')?.addEventListener('click', function(event) {
+  
     const button = event.currentTarget;
   const note = document.getElementById('usage-note');
   button.disabled = true;
