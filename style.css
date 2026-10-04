@@ -655,21 +655,53 @@ body {
 }
 
 /* 사용자 탭: 담당자 추가 / 정렬 */
-.staff-add-grid{display:grid;grid-template-columns:130px 1fr auto;gap:12px;align-items:end;}
+.staff-add-grid{display:grid;grid-template-columns:130px minmax(0,1fr) auto;gap:12px;align-items:end;}
+.staff-add-grid > .field{min-width:0;}
+.staff-add-grid select,.staff-add-grid input[type="text"]{width:100%;min-width:0;}
+.staff-add-grid .btn-primary{white-space:nowrap;}
 .staff-toolbar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin-top:16px;}
 .staff-toolbar label{font-size:.9em;font-weight:600;}
-.staff-toolbar select{max-width:100%;}
+.staff-toolbar select{max-width:100%;min-width:0;}
 
 /* 사용자 탭: 우리은행 다계좌이체 */
-.transfer-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:12px;}
-.transfer-bulk{display:flex;gap:8px;align-items:end;}
-.transfer-bulk .field{flex:1;}
+.transfer-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px;}
+.transfer-grid > *{min-width:0;}
+.transfer-grid select,.transfer-grid input[type="text"]{width:100%;min-width:0;}
+.transfer-bulk{display:flex;gap:8px;align-items:flex-end;}
+.transfer-bulk .field{flex:1 1 0;min-width:0;}
+.transfer-bulk .btn-primary{flex:none;white-space:nowrap;}
 .transfer-table input[type="text"]{width:100%;min-width:90px;text-align:right;}
 .transfer-table td.num,.transfer-table th.num{text-align:right;}
 .transfer-summary{margin-top:12px;font-weight:600;}
 .transfer-actions{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
 @media (max-width:480px){
-  .staff-add-grid{grid-template-columns:1fr auto;}
+  .staff-add-grid{grid-template-columns:minmax(0,1fr) auto;}
   .staff-add-grid .field:first-child{grid-column:1 / -1;}
-  .transfer-grid{grid-template-columns:1fr;}
+  .transfer-grid{grid-template-columns:minmax(0,1fr);}
+}
+
+/* 모바일: 이체 목록을 가로 스크롤 없이 한 줄 카드로 (선택 | 이름·구분/계좌 | 금액) */
+@media (max-width:600px){
+  #transfer-section .card{padding:16px;}
+  #transfer-section .staff-table-scroll{overflow-x:hidden;}
+  .transfer-table{min-width:0;display:block;}
+  .transfer-table thead{display:none;}
+  .transfer-table tbody{display:block;}
+  .transfer-table tr{
+    display:grid;
+    grid-template-columns:32px auto minmax(0,1fr) 112px;
+    grid-template-areas:"chk name group amt" "chk acct acct amt";
+    align-items:center;
+    column-gap:8px;row-gap:2px;
+    padding:8px;
+    border-bottom:1px solid var(--line);
+  }
+  .transfer-table td,.transfer-table td+td{border:0;padding:0;text-align:left;}
+  .transfer-table td:nth-child(1){grid-area:chk;text-align:center;}
+  .transfer-table td:nth-child(2){grid-area:group;font-size:12px;color:var(--ink-soft);}
+  .transfer-table td:nth-child(3){grid-area:name;}
+  .transfer-table td:nth-child(4){grid-area:acct;font-size:13px;color:var(--ink-soft);word-break:break-all;}
+  .transfer-table td:nth-child(5){grid-area:amt;}
+  .transfer-table input[type="checkbox"]{width:22px;height:22px;}
+  .transfer-table input[type="text"]{min-width:0;padding:9px 8px;}
 }
