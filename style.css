@@ -1154,3 +1154,35 @@ button.btn-unapprove{background:#FBEDE5;border:1px solid #B5502A;color:#9A3F1D;f
 @media (hover:hover){
   button.btn-unapprove:hover:not(:disabled){background:#B5502A;border-color:#B5502A;color:#fff;}
 }
+
+
+/* ---------- 기부금영수증 탭 ---------- */
+.don-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 20px;margin-bottom:18px;}
+.don-grid .field small{display:block;margin-top:4px;color:var(--ink-soft);font-size:12px;}
+.don-grid input[type=file],.don-grid input[type=password],.don-grid input[type=month],.don-grid input[type=date]{width:100%;box-sizing:border-box;border:1px solid var(--line);padding:8px;font:inherit;background:var(--paper-2);}
+.don-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px;}
+.don-status{font-size:14px;color:var(--ink-soft);}
+.don-status.error{color:#b3261e;font-weight:700;}
+.don-status.ok{color:var(--navy-2);font-weight:700;}
+.don-hint{font-size:13px;color:var(--ink-soft);}
+.don-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:16px;}
+.don-stat{background:var(--paper-2);padding:14px;text-align:center;}
+.don-stat-label{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:6px;}
+.don-stat b{font-size:18px;}
+.don-stat.warn b{color:#b3261e;}
+.don-notices p{margin:0 0 6px;font-size:13.5px;color:var(--ink-soft);}
+.don-notices p.don-warn{color:#b3261e;font-weight:700;}
+.don-sub{font-size:15px;margin:18px 0 8px;}
+.don-table td,.don-table th{text-align:center;font-size:13.5px;}
+.don-table td.num{text-align:right;white-space:nowrap;}
+.don-rrn-cell{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
+.don-rrn-cell input{min-width:150px;}
+.don-rrn-cell input.invalid{border-color:#b3261e;}
+.don-rrn-cell select{border:1px solid var(--line);padding:6px;font:inherit;background:var(--paper-2);}
+.don-row-msg{font-size:12.5px;color:var(--ink-soft);}
+.don-full{margin-top:18px;}
+.don-full summary{cursor:pointer;font-weight:700;margin-bottom:8px;}
+@media (max-width:767px){
+  .don-grid{grid-template-columns:1fr;}
+  .don-summary{grid-template-columns:repeat(2,minmax(0,1fr));}
+}

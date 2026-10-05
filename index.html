@@ -46,6 +46,7 @@
       <button class="tab-btn" data-view="fund">기금</button>
       <button class="tab-btn" data-view="budget">예산</button>
       <button class="tab-btn" data-view="staff">사용자</button>
+      <button class="tab-btn" data-view="donation">기부금영수증</button>
     </nav>
     <time id="app-clock" class="app-clock" datetime="" aria-label="한국 표준시">--:--:--</time>
   </div>
@@ -409,6 +410,82 @@
     </section>
 
   </div>
+<div class="view" id="view-donation">
+  <section>
+    <div class="sec-head"><span class="sec-num">☰</span><h2>전자기부금영수증 만들기</h2></div>
+    <div class="card">
+      <p class="sec-desc" style="margin:0 0 8px;">매월 들어오는 노동조합비 파일을 올리면 국세청 <b>전자기부금영수증 양식(40 종교단체외일반(지정))</b>으로 만들어 줍니다.</p>
+      <p class="sec-desc" style="margin:0 0 16px;">주민등록번호는 노동조합·후생파트 파일에 있으면 그 값을 쓰고, 연구산학협력단은 <b>전월 전자기부금영수증</b>에서 이름과 생년월일로 찾습니다. 모든 처리는 이 브라우저 안에서만 이뤄지며 주민등록번호는 서버에 저장되지 않습니다.</p>
+      <div class="don-grid">
+        <div class="field">
+          <label for="don-file-base">① 전월 전자기부금영수증 (필수)</label>
+          <input type="file" id="don-file-base" accept=".xls,.xlsx">
+          <small>주민번호 기준 명단과 출력 서식으로 쓰입니다.</small>
+        </div>
+        <div class="field">
+          <label for="don-file-union">② 노동조합 조합비</label>
+          <input type="file" id="don-file-union" accept=".xls,.xlsx">
+        </div>
+        <div class="field">
+          <label for="don-file-research">③ 연구산학협력단 조합비</label>
+          <input type="file" id="don-file-research" accept=".xls,.xlsx">
+        </div>
+        <div class="field">
+          <label for="don-file-welfare">④ 후생파트 조합비</label>
+          <input type="file" id="don-file-welfare" accept=".xls,.xlsx">
+        </div>
+        <div class="field">
+          <label for="don-password">엑셀 파일 암호 (암호 파일일 때만)</label>
+          <input type="password" id="don-password" autocomplete="off">
+          <small>저장되지 않고 이 화면에서만 사용합니다.</small>
+        </div>
+        <div class="field">
+          <label for="don-ym">대상 연월</label>
+          <input type="month" id="don-ym">
+          <small>비워 두면 파일에서 읽습니다. 후생파트는 이 월의 열을 사용합니다.</small>
+        </div>
+        <div class="field">
+          <label for="don-date">기부일자</label>
+          <input type="date" id="don-date">
+          <small>기본값은 해당 월 25일입니다.</small>
+        </div>
+      </div>
+      <div class="don-actions">
+        <button class="btn-primary" id="don-btn-preview" type="button">미리보기 만들기</button>
+        <span id="don-status" class="don-status" role="status"></span>
+      </div>
+    </div>
+  </section>
+  <section id="don-result" class="hidden">
+    <div class="sec-head"><span class="sec-num">☰</span><h2>변환 결과</h2></div>
+    <div class="card">
+      <div id="don-summary" class="don-summary"></div>
+      <div id="don-notices" class="don-notices"></div>
+      <div id="don-attention" class="hidden">
+        <h3 class="don-sub">확인이 필요한 항목</h3>
+        <div class="staff-table-scroll">
+          <table class="staff-table don-table">
+            <thead><tr><th>구분</th><th>성명</th><th>생년월일</th><th>주민등록번호</th><th>금액</th><th>상태</th></tr></thead>
+            <tbody id="don-attention-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <details class="don-full">
+        <summary id="don-full-count">전체 보기</summary>
+        <div class="staff-table-scroll">
+          <table class="staff-table don-table">
+            <thead><tr><th>No.</th><th>구분</th><th>성명</th><th>주민등록번호</th><th>금액</th><th>관리번호</th></tr></thead>
+            <tbody id="don-full-body"></tbody>
+          </table>
+        </div>
+      </details>
+      <div class="don-actions">
+        <button class="btn-primary" id="don-btn-download" type="button" disabled>전자기부금영수증 다운로드 (.xls)</button>
+        <span id="don-download-hint" class="don-hint"></span>
+      </div>
+    </div>
+  </section>
+</div>
 <div class="view" id="view-fund">
   <div class="notice" style="margin-top:28px;">
     기금 회계입니다. 입력한 내역은 <b>바로 확정</b>되며(결의·승인 없음), 잘못 입력하면 수정·삭제할 수 있습니다. 연도는 위의 회계연도 선택을 따르고, 담당자 정보는 활동비와 공유합니다.
@@ -510,7 +587,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <!-- APP_BUILD: stamp-version.mjs 실행 시 자동으로 갱신됩니다 -->
-<script>window.APP_BUILD = '20261005-1814';</script>
+<script>window.APP_BUILD = '20261005-1851';</script>
 <script src="domain.js"></script>
 <script>
 /* 초기 데이터(data.json)를 먼저 읽은 뒤 app.js를 실행합니다.
@@ -523,9 +600,13 @@
   var tag = document.querySelector('.version-tag');
   if(tag) tag.textContent = 'v' + build;
   function start(){
-    var s = document.createElement('script');
-    s.src = 'app.js?v=' + encodeURIComponent(build);
-    document.body.appendChild(s);
+    // 순서를 지켜 불러옵니다 (기부금영수증 모듈 → app.js)
+    ['donation.js', 'xls-protected.js', 'donation-ui.js', 'app.js'].forEach(function(src){
+      var s = document.createElement('script');
+      s.src = src + '?v=' + encodeURIComponent(build);
+      s.async = false;
+      document.body.appendChild(s);
+    });
   }
   fetch('data.json', {cache:'no-cache'})
     .then(function(r){ return r.ok ? r.json() : {}; })
