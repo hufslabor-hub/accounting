@@ -483,7 +483,7 @@ body { background-color:var(--paper); color:var(--ink); }
   .workflow-stage h3{font-size:16px;margin:0 0 12px;}
   .workflow-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
   .workflow-select{text-align:center!important;width:44px;}
-  .workflow-index{text-align:center!important;width:56px;}
+  .workflow-index{text-align:center!important;width:40px;}
 .workflow-summary{margin:12px 0 0;padding:10px 14px;background:var(--paper);color:var(--navy);font-weight:700;font-size:14px;}
 .workflow-summary.warn{background:#f8e1df;color:var(--expense);}
   .submitted-group-row:hover{background:var(--paper);}
