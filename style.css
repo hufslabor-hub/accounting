@@ -33,14 +33,14 @@
   html,body{margin:0;padding:0;}
 body, button, input, select, textarea, table { font-family:'Pretendard',sans-serif; }
 body { background-color:var(--paper); color:var(--ink); }
-  .wrap{max-width:1040px;margin:0 auto;padding:0 24px 80px;}
+  .wrap{max-width:1600px;margin:0 auto;padding:0 24px 80px;}
   header.masthead{
     max-width:none;width:100%;margin:0;
     background:linear-gradient(180deg, var(--navy) 0%, var(--navy-2) 100%);
     color:var(--paper-2); padding:44px 24px 28px; position:relative;
   }
   header.masthead::after{ display:none; }
-  .masthead-inner{max-width:1040px;margin:0 auto;}
+  .masthead-inner{max-width:1600px;margin:0 auto;}
   .org{font-size:17px;letter-spacing:.02em;color:var(--gold-soft);font-weight:500;margin:0 0 10px;}
   h1.title{font-family:'Pretendard',sans-serif;font-weight:800;font-size:clamp(24px,4vw,36px);line-height:1.25;margin:0 0 20px;max-width:none;}
   .budget-orphan-row td{color:var(--expense);font-weight:700;}
@@ -56,7 +56,7 @@ body { background-color:var(--paper); color:var(--ink); }
     border-bottom: 4px solid var(--gold);
     box-shadow: 0 4px 12px rgba(59,73,83,.12);
   }
-  .tabs-inner{max-width:1040px;margin:0 auto;padding:0 16px;}
+  .tabs-inner{max-width:1600px;margin:0 auto;padding:0 16px;}
   nav.tabs{
     display:flex;gap:2px;margin:0;
     overflow-x:auto;-webkit-overflow-scrolling:touch;
@@ -145,6 +145,7 @@ body { background-color:var(--paper); color:var(--ink); }
   .entry-table .col-amount{width:8%;}
   .entry-table .col-status{width:7%;}
   .entry-table .col-mgmt{width:7%;}
+  .entry-table .col-approval{width:7%;}
   .entry-table .col-approve{width:10%;}
   .entry-table .col-actions{width:13%;}
   .entry-table .col-mgmt,
@@ -245,6 +246,7 @@ body { background-color:var(--paper); color:var(--ink); }
     .entry-table .col-amount{width:10%;}
     .entry-table .col-status{width:12%;}
     .entry-table .col-mgmt{width:7%;}
+    .entry-table .col-approval{width:7%;}
     .entry-table .col-approve{width:9%;}
     .entry-table .col-actions{width:12%;}
   }

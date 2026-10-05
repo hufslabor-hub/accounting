@@ -1355,7 +1355,7 @@ const isClosedOpenItem = t => {
 
 // 번호 명칭: 마감된 내역은 '승인번호', 마감되기 전 내역은 '결의번호'
 const mgmtNoLabel = t => isClosedApproved(t) ? '승인번호' : '결의번호';
-const mgmtNoLabelForMonth = m => { const n = monthNo(m); return n>0 && n<=closedThrough ? '승인번호' : '결의번호'; };
+const mgmtNoLabelForMonth = m => '승인번호';
 
 async function loadBudget(){
   try{
