@@ -2215,7 +2215,7 @@ function renderYearSelect(){
   sel.innerHTML = years.map(y => `<option value="${y}"${y===currentYear?' selected':''}>${y}년</option>`).join('')
     + '<option value="__add__">＋ 연도 추가…</option>';
   document.getElementById('title-year').textContent = currentYear + ' 회계연도';
-  //document.getElementById('fy-range').textContent = `${currentYear}.01.01 ~ ${currentYear}.12.31`;
+  document.getElementById('fy-range').textContent = `${currentYear}.01.01 ~ ${currentYear}.12.31`;
   document.getElementById('budget-year-label').textContent = `${currentYear}년`;
   document.getElementById('budget-year-column').textContent = currentYear;
   const datePicker = document.getElementById('f-date-picker');
@@ -5448,6 +5448,34 @@ document.getElementById('some-button')?.addEventListener('click', async function
   }
 });
 
-
-  
+// 탭 영역 오른쪽 KST 시계 (시:분:초)
+function startAppClock(){
+  const el = document.getElementById('app-clock');
+  if(!el) return;
+  const pad = n => String(n).padStart(2,'0');
+  const tick = ()=>{
+    try{
+      const parts = new Intl.DateTimeFormat('en-GB',{
+        timeZone:'Asia/Seoul',
+        hour:'2-digit', minute:'2-digit', second:'2-digit',
+        hour12:false
+      }).formatToParts(new Date());
+      const get = type => parts.find(p=>p.type===type)?.value || '00';
+      const h = get('hour'), m = get('minute'), s = get('second');
+      const text = `${h}:${m}:${s}`;
+      el.textContent = text;
+      const dParts = new Intl.DateTimeFormat('en-CA',{
+        timeZone:'Asia/Seoul', year:'numeric', month:'2-digit', day:'2-digit'
+      }).format(new Date());
+      el.setAttribute('datetime', `${dParts}T${text}+09:00`);
+    }catch(e){
+      const now = new Date();
+      const kst = new Date(now.getTime() + (9*60 - now.getTimezoneOffset())*60000);
+      el.textContent = `${pad(kst.getHours())}:${pad(kst.getMinutes())}:${pad(kst.getSeconds())}`;
+    }
+  };
+  tick();
+  setInterval(tick, 1000);
+}
+startAppClock();
 connectFirebase();
