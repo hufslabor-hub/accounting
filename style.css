@@ -188,9 +188,9 @@ body { background-color:var(--paper); color:var(--ink); }
   .entry-table .col-actions{width:12%;}
   .entry-table .col-mgmt,
   .entry-table .col-approval,
-  .entry-table th:nth-child(9),
+  .entry-table th:nth-child(1),
   .entry-table th:nth-child(10),
-  .entry-table td:nth-child(9),
+  .entry-table td:nth-child(1),
   .entry-table td:nth-child(10){
     text-align:center;
     word-break:break-all;
@@ -229,7 +229,7 @@ body { background-color:var(--paper); color:var(--ink); }
   .transaction-table .col-status{width:14%;}
   .transaction-table .col-actions{width:12%;}
   .transaction-table td.num{white-space:nowrap;}
-  .entry-table td:nth-child(8){word-break:break-all;}
+  .entry-table td:nth-child(9){word-break:break-all;}
   .entry-table td.col-actions-cell,
   .entry-table th.col-actions-head{
     text-align:center; vertical-align:middle;
@@ -1122,3 +1122,17 @@ button{transition:background-color .12s,color .12s,box-shadow .12s;}
 .spender-chip:hover{border-color:#b48c28;}
 .spender-chip.active{background:#26394d;border-color:#26394d;color:#fff;}
 .spender-chip.active small{color:#e2e8f0;}
+
+/* 영수증 증빙 첨부: 점선 상자 안에 모든 요소를 가운데 정렬 */
+.receipt-field{margin:10px 0 14px;}
+.receipt-drop-zone{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:18px 16px;border:2px dashed var(--navy);border-radius:12px;background:var(--paper);text-align:center;}
+.receipt-drop-zone .receipt-hint{margin:0;font-size:.92rem;color:#64748b;line-height:1.5;}
+.receipt-drop-zone .receipt-pick-btn{width:auto;margin:0;}
+.receipt-preview{width:100%;display:flex;justify-content:center;}
+.receipt-preview-row{display:flex;flex-direction:column;align-items:center;gap:10px;max-width:100%;width:fit-content;margin:0 auto;}
+.receipt-preview-row img{display:block;max-width:100%;max-height:220px;object-fit:contain;border:1px solid #cbd5e1;border-radius:8px;background:#fff;}
+
+/* 모바일 카드형 표: 지급 대기 항목에 열 이름 표시 */
+@media (max-width:767px){
+  #view-entry .pending-transaction-table td[data-label]::before{content:attr(data-label) " · ";color:#64748b;font-size:12px;font-weight:400;}
+}

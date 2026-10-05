@@ -2464,7 +2464,7 @@ function loadImageFromFile(file){
   });
 }
 
-// 이미지는 JPEG로 줄여서(긴 변 최대 1800px) 한 문서에 들어가게 만든다
+// 이미지는 JPEG로 줄여서(긴 변 최대 1280px, 품질 0.7부터) 한 문서에 들어가게 만든다
 async function buildReceiptPayload(file){
   const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
   if(isPdf){
@@ -2475,7 +2475,7 @@ async function buildReceiptPayload(file){
   if(!String(file.type).startsWith('image/')) throw new Error('이미지 또는 PDF 파일만 첨부할 수 있습니다.');
   const img = await loadImageFromFile(file);
   const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height;
-  let maxSide = 1800, quality = 0.85;
+  let maxSide = 1280, quality = 0.7;
   for(let i=0;i<12;i++){
     const scale = Math.min(1, maxSide/Math.max(w0,h0));
     const canvas = document.createElement('canvas');
@@ -3496,6 +3496,28 @@ function entryResolutionNo(t){
   if(t.status === 'submitted' && t.managementNo) return String(t.managementNo);
   return '';
 }
+// 결의일: '결의' 버튼을 누른 날(submittedAt, 로컬 날짜) → 'YYYY-MM-DD'
+function entrySubmittedDateKey(t){
+  if(!t || !t.submittedAt) return '';
+  const d = new Date(t.submittedAt);
+  if(Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+// 결의번호는 달마다 1번부터 시작하므로, 같은 번호를 구분하는 '결의월' 키 (YYYYMM)
+function resolutionMonthKey(t){
+  const key = entrySubmittedDateKey(t);
+  return key ? key.slice(0,4)+key.slice(5,7) : '';
+}
+// 결의번호 순 정렬 (결의월 → 번호, 번호 없는 내역은 맨 뒤)
+function compareByResolution(a,b){
+  const na = entryResolutionNo(a), nb = entryResolutionNo(b);
+  const sa = na!=='' && Number.isFinite(Number(na)) ? Number(na) : null;
+  const sb = nb!=='' && Number.isFinite(Number(nb)) ? Number(nb) : null;
+  if((sa===null)!==(sb===null)) return sa===null ? 1 : -1;
+  if(sa===null) return (b.date||'').localeCompare(a.date||'') || String(a.id).localeCompare(String(b.id));
+  return resolutionMonthKey(a).localeCompare(resolutionMonthKey(b)) || sa-sb
+    || (a.date||'').localeCompare(b.date||'') || String(a.id).localeCompare(String(b.id));
+}
 // 승인번호: 승인(approved/paid/confirmed) 상태일 때 managementNo
 function entryApprovalNo(t){
   if(APPROVED_STATES.includes(t.status) && t.managementNo) return String(t.managementNo);
@@ -3519,7 +3541,7 @@ const source = ledger;
     // 마감된 달의 승인 건은 결의 내역에서 숨기고 보고서에만 표시
     .filter(t => isReport || !isClosedApproved(t))
             .slice()
-    .sort((a,b) => (b.date||'').localeCompare(a.date||''));
+    .sort(isReport ? ((a,b) => (b.date||'').localeCompare(a.date||'')) : compareByResolution);
 
   const shown = filtered;
 
@@ -3540,7 +3562,8 @@ const source = ledger;
       const resolutionNo = entryResolutionNo(t);
       const approvalNo = entryApprovalNo(t);
       tr.innerHTML = `
-        <td>${escapeHTML(formatEntryDate(t.date))}</td>
+        <td>${resolutionNo ? escapeHTML(resolutionNo) : ''}</td>
+        <td class="col-date">${escapeHTML(formatEntryDate(t.date))}</td>
         <td style="color:${t.gubun==='수입'?'var(--income)':'var(--expense)'}">${escapeHTML(t.gubun||'')}</td>
         <td>${escapeHTML(t.desc||'')}</td>
         <td>${escapeHTML(t.category||'-')}</td>
@@ -3548,7 +3571,6 @@ const source = ledger;
         <td>${escapeHTML(t.spender||'-')}</td>
         <td class="num">${fmtShort(t.amount)}</td>
         <td><span class="status-badge status-${t.status}">${STATUS_LABEL[t.status]||t.status}</span></td>
-        <td>${resolutionNo ? escapeHTML(resolutionNo) : ''}</td>
         <td>${approvalNo ? escapeHTML(approvalNo) : ''}</td>
         <td class="col-actions-cell">${rowActions(t)}</td>
       `;
@@ -3709,7 +3731,8 @@ function workflowTable(entries,status,checkedIds=new Set()){
 function groupSubmittedEntries(entries){
   const groups = new Map();
   entries.forEach(t=>{
-    const key = String(t.managementNo || t.submissionSequence || t.id);
+    // 결의번호는 달마다 다시 시작하므로 '결의월:번호'로 묶는다
+    const key = `${resolutionMonthKey(t)}:${entryResolutionNo(t) || t.managementNo || t.id}`;
     if(!groups.has(key)) groups.set(key, []);
     groups.get(key).push(t);
   });
@@ -3717,31 +3740,38 @@ function groupSubmittedEntries(entries){
     list.sort((a,b)=>(a.date||'').localeCompare(b.date||'') || String(a.id).localeCompare(String(b.id)));
     const sum = list.reduce((s,e)=>s+Number(e.amount||0),0);
     const spender = (list[0].spender || '').trim() || '미지정';
-    const dates = list.map(e=>e.date).filter(Boolean).sort();
-    const dateLabel = dates.length
-      ? (dates[0]===dates[dates.length-1] ? formatEntryDate(dates[0]) : `${formatEntryDate(dates[0])} ~ ${formatEntryDate(dates[dates.length-1])}`)
-      : '-';
-    return {key, list, sum, spender, count:list.length, managementNo:key, dateLabel};
-  }).sort((a,b)=>String(b.managementNo).localeCompare(String(a.managementNo),'ko') || (b.list[0]?.date||'').localeCompare(a.list[0]?.date||''));
+    const submittedKey = entrySubmittedDateKey(list[0]);
+    return {
+      key, list, sum, spender, count:list.length,
+      resolutionNo:entryResolutionNo(list[0]) || String(list[0].managementNo || ''),
+      monthKey:resolutionMonthKey(list[0]),
+      dateLabel:submittedKey ? formatEntryDate(submittedKey) : '-'
+    };
+  }).sort((a,b)=>{
+    const na = Number(a.resolutionNo), nb = Number(b.resolutionNo);
+    const fa = Number.isFinite(na) && a.resolutionNo!=='', fb = Number.isFinite(nb) && b.resolutionNo!=='';
+    if(fa!==fb) return fa ? -1 : 1;
+    return a.monthKey.localeCompare(b.monthKey) || (fa ? na-nb : 0) || (a.list[0]?.date||'').localeCompare(b.list[0]?.date||'');
+  });
 }
 
 function submittedGroupsTable(groups, checkedIds=new Set()){
   if(!groups.length) return '<p class="pending-empty">해당 상태의 내역이 없습니다.</p>';
-  const rows = groups.map((g,index)=>{
+  const rows = groups.map(g=>{
     const ids = g.list.map(e=>e.id);
     const allChecked = ids.every(id=>checkedIds.has(id));
     const idsAttr = ids.map(id=>escapeHTML(id)).join(',');
     return `
     <tr class="submitted-group-row" data-group-key="${escapeHTML(g.key)}" style="cursor:pointer;">
-      <td class="workflow-select"><input type="checkbox" data-workflow-group="${escapeHTML(g.key)}" data-workflow-ids="${idsAttr}" data-workflow-status="submitted" aria-label="${mgmtNoLabel(g.list[0])} ${escapeHTML(String(g.managementNo))} 선택"${allChecked?' checked':''}></td>
-      <td class="workflow-index">${index+1}</td>
-      <td>${escapeHTML(g.dateLabel)}</td>
-      <td colspan="2"><strong>${mgmtNoLabel(g.list[0])} ${escapeHTML(String(g.managementNo))}</strong> · ${g.count}건</td>
-      <td colspan="2">${escapeHTML(g.spender)}</td>
-      <td class="num">${fmtShort(g.sum)}</td>
+      <td class="workflow-select"><input type="checkbox" data-workflow-group="${escapeHTML(g.key)}" data-workflow-ids="${idsAttr}" data-workflow-status="submitted" aria-label="${mgmtNoLabel(g.list[0])} ${escapeHTML(String(g.resolutionNo))} 선택"${allChecked?' checked':''}></td>
+      <td class="workflow-index" data-label="결의번호"><strong>${escapeHTML(String(g.resolutionNo))}</strong></td>
+      <td data-label="결의일">${escapeHTML(g.dateLabel)}</td>
+      <td data-label="건수">${g.count}건</td>
+      <td data-label="담당자">${escapeHTML(g.spender)}</td>
+      <td class="num" data-label="합계">${fmtShort(g.sum)}</td>
     </tr>
     <tr class="submitted-group-detail hidden" data-group-detail="${escapeHTML(g.key)}">
-      <td colspan="8" style="padding:0;background:var(--paper);">
+      <td colspan="6" style="padding:0;background:var(--paper);">
         <div class="table-scroll" style="max-height:240px;">
           <table class="transaction-table pending-transaction-table" style="min-width:0;">
             <thead><tr><th>결제일</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th class="num">금액</th></tr></thead>
@@ -3765,7 +3795,7 @@ function submittedGroupsTable(groups, checkedIds=new Set()){
     <table class="transaction-table pending-transaction-table">
       <thead><tr>
         <th class="workflow-select"><input type="checkbox" data-workflow-all="submitted" aria-label="전체 선택"></th>
-        <th class="workflow-index">순번</th><th>결제일</th><th colspan="2">결의 묶음</th><th colspan="2">담당자</th><th class="num">합계 금액</th>
+        <th class="workflow-index">결의번호</th><th>결의일</th><th>건수</th><th>담당자</th><th class="num">합계 금액</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
@@ -4001,9 +4031,20 @@ const legacy = /^\d{1,8}$/.test(String(entry.managementNo||'')) ? Number(entry.m
   },0);
 }
 
+// 결의월(YYYYMM)별 최고 결의번호 (월 카운터 문서가 아직 없을 때의 대비값)
+function highestSubmissionSequenceForMonth(sourceLedger,monthKey){
+  return sourceLedger.reduce((max,entry)=>{
+    if(resolutionMonthKey(entry)!==monthKey) return max;
+    const saved = Number(entry.submissionSequence);
+    return Number.isSafeInteger(saved) ? Math.max(max,saved) : max;
+  },0);
+}
+
 async function persistSubmissionBatch(entries,submittedAt,submittedBy){
   const ids = entries.map(entry=>entry.id);
-  const sequenceRef = db.collection('accountingData').doc(SUBMISSION_SEQUENCE_KEY);
+  // 결의번호는 결의한 달마다 1번부터 다시 시작 (월별 카운터 문서)
+  const submittedMonthKey = resolutionMonthKey({submittedAt});
+  const sequenceRef = db.collection('accountingData').doc(`${SUBMISSION_SEQUENCE_KEY}:${submittedMonthKey}`);
   let assigned = 0;
   await entryTransaction(ids,async (found,api)=>{
     const targets = ids.map(id=>found.get(id)).filter(Boolean);
@@ -4012,7 +4053,7 @@ async function persistSubmissionBatch(entries,submittedAt,submittedBy){
     }
     requireSingleSpender(targets);
     const sequenceSnapshot = await api.tx.get(sequenceRef);
-    const stored = sequenceSnapshot.exists ? Number(sequenceSnapshot.data().value) : highestSubmissionSequence(ledger);
+    const stored = sequenceSnapshot.exists ? Number(sequenceSnapshot.data().value) : highestSubmissionSequenceForMonth(ledger,submittedMonthKey);
     assigned = checkSequence(stored,'결의번호')+1;
     targets.forEach(entry=>api.set({
       ...entry, status:'submitted', submittedAt, submittedBy,

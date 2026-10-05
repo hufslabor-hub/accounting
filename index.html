@@ -333,36 +333,34 @@
             </div>
           </div>
           <div class="field"><label for="f-mok">세부 계정과목</label><select id="f-mok"></select></div>
-          <div class="field"><label>담당자</label><input type="text" id="f-spender" placeholder="입력자 이름" list="staff-name-options"><datalist id="staff-name-options"></datalist></div>
-
-          <div class="field span2"><label>내용</label><input type="text" id="f-desc" placeholder="예: 집행부 회의 식비" list="dl-desc" autocomplete="off"></div>
-          <div class="field"><label>지급처</label><input type="text" id="f-payee" placeholder="예: 배달의민족" list="recent-payee-options"><datalist id="recent-payee-options"></datalist></div>
-          <div class="field span2"><label>금액(원)</label><input type="text" id="f-amount" inputmode="numeric" placeholder="예: 50000 (환불은 -50000)" list="dl-amount" autocomplete="off"></div>
+          <div class="field"><label>내용</label><input type="text" id="f-desc" placeholder="예: 집행부 회의 식비" list="dl-desc" autocomplete="off"></div>
+          <div class="field span2"><label>지급처</label><input type="text" id="f-payee" placeholder="예: 배달의민족" list="recent-payee-options"><datalist id="recent-payee-options"></datalist></div>
+          <div class="field"><label>금액(원)</label><input type="text" id="f-amount" inputmode="numeric" placeholder="예: 50000 (환불은 -50000)" list="dl-amount" autocomplete="off"></div>
+          <div class="field span2"><label>담당자</label><input type="text" id="f-spender" placeholder="입력자 이름" list="staff-name-options"><datalist id="staff-name-options"></datalist></div>
         </div>
         <datalist id="dl-desc"></datalist>
         <datalist id="dl-amount"></datalist>
 
 <div class="entry-form-footer">
 <!-- 영수증 첨부 영역 -->
-<div class="mb-3">
+<div class="mb-3 receipt-field">
   <label class="form-label font-weight-bold">🧾 영수증 증빙 첨부</label>
-  
-  <!-- 파일 선택 버튼 & 붙여넣기 안내 영역 -->
-  <div id="receipt-drop-zone" class="border border-dashed p-3 text-center bg-light rounded" style="cursor: pointer; border-style: dashed !important;">
-    <p class="mb-1 text-muted">클릭하여 영수증 파일을 선택하거나, 캡처한 이미지를 <b>Ctrl+V</b>로 붙여넣으세요.</p>
-    <input type="file" id="f-receipt-file" accept="image/*,.pdf" style="display: none;" onchange="handleFileSelect(event)">
-    <button type="button" class="btn btn-sm btn-outline-primary receipt-pick-btn" onclick="document.getElementById('f-receipt-file').click()"><span class="ico" aria-hidden="true">📎</span><span>파일 선택</span></button>
-  </div>
 
-  <!-- 이미지 미리보기 구역 -->
-  <div id="receipt-preview-container" class="mt-2" style="display: none;">
-    <div class="d-flex align-items-center gap-2">
-      <img id="receipt-preview-img" src="" alt="영수증 미리보기" style="max-height: 120px;" class="img-thumbnail rounded border">
-      <button type="button" class="btn btn-sm btn-danger receipt-del-btn" onclick="clearReceipt()">삭제</button>
+  <!-- 점선 상자: 안내문 · 파일 선택 버튼 · 붙여넣은 이미지 미리보기가 모두 이 안에 들어갑니다 -->
+  <div id="receipt-drop-zone" class="receipt-drop-zone">
+    <p class="receipt-hint">클릭하여 영수증 파일을 선택하거나, 캡처한 이미지를 <b>Ctrl+V</b>로 붙여넣으세요.</p>
+    <input type="file" id="f-receipt-file" accept="image/*,.pdf" style="display: none;" onchange="handleFileSelect(event)">
+    <button type="button" class="receipt-pick-btn" onclick="document.getElementById('f-receipt-file').click()"><span class="ico" aria-hidden="true">📎</span><span>파일 선택</span></button>
+
+    <div id="receipt-preview-container" class="receipt-preview" style="display: none;">
+      <div class="receipt-preview-row">
+        <img id="receipt-preview-img" src="" alt="영수증 미리보기">
+        <button type="button" class="receipt-del-btn" onclick="clearReceipt()">삭제</button>
+      </div>
     </div>
   </div>
 </div>
-        
+
         <button class="btn-primary" id="btn-add">내역 추가</button>
         <button class="btn-revert hidden" id="btn-cancel-entry-edit" type="button">수정 취소</button>
         <span id="save-status"></span>
@@ -382,10 +380,10 @@
         <div class="table-scroll transaction-table-scroll entry-table-container">
           <table class="transaction-table entry-table">
             <colgroup>
-              <col class="col-date"><col class="col-type"><col class="col-description"><col class="col-mok">
-              <col class="col-payee"><col class="col-spender"><col class="col-amount"><col class="col-status"><col class="col-mgmt"><col class="col-approval"><col class="col-actions">
+              <col class="col-mgmt"><col class="col-date"><col class="col-type"><col class="col-description"><col class="col-mok">
+              <col class="col-payee"><col class="col-spender"><col class="col-amount"><col class="col-status"><col class="col-approval"><col class="col-actions">
             </colgroup>
-            <thead><tr><th>결제일</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th>담당자</th><th class="num">금액</th><th>상태</th><th>결의번호</th><th>승인번호</th><th class="col-actions-head">추가 작업</th></tr></thead>
+            <thead><tr><th>결의번호</th><th>결제일</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th>담당자</th><th class="num">금액</th><th>상태</th><th>승인번호</th><th class="col-actions-head">추가 작업</th></tr></thead>
             <tbody id="tx-body-entry"></tbody>
           </table>
         </div>
@@ -512,7 +510,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <!-- APP_BUILD: stamp-version.mjs 실행 시 자동으로 갱신됩니다 -->
-<script>window.APP_BUILD = '20261005-1748';</script>
+<script>window.APP_BUILD = '20261005-1800';</script>
 <script src="domain.js"></script>
 <script>
 /* 초기 데이터(data.json)를 먼저 읽은 뒤 app.js를 실행합니다.
