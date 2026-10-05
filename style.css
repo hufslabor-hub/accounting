@@ -220,10 +220,16 @@ body { background-color:var(--paper); color:var(--ink); }
   border-radius: 4px;
   cursor: pointer;
   font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .report-tab-btn:hover, .report-tab-btn.active {
   background: var(--navy, #0d1b2a);
   color: #fff;
+}
+.report-tab-btn.is-closed {
+  border-style: dashed;
 }
 .badge-closed {
   background: #e0e0e0;
@@ -231,6 +237,13 @@ body { background-color:var(--paper); color:var(--ink); }
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 0.85em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.report-tab-btn.active .badge-closed,
+.report-tab-btn:hover .badge-closed {
+  background: rgba(255,255,255,.22);
+  color: inherit;
 }
 
   @media (max-width:600px){

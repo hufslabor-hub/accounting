@@ -2993,10 +2993,12 @@ document.getElementById('r-count').textContent = `승인된 ${approvedCount.toLo
   renderBudgetSection(approved);
 }
 
-// ---- 1) 보고서 탭을 열면 가장 최근 월을 자동 선택 ----
+// ---- 1) 보고서 탭을 열면 가장 최근 표시 가능 월을 자동 선택 ----
 function autoSelectMonthlyReportMonth(approved){
-  if(currentMonthlyReportMonth!==0 || closedThrough<1) return;
-  currentMonthlyReportMonth = closedThrough;   // 마감된 월 중 가장 최근 월
+  if(currentMonthlyReportMonth!==0) return;
+  const maxMonth = maxReportMonthAvailable();
+  if(maxMonth < 1) return;
+  currentMonthlyReportMonth = maxMonth;   // 오늘 기준 최신 월 (미마감 포함)
   renderReportTabs();
   loadMonthlyBudgetReport(currentMonthlyReportMonth);
 }
@@ -3905,6 +3907,17 @@ async function updateSelectedWorkflow(fromStatus,toStatus){
 let currentMonthlyReportMonth = 0; // 1~12, 0 = 미선택
 let monthlyReportDirty = false;     // 결산 내역이 바뀐 뒤 아직 월별 보고서에 반영 안 됨
 
+/** 보고서 월 탭에 표시할 마지막 월 (오늘 날짜 기준 + 마감 월 반영) */
+function maxReportMonthAvailable(){
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  if(currentYear < y) return 12;
+  if(currentYear > y) return Math.max(closedThrough, 0);
+  // 당해 연도: 오늘 월까지. 마감이 더 앞서 있으면 그것도 포함
+  return Math.max(m, closedThrough, 1);
+}
+
 function resetMonthlyReportView() {
   const titleEl = document.getElementById('report-title');
   const noteEl = document.getElementById('monthly-budget-note');
@@ -3913,36 +3926,42 @@ function resetMonthlyReportView() {
   if (titleEl) titleEl.textContent = '월을 선택하세요';
   if (scrollBox) scrollBox.style.display = 'none';
   if (mobileBox) mobileBox.classList.remove('is-ready');
-  if (noteEl) noteEl.textContent = closedThrough
-    ? '상단 월 탭을 눌러 해당 월말 기준 보고서를 조회하세요.'
-    : '마감된 월이 없습니다. 월을 마감하면 해당 월 버튼이 생성됩니다.';
+  if (noteEl) noteEl.textContent = '상단 월 탭을 눌러 해당 월말 기준 누적 보고서를 조회하세요. 마감된 월은 「마감 완료」로 표시됩니다.';
 }
 
-// 월 버튼은 마감된 월(1월 ~ closedThrough월)만 만든다
+// 월 버튼: 1월 ~ 오늘 해당 월까지 생성. 마감 월은 「마감 완료」 표시. 클릭 시 최신 승인 내역 기준 누적 조회
 function renderReportTabs() {
   const container = document.getElementById('report-tabs-container');
   if (!container) return;
 
-  // 마감 취소 등으로 선택한 월이 마감 범위를 벗어났으면 선택 해제
-  if (currentMonthlyReportMonth > closedThrough) {
+  const maxMonth = maxReportMonthAvailable();
+  if (currentMonthlyReportMonth > maxMonth) {
     currentMonthlyReportMonth = 0;
     resetMonthlyReportView();
   }
 
   container.innerHTML = '';
-  if (!closedThrough) {
+  if (maxMonth < 1) {
     const empty = document.createElement('p');
     empty.className = 'report-tabs-empty';
-    empty.textContent = '마감된 월이 없습니다. 월을 마감하면 해당 월 버튼이 생성됩니다.';
+    empty.textContent = '표시할 월이 없습니다.';
     container.appendChild(empty);
     return;
   }
-  for (let m = 1; m <= closedThrough; m++) {
+  for (let m = 1; m <= maxMonth; m++) {
+    const isClosed = m <= closedThrough;
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'report-tab-btn' + (m === currentMonthlyReportMonth ? ' active' : '');
-    btn.textContent = m + '월 ✓';
+    btn.className = 'report-tab-btn'
+      + (m === currentMonthlyReportMonth ? ' active' : '')
+      + (isClosed ? ' is-closed' : '');
     btn.dataset.month = String(m);
+    btn.innerHTML = isClosed
+      ? `${m}월 <span class="badge-closed">마감 완료</span>`
+      : `${m}월`;
+    btn.title = isClosed
+      ? `${m}월말 기준 누적 보고서 (마감 완료)`
+      : `${m}월말 기준 누적 보고서 (최신 승인 내역 반영)`;
     btn.addEventListener('click', () => {
       currentMonthlyReportMonth = m;
       document.querySelectorAll('.report-tab-btn').forEach(b =>
@@ -3953,11 +3972,12 @@ function renderReportTabs() {
   }
 }
 
-// 마감/마감 취소 뒤: 월 버튼을 다시 만들고, 선택이 비면 가장 최근 마감월을 선택
+// 마감/마감 취소 뒤: 월 버튼을 다시 만들고, 선택이 비면 가장 최근 표시 가능 월을 선택
 function syncMonthlyReportToClosure() {
   renderReportTabs();
-  if (currentMonthlyReportMonth === 0 && closedThrough > 0) {
-    currentMonthlyReportMonth = closedThrough;
+  const maxMonth = maxReportMonthAvailable();
+  if (currentMonthlyReportMonth === 0 && maxMonth > 0) {
+    currentMonthlyReportMonth = maxMonth;
     renderReportTabs();
   }
   if (currentMonthlyReportMonth >= 1 && currentMonthlyReportMonth <= 12) {
