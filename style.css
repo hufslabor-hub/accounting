@@ -1194,7 +1194,7 @@ button.btn-unapprove{background:#FBEDE5;border:1px solid #B5502A;color:#9A3F1D;f
 .don-seed summary{cursor:pointer;font-size:13.5px;color:var(--ink-soft);}
 .don-privacy{color:#b3261e !important;}
 .don-manual-amount{width:130px;text-align:right;border:1px solid var(--line);padding:7px 8px;font:inherit;background:var(--paper-2);}
-#r-balance {
-  font-size: 32px !important;
+#r-balance, #r-income, #r-expense{
+    font-size: 32px !important;
   font-weight: 800;
 }
