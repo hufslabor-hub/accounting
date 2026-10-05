@@ -143,7 +143,7 @@ body { background-color:var(--paper); color:var(--ink); }
   .entry-table .col-payee{width:7%;}
   .entry-table .col-spender{width:6%;}
   .entry-table .col-amount{width:8%;}
-  .entry-table .col-status{width:5%;}
+  .entry-table .col-status{width:4.5%;}
   .entry-table .col-mgmt{width:8%;}
   .entry-table .col-approval{width:9%;}
   .entry-table .col-actions{width:12%;}
@@ -154,7 +154,7 @@ body { background-color:var(--paper); color:var(--ink); }
   .entry-table td:nth-child(9),
   .entry-table td:nth-child(10){
     text-align:center;
-    white-space:nowrap;
+    word-break:break-all;
   }
   .entry-table td.col-actions-cell .action-row{
     flex-wrap:nowrap;
@@ -179,7 +179,7 @@ body { background-color:var(--paper); color:var(--ink); }
   .transaction-table .col-status{width:14%;}
   .transaction-table .col-actions{width:12%;}
   .transaction-table td.num{white-space:nowrap;}
-  .entry-table td:nth-child(8){white-space:nowrap;}
+  .entry-table td:nth-child(8){word-break:break-all;}
   .entry-table td.col-actions-cell,
   .entry-table th.col-actions-head{
     text-align:center; vertical-align:middle;
@@ -243,7 +243,7 @@ body { background-color:var(--paper); color:var(--ink); }
     .entry-table .col-payee{width:8%;}
     .entry-table .col-spender{width:8%;}
     .entry-table .col-amount{width:10%;}
-    .entry-table .col-status{width:12%;}
+    .entry-table .col-status{width:8%;}
     .entry-table .col-mgmt{width:8%;}
     .entry-table .col-approval{width:9%;}
     .entry-table .col-actions{width:12%;}
