@@ -2221,7 +2221,7 @@ function renderYearSelect(){
   const datePicker = document.getElementById('f-date-picker');
   datePicker.min = fyStart(currentYear - 1);
   datePicker.max = fyEnd(currentYear);
-  document.getElementById('f-date').value = '';
+  //document.getElementById('f-date').value = '';
   datePicker.value = '';
 }
 
