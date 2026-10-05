@@ -27,6 +27,25 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // 기부금영수증: 주민번호 명단(registry)과 설정(settings: 노조 파일 암호·지식출판콘텐츠원 금액)
+    match /donationData/registry {
+      allow read: if isAllowedUser();
+      allow create, update: if isAllowedUser()
+        && request.resource.data.keys().hasOnly(['people', 'updatedAt', 'updatedBy'])
+        && request.resource.data.people is map
+        && request.resource.data.people.size() < 5000
+        && request.resource.data.updatedBy == request.auth.uid;
+      allow delete: if false;
+    }
+
+    match /donationData/settings {
+      allow read: if isAllowedUser();
+      allow create, update: if isAllowedUser()
+        && request.resource.data.keys().hasOnly(['unionPassword', 'manualGroup', 'updatedAt', 'updatedBy'])
+        && request.resource.data.updatedBy == request.auth.uid;
+      allow delete: if false;
+    }
+
     match /accountingData/{documentId} {
       allow read: if isAllowedUser();
       allow create, update: if isAllowedUser()

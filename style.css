@@ -1186,3 +1186,11 @@ button.btn-unapprove{background:#FBEDE5;border:1px solid #B5502A;color:#9A3F1D;f
   .don-grid{grid-template-columns:1fr;}
   .don-summary{grid-template-columns:repeat(2,minmax(0,1fr));}
 }
+
+.don-box{border:1px solid var(--line);background:var(--paper);padding:12px 14px;margin-bottom:16px;}
+.don-box-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:8px;}
+.don-inline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.don-inline input[type=password],.don-inline input[type=file]{border:1px solid var(--line);padding:8px;font:inherit;background:var(--paper-2);}
+.don-seed summary{cursor:pointer;font-size:13.5px;color:var(--ink-soft);}
+.don-privacy{color:#b3261e !important;}
+.don-manual-amount{width:130px;text-align:right;border:1px solid var(--line);padding:7px 8px;font:inherit;background:var(--paper-2);}

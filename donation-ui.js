@@ -11,11 +11,19 @@
 
   const $ = (id) => document.getElementById(id);
   const el = {
-    base: $('don-file-base'),
     union: $('don-file-union'),
     research: $('don-file-research'),
     welfare: $('don-file-welfare'),
+    seedFile: $('don-file-seed'),
+    seedBtn: $('don-btn-seed'),
+    registryStatus: $('don-registry-status'),
     password: $('don-password'),
+    pwStatus: $('don-pw-status'),
+    pwEdit: $('don-pw-edit'),
+    pwSave: $('don-btn-pw-save'),
+    pwCancel: $('don-btn-pw-cancel'),
+    pwChange: $('don-btn-pw-change'),
+    manualBody: $('don-manual-body'),
     ym: $('don-ym'),
     date: $('don-date'),
     preview: $('don-btn-preview'),
@@ -31,9 +39,108 @@
     downloadHint: $('don-download-hint')
   };
 
-  const state = { baseWb: null, items: [], skipped: [], ym: '', dateTouched: false };
+  const MANUAL_LABEL = '지식출판콘텐츠원';
+  const DEFAULT_MANUAL = ['김세희', '장혜정'];
+  const state = {
+    loaded: false,
+    registryMap: {}, // { 주민번호: 성명 } — Firestore donationData/registry
+    password: '', // Firestore donationData/settings.unionPassword
+    manual: DEFAULT_MANUAL.map((name) => ({ name, amount: 0 })),
+    items: [],
+    skipped: [],
+    ym: '',
+    notices: [],
+    newPeople: {},
+    dateTouched: false
+  };
   const won = (n) => Number(n || 0).toLocaleString('ko-KR') + '원';
   const ymLabel = (ym) => `${ym.slice(0, 4)}년 ${Number(ym.slice(4))}월`;
+
+  // ---------- Firestore (donationData) ----------
+  const fdb = () => firebase.firestore();
+  const regDoc = () => fdb().collection('donationData').doc('registry');
+  const setDoc = () => fdb().collection('donationData').doc('settings');
+  const stamp = () => ({
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: (firebase.auth().currentUser || {}).uid || ''
+  });
+  const fsError = (e) =>
+    e && e.code === 'permission-denied'
+      ? '저장소 접근이 거부되었습니다. firestore.rules에 donationData 규칙을 게시했는지 확인해 주세요.'
+      : e.message || String(e);
+
+  async function loadAll() {
+    const [r, st] = await Promise.all([regDoc().get(), setDoc().get()]);
+    state.registryMap = (r.exists && r.data().people) || {};
+    const sd = st.exists ? st.data() : {};
+    state.password = sd.unionPassword || '';
+    const members = sd.manualGroup && Array.isArray(sd.manualGroup.members) ? sd.manualGroup.members : null;
+    if (members && members.length) state.manual = members.map((m) => ({ name: m.name, amount: Number(m.amount) || 0 }));
+    state.loaded = true;
+    renderRegistryStatus();
+    renderPw();
+    renderManual();
+  }
+
+  async function ensureLoaded() {
+    if (state.loaded) return;
+    try {
+      await loadAll();
+    } catch (e) {
+      console.error(e);
+      el.registryStatus.textContent = fsError(e);
+      throw e;
+    }
+  }
+
+  async function saveRegistry(people) {
+    const add = {};
+    Object.keys(people).forEach((rrn) => (add[rrn] = people[rrn]));
+    if (!Object.keys(add).length) return 0;
+    await regDoc().set({ people: add, ...stamp() }, { merge: true });
+    Object.assign(state.registryMap, add);
+    renderRegistryStatus();
+    return Object.keys(add).length;
+  }
+
+  async function saveManual() {
+    await setDoc().set({ manualGroup: { label: MANUAL_LABEL, members: state.manual }, ...stamp() }, { merge: true });
+  }
+
+  async function savePassword(pw) {
+    await setDoc().set({ unionPassword: pw, ...stamp() }, { merge: true });
+    state.password = pw;
+    renderPw();
+  }
+
+  // ---------- 명단/암호/수동 인원 화면 ----------
+  function renderRegistryStatus() {
+    const n = Object.keys(state.registryMap).length;
+    el.registryStatus.textContent = n ? `저장된 명단 ${n}명` : '저장된 명단이 없습니다. 아래에서 기존 영수증 파일로 처음 한 번 가져와 주세요.';
+  }
+
+  function renderPw() {
+    const has = !!state.password;
+    el.pwStatus.textContent = has ? '저장된 암호를 사용합니다. (바뀌었을 때만 변경하세요)' : '저장된 암호가 없습니다. 암호 걸린 파일을 쓰려면 한 번 입력해 저장해 주세요.';
+    el.pwEdit.classList.toggle('hidden', has);
+    el.pwChange.classList.toggle('hidden', !has);
+    el.pwCancel.classList.toggle('hidden', !has);
+    el.password.value = '';
+  }
+
+  function renderManual() {
+    const registry = D.createRegistry();
+    registry.addFromMap(state.registryMap);
+    el.manualBody.replaceChildren(
+      ...state.manual.map((m, i) => {
+        const input = h('input', { type: 'number', min: '0', step: '10', class: 'don-manual-amount', value: m.amount || '', inputmode: 'numeric' });
+        input.addEventListener('input', () => (state.manual[i].amount = Number(input.value) || 0));
+        const c = registry.candidates(m.name);
+        const rrnText = c.length === 1 ? D.maskRrn(c[0].rrn) : c.length > 1 ? '동명이인 — 미리보기에서 선택' : '명단에 없음 — 미리보기에서 입력';
+        return h('tr', {}, h('td', { text: m.name }), h('td', {}, input), h('td', { text: rrnText }));
+      })
+    );
+  }
 
   function h(tag, attrs, ...kids) {
     const n = document.createElement(tag);
@@ -57,10 +164,21 @@
     const u8 = new Uint8Array(await file.arrayBuffer());
     try {
       if (P.isEncryptedXls(u8)) {
-        const pw = el.password.value;
-        if (!pw) throw new Error('암호가 걸린 파일입니다. "엑셀 파일 암호"를 입력해 주세요.');
-        const { rows, sheetName } = await P.readProtectedXls(u8, pw);
-        return { sheets: { [sheetName]: rows }, names: [sheetName] };
+        if (!state.password) {
+          el.pwEdit.classList.remove('hidden');
+          throw new Error('암호가 걸린 파일입니다. 위에서 "노동조합 파일 암호"를 저장해 주세요.');
+        }
+        try {
+          const { rows, sheetName } = await P.readProtectedXls(u8, state.password);
+          return { sheets: { [sheetName]: rows }, names: [sheetName] };
+        } catch (e) {
+          if (e.code === 'BAD_PASSWORD') {
+            el.pwEdit.classList.remove('hidden');
+            el.pwCancel.classList.remove('hidden');
+            throw new Error('저장된 암호가 맞지 않습니다. 암호가 바뀌었다면 위에서 "암호 변경"으로 새 암호를 저장해 주세요.');
+          }
+          throw e;
+        }
       }
       const wb = XLSX.read(u8, { type: 'array' });
       const sheets = {};
@@ -76,25 +194,59 @@
 
   const firstSheetRows = (r) => r.sheets[r.names[0]];
 
+  // ---------- 초기 명단 가져오기 ----------
+  async function importSeed() {
+    const f = el.seedFile.files[0];
+    if (!f) return setStatus('가져올 전자기부금영수증 파일을 선택해 주세요.', 'error');
+    el.seedBtn.disabled = true;
+    try {
+      await ensureLoaded();
+      const r = await readSheets(f, '영수증 파일');
+      const name = r.names.find((n) => /^\s*40/.test(n)) || r.names[0];
+      const list = D.parseReceiptRows(r.sheets[name]);
+      if (!list.length) throw new Error('주민등록번호가 있는 행을 찾지 못했습니다.');
+      const add = {};
+      list.forEach((p) => {
+        if (!state.registryMap[p.rrn]) add[p.rrn] = p.name;
+      });
+      const n = await saveRegistry(add);
+      // 지식출판콘텐츠원 인원의 금액을 기본값으로
+      const amounts = {};
+      list.forEach((p) => (amounts[p.name] = p.amount));
+      let manualUpdated = 0;
+      state.manual.forEach((m) => {
+        if (amounts[m.name] > 0) {
+          m.amount = amounts[m.name];
+          manualUpdated++;
+        }
+      });
+      if (manualUpdated) await saveManual();
+      renderManual();
+      setStatus(`명단 ${list.length}명 중 새로 ${n}명을 저장했습니다.` + (manualUpdated ? ` ${MANUAL_LABEL} ${manualUpdated}명의 금액도 기본값으로 가져왔습니다.` : ''), 'ok');
+    } catch (e) {
+      console.error(e);
+      setStatus(fsError(e), 'error');
+    } finally {
+      el.seedBtn.disabled = false;
+    }
+  }
+
   // ---------- 미리보기 ----------
   async function makePreview() {
     el.result.classList.add('hidden');
     setStatus('');
-    const baseFile = el.base.files[0];
-    if (!baseFile) return setStatus('전월 전자기부금영수증 파일(기준 영수증)을 선택해 주세요.', 'error');
-    if (!el.union.files[0] && !el.research.files[0] && !el.welfare.files[0]) {
-      return setStatus('노동조합·연구산학협력단·후생파트 파일 중 하나 이상을 선택해 주세요.', 'error');
+    const hasManual = state.manual.some((m) => m.amount > 0);
+    if (!el.union.files[0] && !el.research.files[0] && !el.welfare.files[0] && !hasManual) {
+      return setStatus('노동조합·연구산학협력단·후생파트 파일을 올리거나 지식출판콘텐츠원 금액을 입력해 주세요.', 'error');
     }
     el.preview.disabled = true;
-    setStatus('파일을 읽고 있습니다…');
+    setStatus('명단과 파일을 읽고 있습니다…');
     try {
+      await ensureLoaded();
       const notices = [];
-      // 기준 영수증 → 주민번호 명단 + 출력 서식
-      const base = await readSheets(baseFile, '기준 영수증');
-      const sheetName = base.names.find((n) => /^\s*40/.test(n));
-      if (!sheetName || !base.wb) throw new Error('기준 영수증: "40 종교단체외일반(지정)" 시트를 찾지 못했습니다. 전월 전자기부금영수증 .xls 파일을 선택해 주세요.');
       const registry = D.createRegistry();
-      const regCount = registry.addFromReceiptRows(base.sheets[sheetName]);
+      registry.addFromMap(state.registryMap);
+      if (!registry.size) notices.push('저장된 주민번호 명단이 비어 있습니다. 연구산학협력단은 주민번호를 직접 입력해야 합니다.');
 
       const parsed = {};
       const detected = [];
@@ -119,15 +271,20 @@
         const w = await readSheets(el.welfare.files[0], '후생파트 파일');
         parsed.welfare = D.parseWelfare(w.sheets, Number(ym.slice(0, 4)), Number(ym.slice(4)));
       }
+      parsed.publish = D.parseManual(state.manual);
+
+      const stored = { ...state.registryMap };
       const { items, skipped } = D.buildItems(parsed, registry);
       if (!items.length) throw new Error('입력 대상(금액이 있는 사람)이 없습니다.');
+      items.forEach((it) => {
+        if (it.conflict) notices.push(`${it.name}: 파일의 주민번호가 저장된 명단과 다릅니다. 파일 값으로 변환하지만 명단은 바꾸지 않습니다.`);
+      });
 
-      state.baseWb = { wb: base.wb, sheetName };
       state.items = items;
       state.skipped = skipped;
       state.ym = ym;
       state.notices = notices;
-      state.regCount = regCount;
+      state.stored = stored;
       render();
       setStatus('');
     } catch (e) {
@@ -139,7 +296,7 @@
   }
 
   // ---------- 화면 그리기 ----------
-  const SRC_LABEL = { union: '노동조합', research: '연구산학', welfare: '후생파트' };
+  const SRC_LABEL = { union: '노동조합', research: '연구산학', welfare: '후생파트', publish: MANUAL_LABEL };
   const needsAttention = (it) => it.status !== 'ok' || it.conflict || it.dup;
 
   function statusText(it) {
@@ -241,11 +398,23 @@
   }
 
   // ---------- 다운로드 ----------
-  function download() {
+  let templateWb = null;
+  async function loadTemplate() {
+    if (templateWb) return templateWb;
+    const res = await fetch('receipt-template.xlsx', { cache: 'no-cache' });
+    if (!res.ok) throw new Error('출력 서식 파일(receipt-template.xlsx)을 불러오지 못했습니다. 서버에 함께 올렸는지 확인해 주세요.');
+    const wb = XLSX.read(new Uint8Array(await res.arrayBuffer()), { type: 'array' });
+    const sheetName = wb.SheetNames.find((n) => /^\s*40/.test(n));
+    if (!sheetName) throw new Error('출력 서식에 40번 시트가 없습니다.');
+    return (templateWb = { wb, sheetName });
+  }
+
+  async function download() {
+    el.download.disabled = true;
     try {
       const date = D.digits(el.date.value);
       const rows = D.toReceiptRows(state.items, { ym: state.ym, date });
-      const { wb, sheetName } = state.baseWb;
+      const { wb, sheetName } = await loadTemplate();
       const ws = wb.Sheets[sheetName];
       // 5행(데이터 시작) 이하 기존 내용 삭제 — 1~4행(제목·안내)은 그대로 둠
       Object.keys(ws).forEach((k) => {
@@ -260,10 +429,29 @@
       );
       ws['!ref'] = 'A1:J' + (4 + rows.length);
       XLSX.writeFile(wb, `전자기부금영수증_${state.ym}.xls`, { bookType: 'biff8' });
-      setStatus(`${rows.length}건을 내려받았습니다. 홈택스에 올리기 전에 엑셀에서 한 번 열어 확인해 주세요.`, 'ok');
+
+      // 새로 확인된 주민번호와 지식출판콘텐츠원 금액을 저장
+      const people = {};
+      state.items.forEach((it) => {
+        const rrn = D.normRrn(it.rrn);
+        if (rrn && !it.conflict && !state.registryMap[rrn]) people[rrn] = it.name;
+      });
+      let msg = `${rows.length}건을 내려받았습니다. 홈택스에 올리기 전에 엑셀에서 한 번 열어 확인해 주세요.`;
+      try {
+        const n = await saveRegistry(people);
+        await saveManual();
+        renderManual();
+        msg += ` 새 주민번호 ${n}명과 ${MANUAL_LABEL} 금액을 저장했습니다.`;
+        setStatus(msg, 'ok');
+      } catch (e) {
+        console.error(e);
+        setStatus(msg + ' (단, 명단 저장 실패: ' + fsError(e) + ')', 'error');
+      }
     } catch (e) {
       console.error(e);
       setStatus(e.message || String(e), 'error');
+    } finally {
+      renderSummary();
     }
   }
 
@@ -276,4 +464,27 @@
   el.date.addEventListener('change', () => (state.dateTouched = true));
   el.preview.addEventListener('click', makePreview);
   el.download.addEventListener('click', download);
+  el.seedBtn.addEventListener('click', importSeed);
+  el.pwChange.addEventListener('click', () => {
+    el.pwEdit.classList.remove('hidden');
+    el.pwCancel.classList.remove('hidden');
+    el.password.focus();
+  });
+  el.pwCancel.addEventListener('click', () => state.password && renderPw());
+  el.pwSave.addEventListener('click', async () => {
+    const pw = el.password.value;
+    if (!pw) return setStatus('저장할 암호를 입력해 주세요.', 'error');
+    try {
+      await ensureLoaded();
+      await savePassword(pw);
+      setStatus('노동조합 파일 암호를 저장했습니다.', 'ok');
+    } catch (e) {
+      setStatus(fsError(e), 'error');
+    }
+  });
+
+  // 탭이 처음 열릴 때 Firestore 에서 명단·설정을 불러온다
+  const tryLoad = () => root.classList.contains('active') && !state.loaded && ensureLoaded().catch(() => {});
+  new MutationObserver(tryLoad).observe(root, { attributes: true, attributeFilter: ['class'] });
+  tryLoad();
 })();

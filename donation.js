@@ -22,7 +22,8 @@
   const SOURCES = Object.freeze({
     union: '노동조합',
     research: '연구산학협력단',
-    welfare: '후생파트'
+    welfare: '후생파트',
+    publish: '지식출판콘텐츠원'
   });
 
   // ---------- 기본 변환 ----------
@@ -186,6 +187,23 @@
     return { items, skipped, ym: String(year) + String(month).padStart(2, '0') };
   }
 
+  /** 영수증 40번 시트 rows → [{ name, rrn, amount }] (주민번호가 있는 행만) */
+  function parseReceiptRows(rows) {
+    const h = findHeaderRow(rows, ['주민등록번호', '성명'], 10);
+    if (h < 0) throw new Error('영수증 40번 시트에서 "주민등록번호", "성명" 제목 행을 찾지 못했습니다.');
+    const cR = colOf(rows[h], '주민등록번호');
+    const cN = colOf(rows[h], '성명');
+    const cA = colOf(rows[h], '기부금액합계');
+    const out = [];
+    for (let i = h + 1; i < rows.length; i++) {
+      const r = rows[i] || [];
+      const rrn = normRrn(r[cR]);
+      const name = normName(r[cN]);
+      if (rrn && name) out.push({ name, rrn, amount: cA >= 0 && toNumber(r[cA]) > 0 ? toNumber(r[cA]) : 0 });
+    }
+    return out;
+  }
+
   // ---------- 주민번호 기준 명단 ----------
   function createRegistry() {
     const byName = new Map();
@@ -198,21 +216,26 @@
         if (!list.some((x) => x.rrn === d)) list.push({ rrn: d, birth: birthFromRrn(d) });
         byName.set(n, list);
       },
-      /** 전월 전자기부금영수증 40번 시트 rows 에서 성명/주민번호 수집 */
+      /** 영수증 40번 시트 rows(초기 명단 가져오기용)에서 성명/주민번호 수집. 추가한 건수 반환 */
       addFromReceiptRows(rows) {
-        const h = findHeaderRow(rows, ['주민등록번호', '성명'], 10);
-        if (h < 0) throw new Error('기준 영수증 40번 시트에서 "주민등록번호", "성명" 제목 행을 찾지 못했습니다.');
-        const cR = colOf(rows[h], '주민등록번호');
-        const cN = colOf(rows[h], '성명');
-        let n = 0;
-        for (let i = h + 1; i < rows.length; i++) {
-          const r = rows[i] || [];
-          if (normRrn(r[cR]) && normName(r[cN])) {
-            api.add(r[cN], r[cR]);
-            n++;
-          }
-        }
-        return n;
+        const list = parseReceiptRows(rows);
+        list.forEach((p) => api.add(p.name, p.rrn));
+        return list.length;
+      },
+      /** { 주민번호: 성명 } — Firestore 저장 형태 */
+      toMap() {
+        const m = {};
+        byName.forEach((list, name) => list.forEach((c) => (m[c.rrn] = name)));
+        return m;
+      },
+      addFromMap(map) {
+        Object.keys(map || {}).forEach((rrn) => api.add(map[rrn], rrn));
+      },
+      hasRrn(rrn) {
+        const d = normRrn(rrn);
+        let found = false;
+        byName.forEach((list) => list.forEach((c) => c.rrn === d && (found = true)));
+        return found;
       },
       candidates(name) {
         return (byName.get(normName(name)) || []).slice();
@@ -224,6 +247,23 @@
       }
     };
     return api;
+  }
+
+  /**
+   * 지식출판콘텐츠원 등 수동 입력 인원 → parse 결과 형태. 금액이 없거나 0이면 제외 목록.
+   * members: [{ name, amount }]
+   */
+  function parseManual(members) {
+    const items = [];
+    const skipped = [];
+    (members || []).forEach((m) => {
+      const name = normName(m.name);
+      if (!name) return;
+      const amount = toNumber(m.amount);
+      if (!(amount > 0)) skipped.push({ source: 'publish', name, reason: '금액 없음' });
+      else items.push({ source: 'publish', name, amount, birth: '', rrn: null, note: '' });
+    });
+    return { items, skipped, ym: '' };
   }
 
   /**
@@ -245,13 +285,13 @@
   }
 
   /**
-   * 3종 파싱 결과를 합쳐 미리보기 항목을 만든다. (노동조합 → 연구산학 → 후생 순)
+   * 파싱 결과를 합쳐 미리보기 항목을 만든다. (노동조합 → 연구산학 → 후생 → 지식출판콘텐츠원 순)
    * 원본 파일에 주민번호가 있으면(노동조합·후생) 그 값을 우선 쓰고, 없으면(연구산학) 기준 명단에서 이름+생년월일로 찾는다.
    */
   function buildItems(parsed, registry) {
     const all = [];
     const skipped = [];
-    ['union', 'research', 'welfare'].forEach((k) => {
+    ['union', 'research', 'welfare', 'publish'].forEach((k) => {
       const p = parsed[k];
       if (!p) return;
       skipped.push(...p.skipped);
@@ -322,6 +362,8 @@
     parseUnion,
     parseResearch,
     parseWelfare,
+    parseManual,
+    parseReceiptRows,
     createRegistry,
     resolveRrn,
     buildItems,

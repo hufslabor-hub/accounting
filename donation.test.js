@@ -113,8 +113,32 @@ const assert = (c, m) => {
   }
   assert(threw, '주민번호 없는 항목이 있으면 생성 거부');
 
+  console.log('7) 영수증 파일 가져오기·명단 저장 형태');
+  const receipt = [
+    ['신청구분코드', '주민등록번호', '성명', '기부내용구분', '관리번호', '기부금단체코드', '기부일자', '기부금액합계'],
+    ['01', '8912202012311', '김세희', '1 : 금전기부', 'a', '421', '20260425', 23485],
+    ['01', '920710-2048312', '장혜정', '1 : 금전기부', 'b', '421', '20260425', 23485]
+  ];
+  const pr = D.parseReceiptRows(receipt);
+  assert(pr.length === 2 && pr[0].amount === 23485 && pr[1].rrn === '9207102048312', '영수증 행에서 성명·주민번호·금액 추출');
+  const reg2 = D.createRegistry();
+  reg2.addFromMap({ '8912202012311': '김세희' });
+  assert(reg2.hasRrn('891220-2012311') && !reg2.hasRrn('9207102048312'), '맵에서 명단 복원, 보유 여부 확인');
+  assert(JSON.stringify(reg2.toMap()) === JSON.stringify({ '8912202012311': '김세희' }), '명단을 {주민번호: 성명} 맵으로 저장');
+
+  console.log('8) 지식출판콘텐츠원 수동 인원');
+  const man = D.parseManual([
+    { name: '김세희', amount: 23485 },
+    { name: '장혜정', amount: 0 }
+  ]);
+  assert(man.items.length === 1 && man.skipped.length === 1 && man.skipped[0].name === '장혜정', '금액 0은 제외');
+  const b2 = D.buildItems({ publish: man }, reg2);
+  assert(b2.items[0].source === 'publish' && b2.items[0].rrn === '8912202012311' && b2.items[0].status === 'ok', '명단에서 주민번호 확정');
+  const b3 = D.buildItems({ publish: D.parseManual([{ name: '장혜정', amount: 100 }]) }, reg2);
+  assert(b3.items[0].status === 'missing', '명단에 없으면 직접 입력 필요');
+
   if (process.env.XLS_FILE) {
-    console.log('7) 암호 걸린 실제 xls');
+    console.log('9) 암호 걸린 실제 xls');
     const fs = require('fs');
     const u8 = new Uint8Array(fs.readFileSync(process.env.XLS_FILE));
     assert(P.isEncryptedXls(u8), '암호 파일 감지');
