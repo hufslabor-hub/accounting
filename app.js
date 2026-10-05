@@ -5754,30 +5754,66 @@ document.getElementById('some-button')?.addEventListener('click', async function
   }
 });
 
-// 탭 영역 오른쪽 KST 시계 (시:분:초)
+
+// 탭 영역 오른쪽 KST 시계 (시:분:초) 및 날짜 추가
 function startAppClock(){
   const el = document.getElementById('app-clock');
+  const dateEl = document.getElementById('app-date'); // 1. 날짜 엘리먼트 가져오기
   if(!el) return;
   const pad = n => String(n).padStart(2,'0');
+  
+  // 요일 배열 생성
+  const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
+  let lastDateStr = ""; // 날짜가 바뀔 때만 화면을 갱신하기 위한 변수
+
   const tick = ()=>{
     try{
+      const now = new Date();
+      
+      // --- 날짜 처리 영역 시작 ---
+      if (dateEl) {
+        // KST 기준으로 연, 월, 일, 요일 추출
+        const dateParts = new Intl.DateTimeFormat('ko-KR', {
+          timeZone: 'Asia/Seoul',
+          year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short'
+        }).formatToParts(now);
+        
+        const getValue = type => dateParts.find(p => p.type === type)?.value || '';
+        
+        // "2026년 10월 5일 (월)" 형식으로 문자열 조립
+        const dateText = `${getValue('year')}년 ${getValue('month')}월 ${getValue('day')}일 (${getValue('weekday')})`;
+        
+        // 매초 화면을 다시 그리지 않고, 날짜가 바뀔 때만(또는 처음 실행 시) 딱 한 번 갱신
+        if (lastDateStr !== dateText) {
+          dateEl.textContent = dateText;
+          lastDateStr = dateText;
+        }
+      }
+      // --- 날짜 처리 영역 끝 ---
+
       const parts = new Intl.DateTimeFormat('en-GB',{
         timeZone:'Asia/Seoul',
         hour:'2-digit', minute:'2-digit', second:'2-digit',
         hour12:false
-      }).formatToParts(new Date());
+      }).formatToParts(now);
       const get = type => parts.find(p=>p.type===type)?.value || '00';
       const h = get('hour'), m = get('minute'), s = get('second');
       const text = `${h}:${m}:${s}`;
       el.textContent = text;
       const dParts = new Intl.DateTimeFormat('en-CA',{
         timeZone:'Asia/Seoul', year:'numeric', month:'2-digit', day:'2-digit'
-      }).format(new Date());
+      }).format(now);
       el.setAttribute('datetime', `${dParts}T${text}+09:00`);
     }catch(e){
       const now = new Date();
       const kst = new Date(now.getTime() + (9*60 - now.getTimezoneOffset())*60000);
       el.textContent = `${pad(kst.getHours())}:${pad(kst.getMinutes())}:${pad(kst.getSeconds())}`;
+      
+      // try 블록에서 에러가 날 경우 대비한 catch 영역 날짜 처리
+      if (dateEl) {
+        const day = dayNames[kst.getUTCDay()];
+        dateEl.textContent = `${kst.getUTCFullYear()}년 ${kst.getUTCMonth() + 1}월 ${kst.getUTCDate()}일 (${day})`;
+      }
     }
   };
   tick();

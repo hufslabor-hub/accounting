@@ -81,10 +81,22 @@ body { background-color:var(--paper); color:var(--ink); }
     display:flex;align-items:center;gap:10px;
     min-height:44px;
   }
-  #current-date{
-    flex:0 0 auto;
+#app-date {
+  font-weight: 500;
+   flex:0 0 auto;
+    display:flex;
+    align-items:center;
+    align-self:center;
+    font-variant-numeric:tabular-nums;
+    font-weight:700;
+    font-size:21px !important; /* 기본 14px의 1.5배 */
+    letter-spacing:0.04em;
+    color:var(--gold-soft);
+    white-space:nowrap;
+    padding:0 4px;
+    line-height:1;
     font-family:'Pretendard',sans-serif;
-  }
+}
   .app-clock{
     flex:0 0 auto;
     display:flex;
