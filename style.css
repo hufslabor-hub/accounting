@@ -77,6 +77,14 @@ body { background-color:var(--paper); color:var(--ink); }
     flex:0 0 auto; white-space:nowrap;
   }
   .tab-btn.active{background:var(--paper); color:var(--navy); font-weight:700;}
+  .tabs-inner{
+    display:flex;align-items:center;gap:10px;
+    min-height:44px;
+  }
+  #current-date{
+    flex:0 0 auto;
+    font-family:'Pretendard',sans-serif;
+  }
   .app-clock{
     flex:0 0 auto;
     display:flex;
