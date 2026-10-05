@@ -433,13 +433,15 @@
 
       <div class="don-box">
         <div class="don-box-head"><b>노동조합 파일 암호</b><span id="don-pw-status" class="don-hint"></span></div>
-        <div class="don-inline" id="don-pw-edit">
-          <input type="password" id="don-password" autocomplete="new-password" placeholder="새 암호">
-          <button class="btn-primary btn-soft" id="don-btn-pw-save" type="button">암호 저장</button>
-          <button class="btn-text" id="don-btn-pw-cancel" type="button">취소</button>
-        </div>
-        <button class="btn-text" id="don-btn-pw-change" type="button">암호 변경</button>
-      </div>
+    <!-- div를 form 태그로 변경하고 onsubmit 속성을 추가합니다 -->
+  <form class="don-inline" id="don-pw-edit" onsubmit="return false;">
+    <input type="password" id="don-password" autocomplete="new-password" placeholder="새 암호">
+    <button class="btn-primary btn-soft" id="don-btn-pw-save" type="button">암호 저장</button>
+    <button class="btn-text" id="don-btn-pw-cancel" type="button">취소</button>
+  </form>
+  
+  <button class="btn-text" id="don-btn-pw-change" type="button">암호 변경</button>
+</div>
 
       <div class="don-grid">
         <div class="field">
