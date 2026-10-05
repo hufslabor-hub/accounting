@@ -9,7 +9,7 @@
 2. **Authentication → 설정 → 승인된 도메인**에 배포된 사이트의 호스트명을 추가합니다. Google 로그인은 HTTPS 사이트에서 실행해야 합니다. `file://`로 직접 여는 방식은 지원하지 않습니다.
 3. Firebase 웹 앱 설정을 [firebase-config.js](./firebase-config.js)에 둡니다. 웹 앱 설정은 공개 식별 정보이며, Admin SDK 서비스 계정 키나 비공개 키는 절대 넣지 마세요.
 4. [firestore.rules](./firestore.rules)의 규칙을 **Firestore Database → 규칙**에 게시합니다.
-5. 담당자가 Google로 최초 로그인하면 화면에 Firebase Authentication UID가 표시됩니다. Firestore에 `allowedUsers/{UID}` 문서를 만들면 해당 계정에 읽기·쓰기 권한이 부여됩니다. 문서 ID는 로그인 화면의 UID와 정확히 일치해야 합니다. 관리 참고용으로 `email` 필드를 추가할 수 있습니다.
+5. 접근 허용은 **이메일 화이트리스트**로 관리합니다. Firestore에 `accessControl/allowedEmails` 문서를 만들고, 필드 `emails`에 **소문자** 이메일 배열을 넣습니다. 예: `{ "emails": ["user@example.com"] }`. Google 로그인 후 **이메일 인증이 완료된** 계정만, 이 목록에 있을 때 읽기·쓰기가 가능합니다. 목록 문서 자체는 콘솔에서만 수정할 수 있으며(규칙상 클라이언트 쓰기 불가), 앱에서는 등록된 사용자만 목록을 읽을 수 있습니다.
 
 Firestore의 `accountingData` 컬렉션에 연도별 자료가 저장되고 브라우저 간 실시간으로 동기화됩니다. Firestore에 자료 문서가 없을 때 같은 브라우저의 이전 로컬 자료가 있으면 먼저 복사하고, 없으면 기본 자료를 초기화합니다. 기존 거래 내역의 관·항·목 분류도 자동으로 이전됩니다.
 
@@ -29,7 +29,7 @@ Firestore의 `accountingData` 컬렉션에 연도별 자료가 저장되고 브�
 
 
 index.html이 data.json을 먼저 읽은 뒤 app.js를 실행합니다. data.json을 못 읽어도 빈 데이터로 앱은 동작합니다.
-style.css?v=2.4, app.js?v=2.4처럼 버전 값을 붙였습니다. 수정 후 배포할 때 이 숫자를 올리면 모바일 캐시 문제를 피할 수 있습니다.
+캐시 무효화는 `index.html`의 `window.APP_BUILD`와 `node stamp-version.mjs`로 처리합니다. 배포 전에 스탬프를 실행하면 `style.css`·`app.js`에 `?v=`가 자동으로 붙습니다.
 index.html을 파일로 직접 열면 data.json을 읽지 못합니다. 자동완성 목록이 비게 되므로, Firebase Hosting 같은 서버에서 열어야 합니다. 로그인 기능도 서버 주소에서 열어야 동작하니 배포 환경에서는 문제없을 것입니다.
 올려주신 파일 맨 위 <style>에 깨진 조각이 있어서 지웠습니다. 짝 없는 닫는 괄호와 "화면이 깨지면 괄호를 지워보세요"라는 메모, 모바일 전용 버튼 글자를 PC에서도 보이게 하는 규칙이 섞여 있었습니다. 버전 표시(.version-tag) 스타일은 유지했습니다.
 app.js에 있던 myChartCanvas 차트 코드는 지웠습니다. 그 이름의 캔버스가 화면에 없어서 한 번도 실행되지 않던 코드입니다.
