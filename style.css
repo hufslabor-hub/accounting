@@ -169,9 +169,8 @@ body { background-color:var(--paper); color:var(--ink); }
   @media (max-width:900px){
     .entry-table td:first-child,
     .entry-table td.col-date{
-      word-break:break-all;
-    }
-  }
+      white-space: nowrap; /*원래 이거 word-break: break-all;*/
+      }
   .entry-table{min-width:0;width:100%;}
   .income-row{background:var(--income-tone);}
   .expense-row{background:var(--paper-2);}
