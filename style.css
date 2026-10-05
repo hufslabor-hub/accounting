@@ -136,16 +136,25 @@ body { background-color:var(--paper); color:var(--ink); }
   .entry-table{min-width:0;width:100%;}
   .income-row{background:var(--income-row);}
   .expense-row{background:var(--paper-2);}
-  .entry-table .col-date{width:11%;}
-  .entry-table .col-type{width:6%;}
-  .entry-table .col-description{width:14%;}
-  .entry-table .col-mok{width:10%;}
-  .entry-table .col-payee{width:9%;}
-  .entry-table .col-spender{width:8%;}
-  .entry-table .col-amount{width:10%;}
-  .entry-table .col-status{width:10%;}
-  .entry-table .col-mgmt{width:10%;}
+  .entry-table .col-date{width:10%;}
+  .entry-table .col-type{width:5%;}
+  .entry-table .col-description{width:13%;}
+  .entry-table .col-mok{width:9%;}
+  .entry-table .col-payee{width:8%;}
+  .entry-table .col-spender{width:7%;}
+  .entry-table .col-amount{width:9%;}
+  .entry-table .col-status{width:9%;}
+  .entry-table .col-mgmt{width:9%;}
+  .entry-table .col-approve{width:9%;}
   .entry-table .col-actions{width:12%;}
+  .entry-table .col-mgmt,
+  .entry-table .col-approve,
+  .entry-table th:nth-child(9),
+  .entry-table th:nth-child(10),
+  .entry-table td:nth-child(9),
+  .entry-table td:nth-child(10){
+    text-align:center;
+  }
   .transaction-table .col-date{width:15%;}
   .transaction-table .col-type{width:6%;}
   .transaction-table .col-description{width:13%;}
@@ -213,14 +222,16 @@ body { background-color:var(--paper); color:var(--ink); }
   @media (max-width:600px){
     .transaction-table th,.transaction-table td{padding:6px 3px;font-size:12px;}
     .transaction-table td.num{font-size:11px;white-space:normal;}
-    .entry-table .col-date{width:15%;}
-    .entry-table .col-type{width:6%;}
-    .entry-table .col-description{width:13%;}
-    .entry-table .col-mok{width:10%;}
-    .entry-table .col-payee{width:9%;}
-    .entry-table .col-spender{width:9%;}
-    .entry-table .col-amount{width:11%;}
-    .entry-table .col-status{width:15%;}
+    .entry-table .col-date{width:12%;}
+    .entry-table .col-type{width:5%;}
+    .entry-table .col-description{width:12%;}
+    .entry-table .col-mok{width:9%;}
+    .entry-table .col-payee{width:8%;}
+    .entry-table .col-spender{width:8%;}
+    .entry-table .col-amount{width:10%;}
+    .entry-table .col-status{width:12%;}
+    .entry-table .col-mgmt{width:8%;}
+    .entry-table .col-approve{width:8%;}
     .entry-table .col-actions{width:12%;}
   }
   th,td{text-align:center;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
@@ -553,14 +564,14 @@ body {
     white-space:normal !important;
     text-align:left !important;
   }
-  /* 1결제일 3내용 4목 6담당자 7금액 8상태 10추가작업 */
+  /* 1결제일 3내용 4목 6담당자 7금액 8상태 11추가작업 (9결의번호·10승인번호는 모바일 카드에서 숨김) */
   #view-entry .entry-table td:nth-child(1),
   #view-entry .entry-table td:nth-child(3),
   #view-entry .entry-table td:nth-child(4),
   #view-entry .entry-table td:nth-child(6),
   #view-entry .entry-table td:nth-child(7),
   #view-entry .entry-table td:nth-child(8),
-  #view-entry .entry-table td:nth-child(10){
+  #view-entry .entry-table td:nth-child(11){
     display:block !important;
   }
   #view-entry .entry-table td:nth-child(1){
@@ -580,7 +591,7 @@ body {
     font-size:18px;font-weight:800;margin:4px 0 8px;
   }
   #view-entry .entry-table td:nth-child(8){margin-bottom:8px;}
-  #view-entry .entry-table td:nth-child(10){
+  #view-entry .entry-table td:nth-child(11){
     border-top:1px solid var(--line) !important;
     padding-top:8px !important;
   }

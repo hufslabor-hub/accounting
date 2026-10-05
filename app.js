@@ -3245,6 +3245,18 @@ function renderMonthFilters(containerId, sourceList, current, onClick){
   });
 }
 
+// 결의번호: submissionSequence 우선, 없으면 결의완료 상태의 managementNo
+function entryResolutionNo(t){
+  if(t.submissionSequence != null && String(t.submissionSequence).trim() !== '') return String(t.submissionSequence);
+  if(t.status === 'submitted' && t.managementNo) return String(t.managementNo);
+  return '';
+}
+// 승인번호: 승인(approved/paid/confirmed) 상태일 때 managementNo
+function entryApprovalNo(t){
+  if(APPROVED_STATES.includes(t.status) && t.managementNo) return String(t.managementNo);
+  return '';
+}
+
 function renderTxTable(mode){
   const isReport = mode==='report';
   const bodyId = isReport ? 'tx-body-report' : 'tx-body-entry';
@@ -3280,6 +3292,8 @@ const source = ledger;
         <td>${t.managementNo?escapeHTML(String(t.managementNo)):''}</td>
       `;
     } else {
+      const resolutionNo = entryResolutionNo(t);
+      const approvalNo = entryApprovalNo(t);
       tr.innerHTML = `
         <td>${escapeHTML(formatEntryDate(t.date))}</td>
         <td style="color:${t.gubun==='수입'?'var(--income)':'var(--expense)'}">${escapeHTML(t.gubun||'')}</td>
@@ -3289,7 +3303,8 @@ const source = ledger;
         <td>${escapeHTML(t.spender||'-')}</td>
         <td class="num">${fmtShort(t.amount)}</td>
         <td><span class="status-badge status-${t.status}">${STATUS_LABEL[t.status]||t.status}</span></td>
-        <td class="num">${t.managementNo?escapeHTML(String(t.managementNo)):''}</td>
+        <td>${resolutionNo ? escapeHTML(resolutionNo) : ''}</td>
+        <td>${approvalNo ? escapeHTML(approvalNo) : ''}</td>
         <td class="col-actions-cell">${rowActions(t)}</td>
       `;
     }
@@ -3375,8 +3390,15 @@ function bindRowActions(container){
               approvalCancelledAt:new Date().toISOString(),
               approvalCancelledBy:currentUser?.email || currentUser?.displayName || ''
             };
-            ['approvedAt','approvedBy','paidAt','paidBy','confirmedAt','confirmedBy','managementNo','submissionSequence','acctMonth','acctYear']
+            // 승인 취소 시 승인번호(managementNo)만 제거하고, 결의번호(submissionSequence)는 유지
+            // managementNo는 결의번호로 복원
+            ['approvedAt','approvedBy','paidAt','paidBy','confirmedAt','confirmedBy','acctMonth','acctYear']
               .forEach(key=>delete next[key]);
+            if(next.submissionSequence != null && String(next.submissionSequence).trim() !== ''){
+              next.managementNo = String(next.submissionSequence);
+            } else {
+              delete next.managementNo;
+            }
             api.set(next);
           }
         });
