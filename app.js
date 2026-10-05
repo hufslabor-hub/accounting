@@ -3599,7 +3599,7 @@ function rowActions(t){
   }
   const editButton = `<button class="btn-revert" data-act="edit" data-id="${escapeHTML(t.id)}">수정</button>`;
   if(['approved','paid','confirmed'].includes(t.status)){
-    return `<div class="action-row">${editButton}<button class="btn-revert" data-act="unapprove" data-id="${escapeHTML(t.id)}">승인 취소</button></div>`;
+    return `<div class="action-row">${editButton}<button class="btn-revert btn-unapprove" data-act="unapprove" data-id="${escapeHTML(t.id)}">승인 취소</button></div>`;
   }
   const parts = [editButton];
   if(t.status==='submitted'){

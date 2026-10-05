@@ -26,7 +26,7 @@
   --navy:#3B4953; --navy-2:#5A7863;
   --paper:#EBF4DD; --paper-2:#F7FAF2;
   --gold:#90AB8B; --gold-soft:#D5E3CB;
-  --income:#5A7863; --income-row:#E3EED8; --expense:#3B4953;
+  --income:#5A7863; --income-row:#E3EED8; --income-tone:#E3EED8; --expense:#3B4953;
   --ink:#3B4953; --ink-soft:#5A7863; --line:#CFDDC3;
 }
   *{box-sizing:border-box;}
@@ -173,7 +173,7 @@ body { background-color:var(--paper); color:var(--ink); }
     }
   }
   .entry-table{min-width:0;width:100%;}
-  .income-row{background:var(--income-row);}
+  .income-row{background:var(--income-tone);}
   .expense-row{background:var(--paper-2);}
   .entry-table .col-date{width:8%;}
   .entry-table .col-type{width:4.5%;}
@@ -434,7 +434,7 @@ body { background-color:var(--paper); color:var(--ink); }
     background:var(--paper-2); cursor:pointer; box-sizing:border-box;
     font-family:'Pretendard',sans-serif; font-size:14px; font-weight:500; color:var(--ink-soft);
   }
-  .gubun-toggle button.on-income.selected{background:var(--income-row);color:var(--navy);font-weight:700;}
+  .gubun-toggle button.on-income.selected{background:var(--income-tone);color:var(--navy);font-weight:700;}
   .gubun-toggle button.on-expense.selected{background:var(--expense); color:var(--paper-2);font-weight:700;}
 
   .btn-primary{
@@ -681,33 +681,33 @@ body {
     white-space:normal !important;
     text-align:left !important;
   }
-  /* 1결제일 3내용 4목 6담당자 7금액 8상태 11추가작업 (9결의번호·10승인번호는 모바일 카드에서 숨김) */
-  #view-entry .entry-table td:nth-child(1),
-  #view-entry .entry-table td:nth-child(3),
+  /* 2결제일 4내용 5목 7담당자 8금액 9상태 11추가작업 (1결의번호·10승인번호는 모바일 카드에서 숨김) */
+  #view-entry .entry-table td:nth-child(2),
   #view-entry .entry-table td:nth-child(4),
-  #view-entry .entry-table td:nth-child(6),
+  #view-entry .entry-table td:nth-child(5),
   #view-entry .entry-table td:nth-child(7),
   #view-entry .entry-table td:nth-child(8),
+  #view-entry .entry-table td:nth-child(9),
   #view-entry .entry-table td:nth-child(11){
     display:block !important;
   }
-  #view-entry .entry-table td:nth-child(1){
+  #view-entry .entry-table td:nth-child(2){
     font-size:12px;color:var(--ink-soft);margin-bottom:4px;
   }
-  #view-entry .entry-table td:nth-child(3){
+  #view-entry .entry-table td:nth-child(4){
     font-size:16px;font-weight:700;margin-bottom:2px;
   }
-  #view-entry .entry-table td:nth-child(4){
+  #view-entry .entry-table td:nth-child(5){
     font-size:13px;color:var(--ink-soft);margin-bottom:6px;
   }
-  #view-entry .entry-table td:nth-child(6){
+  #view-entry .entry-table td:nth-child(7){
     font-size:13px;color:var(--ink-soft);margin-bottom:4px;
   }
-  #view-entry .entry-table td:nth-child(6)::before{content:'담당 ';font-weight:500;}
-  #view-entry .entry-table td:nth-child(7){
+  #view-entry .entry-table td:nth-child(7)::before{content:'담당 ';font-weight:500;}
+  #view-entry .entry-table td:nth-child(8){
     font-size:18px;font-weight:800;margin:4px 0 8px;
   }
-  #view-entry .entry-table td:nth-child(8){margin-bottom:8px;}
+  #view-entry .entry-table td:nth-child(9){margin-bottom:8px;}
   #view-entry .entry-table td:nth-child(11){
     border-top:1px solid var(--line) !important;
     padding-top:8px !important;
@@ -1135,4 +1135,22 @@ button{transition:background-color .12s,color .12s,box-shadow .12s;}
 /* 모바일 카드형 표: 지급 대기 항목에 열 이름 표시 */
 @media (max-width:767px){
   #view-entry .pending-transaction-table td[data-label]::before{content:attr(data-label) " · ";color:#64748b;font-size:12px;font-weight:400;}
+}
+
+/* 수입 색 통일: 수입 버튼 '눌렀을 때' 색(--income-tone)을 hover와 모든 표의 수입 행에 동일하게 사용 */
+@media (hover:hover){
+  .gubun-toggle button.on-income:not(.selected):hover:not(:disabled){background:var(--income-tone);color:var(--navy);font-weight:700;}
+}
+tr.income-row{background:var(--income-tone);}
+@media (max-width:767px){
+  #view-entry .entry-table tr.income-row,
+  #view-entry .pending-transaction-table tr.income-row,
+  #view-entry .submitted-groups-table tr.income-row{background:var(--income-tone);}
+}
+.status-approved,.status-confirmed,.status-paid{background:var(--income-tone);}
+
+/* 승인 취소: 되돌리기 위험을 알리는 테라코타(번트 오렌지) 톤 */
+button.btn-unapprove{background:#FBEDE5;border:1px solid #B5502A;color:#9A3F1D;font-weight:700;}
+@media (hover:hover){
+  button.btn-unapprove:hover:not(:disabled){background:#B5502A;border-color:#B5502A;color:#fff;}
 }
