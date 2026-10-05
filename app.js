@@ -2622,6 +2622,28 @@ function renderReportMonthFilters(approved){
   });
 }
 
+/** 승인일 키 (정렬·표시). approvedAt 우선, 없으면 승인번호(YYYYMMDD…) 앞 8자리, 최후 결제일 */
+function entryApprovalDateKey(t){
+  if(t?.approvedAt){
+    const s = String(t.approvedAt);
+    if(s.length >= 10) return s.slice(0, 10);
+  }
+  const mgmt = String(t?.managementNo || '');
+  if(/^\d{8}/.test(mgmt)){
+    return `${mgmt.slice(0,4)}-${mgmt.slice(4,6)}-${mgmt.slice(6,8)}`;
+  }
+  return t?.date || '';
+}
+function formatApprovalDate(t){
+  const key = entryApprovalDateKey(t);
+  return key ? formatEntryDate(key) : '-';
+}
+function compareByApprovalDateDesc(a,b){
+  const ka = entryApprovalDateKey(a);
+  const kb = entryApprovalDateKey(b);
+  return (kb||'').localeCompare(ka||'') || (b.date||'').localeCompare(a.date||'') || String(b.id||'').localeCompare(String(a.id||''));
+}
+
 async function renderReportDetail(){
   if(!document.getElementById('view-report').classList.contains('active')) return;
   const body = document.getElementById('tx-body-report');
@@ -2642,13 +2664,18 @@ async function renderReportDetail(){
     catch(error){ note.textContent = `${month} 내역을 불러오지 못했습니다: ${error.message || String(error)}`; return; }
     if(month!==currentMonthReport || !reportMonthCache[month]) return;
   }
-  const list = reportMonthCache[month].slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  // 승인일(승인번호·approvedAt) 기준 정렬 — 최신 승인 먼저
+  const list = reportMonthCache[month].slice().sort(compareByApprovalDateDesc);
   body.innerHTML = '';
   list.forEach(t=>{
     const tr = document.createElement('tr');
-    tr.className = t.gubun==='수입' ? 'income-row' : 'expense-row';
+    tr.className = (t.gubun==='수입' ? 'income-row' : 'expense-row') + ' report-row-clickable';
+    tr.title = t.managementNo ? '클릭하면 해당 승인 건 지출내역보고를 봅니다' : '';
+    tr.dataset.entryId = t.id || '';
+    if(t.managementNo) tr.dataset.managementNo = String(t.managementNo);
     tr.innerHTML = `
       <td>${escapeHTML(formatEntryDate(t.date))}</td>
+      <td>${escapeHTML(formatApprovalDate(t))}</td>
       <td>${escapeHTML(t.desc||'')}</td>
       <td>${escapeHTML(t.category||'-')}</td>
       <td>${escapeHTML(t.payee||t.spender||'-')}</td>
@@ -2659,10 +2686,11 @@ async function renderReportDetail(){
   });
   const income = list.reduce((sum,t)=>sum+(t.gubun==='수입'?Number(t.amount||0):0),0);
   const expense = list.reduce((sum,t)=>sum+(t.gubun==='지출'?Number(t.amount||0):0),0);
-  total.innerHTML = `<tr class="report-total-row"><th colspan="4">${month} 합계 · ${list.length}건</th><td class="num">${fmtShort(income)}</td><td class="num">${fmtShort(expense)}</td><td></td></tr>`;
+  total.innerHTML = `<tr class="report-total-row"><th colspan="5">${month} 합계 · ${list.length}건</th><td class="num">${fmtShort(income)}</td><td class="num">${fmtShort(expense)}</td><td></td></tr>`;
   note.textContent = list.length
-    ? `${month} 승인 거래 ${list.length.toLocaleString('ko-KR')}건 (거래 결제일 기준)`
+    ? `${month} 승인 거래 ${list.length.toLocaleString('ko-KR')}건 · 승인일 기준 정렬 · 행을 클릭하면 지출내역보고를 볼 수 있습니다`
     : `${month}에 승인된 거래가 없습니다.`;
+  bindReportDetailClicks();
 }
 // ---------- per-entry transactions ----------
 function applyLocalChanges(upserts,deletes){
@@ -4333,22 +4361,80 @@ function openPaymentReport(status){
     setStatus('보고서로 처리할 내역을 체크해 주세요.');
     return;
   }
+  openPaymentReportWithEntries(entries, status);
+}
+
+/** 보고서 탭 등에서 이미 모은 내역으로 지출내역보고 열기 (조회 전용 가능) */
+function openPaymentReportWithEntries(entries, status='approved'){
+  if(!entries?.length){
+    setStatus('표시할 내역이 없습니다.', true);
+    return;
+  }
   try{
     const spender = requireSingleSpender(entries);
     paymentReportEntryIds = entries.map(entry=>entry.id);
     paymentReportSourceStatus = status;
-    paymentReportApproval = null;
-    renderPaymentReport(entries,spender);
-    document.getElementById('payment-report-status').textContent = '';
+    const approved = entries.every(e=>APPROVED_STATES.includes(e.status));
+    let approval = null;
+    if(approved){
+      const at = entries.map(e=>e.approvedAt).filter(Boolean).sort().slice(-1)[0] || '';
+      const by = entries.map(e=>e.approvedBy).filter(Boolean)[0] || '';
+      const dateLabel = at ? formatEntryDate(String(at).slice(0,10)) : formatApprovalDate(entries[0]);
+      approval = {
+        label: '지급 승인 완료',
+        date: dateLabel + (at && at.length > 10 ? ' ' + String(at).slice(11,16) : ''),
+        approver: by
+      };
+      paymentReportApproval = {
+        approval,
+        managementNo: entries.find(e=>e.managementNo)?.managementNo || null
+      };
+    }else{
+      paymentReportApproval = null;
+    }
+    const mgmtOverride = paymentReportApproval?.managementNo || null;
+    renderPaymentReport(entries, spender, approval, mgmtOverride);
+    const statusEl = document.getElementById('payment-report-status');
     const approveButton = document.getElementById('btn-approve-payment-report');
-    approveButton.classList.toggle('hidden',status!=='submitted');
-    if(status!=='submitted'){
-      document.getElementById('payment-report-status').textContent = '승인은 결의완료 처리 후 가능합니다.';
+    if(status==='submitted'){
+      approveButton?.classList.remove('hidden');
+      if(statusEl) statusEl.textContent = '';
+    }else{
+      approveButton?.classList.add('hidden');
+      if(statusEl) statusEl.textContent = approved
+        ? '승인 완료된 지출내역보고입니다. PDF로 저장할 수 있습니다.'
+        : '조회 모드입니다. 승인은 결의완료 목록에서 진행하세요.';
     }
     document.getElementById('payment-report-dialog').showModal();
   }catch(error){
-    setStatus(error.message || String(error),error.code==='accounting/spender-mismatch');
+    setStatus(error.message || String(error), error.code==='accounting/spender-mismatch');
   }
+}
+
+/** 세부 거래 내역 행 클릭 → 같은 승인번호 묶음 보고서 조회 */
+function bindReportDetailClicks(){
+  const body = document.getElementById('tx-body-report');
+  if(!body || body.dataset.clickBound==='1') return;
+  body.dataset.clickBound = '1';
+  body.addEventListener('click', event=>{
+    const tr = event.target.closest('tr[data-entry-id]');
+    if(!tr) return;
+    const month = currentMonthReport;
+    const cache = reportMonthCache[month] || [];
+    const mgmt = tr.dataset.managementNo;
+    let group;
+    if(mgmt){
+      group = cache.filter(e=>String(e.managementNo||'')===mgmt);
+    }else{
+      const id = tr.dataset.entryId;
+      group = cache.filter(e=>e.id===id);
+    }
+    if(!group.length){
+      setStatus('해당 내역을 찾지 못했습니다. 보고서를 새로고침해 주세요.', true);
+      return;
+    }
+    openPaymentReportWithEntries(group, 'approved');
+  });
 }
 
 function renderPaymentReport(entries,spender,approval=null,managementNoOverride=null,target=document.getElementById('payment-report-sheet')){
