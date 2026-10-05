@@ -2859,7 +2859,8 @@ async function renderReportDetail(){
       <td>${escapeHTML(formatApprovalDate(t))}</td>
       <td>${escapeHTML(t.desc||'')}</td>
       <td>${escapeHTML(t.category||'-')}</td>
-      <td>${escapeHTML(t.payee||t.spender||'-')}</td>
+      <td>${escapeHTML(t.payee||'-')}</td>
+      <td>${escapeHTML(t.spender||'-')}</td>
       <td class="num" style="color:var(--income)">${t.gubun==='수입'?fmtShort(t.amount):''}</td>
       <td class="num" style="color:var(--expense)">${t.gubun==='지출'?fmtShort(t.amount):''}</td>
       <td>${t.managementNo?escapeHTML(String(t.managementNo)):''}</td>`;
@@ -2867,7 +2868,7 @@ async function renderReportDetail(){
   });
   const income = list.reduce((sum,t)=>sum+(t.gubun==='수입'?Number(t.amount||0):0),0);
   const expense = list.reduce((sum,t)=>sum+(t.gubun==='지출'?Number(t.amount||0):0),0);
-  total.innerHTML = `<tr class="report-total-row"><th colspan="5">${month} 합계 · ${list.length}건</th><td class="num">${fmtShort(income)}</td><td class="num">${fmtShort(expense)}</td><td></td></tr>`;
+  total.innerHTML = `<tr class="report-total-row"><th colspan="6">${month} 합계 · ${list.length}건</th><td class="num">${fmtShort(income)}</td><td class="num">${fmtShort(expense)}</td><td></td></tr>`;
   note.textContent = list.length
     ? `${month} 승인 거래 ${list.length.toLocaleString('ko-KR')}건 · 승인일(승인번호) 기준 · 행을 클릭하면 지출내역보고를 볼 수 있습니다`
     : `${month}에 승인된 거래가 없습니다.`;
@@ -3668,11 +3669,23 @@ function bindRowActions(container){
   });
 }
 
+function spenderPickerBar(entries){
+  if(!entries.length) return '';
+  const counts = new Map();
+  entries.forEach(t=>{ const name=(t.spender||'').trim(); counts.set(name,(counts.get(name)||0)+1); });
+  const names = [...counts.keys()].sort((x,y)=>(x===''?1:0)-(y===''?1:0) || x.localeCompare(y,'ko'));
+  return `<div class="spender-picker" role="group" aria-label="담당자별 선택">
+    <span class="spender-picker-label">담당자별 선택</span>
+    ${names.map(name=>`<button type="button" class="spender-chip" data-spender-pick="${escapeHTML(name)}" aria-pressed="false">${escapeHTML(name||'미지정')} <small>${counts.get(name)}</small></button>`).join('')}
+  </div>`;
+}
+
 function workflowTable(entries,status,checkedIds=new Set()){
   if(!entries.length) return '<p class="pending-empty">해당 상태의 내역이 없습니다.</p>';
+  const clickable = status==='input-complete';
   const rows = entries.map((t,index)=>`
-    <tr class="${t.gubun==='수입'?'income-row':'expense-row'}">
-      <td class="workflow-select"><input type="checkbox" data-workflow-id="${escapeHTML(t.id)}" data-workflow-status="${status}" aria-label="${escapeHTML(t.desc||t.id)} 선택"${checkedIds.has(t.id)?' checked':''}></td>
+    <tr class="${t.gubun==='수입'?'income-row':'expense-row'}${clickable?' input-row-clickable':''}${clickable && t.id===editingEntryId?' input-row-editing':''}"${clickable?` data-entry-row="${escapeHTML(t.id)}" tabindex="0" title="클릭하면 위 입력 폼에서 수정할 수 있습니다"`:''}>
+      <td class="workflow-select"><input type="checkbox" data-workflow-id="${escapeHTML(t.id)}" data-workflow-status="${status}" data-spender="${escapeHTML((t.spender||'').trim())}" aria-label="${escapeHTML(t.desc||t.id)} 선택"${checkedIds.has(t.id)?' checked':''}></td>
       <td class="workflow-index">${index+1}</td>
       <td>${escapeHTML(formatEntryDate(t.date))}</td>
       <td>${escapeHTML(t.gubun||'')}</td>
@@ -3759,7 +3772,19 @@ function submittedGroupsTable(groups, checkedIds=new Set()){
   </div>`;
 }
 
+function updateSpenderButtons(){
+  const boxes = [...document.querySelectorAll('[data-workflow-id][data-workflow-status="input-complete"]')];
+  document.querySelectorAll('[data-spender-pick]').forEach(button=>{
+    const name = button.dataset.spenderPick;
+    const mine = boxes.filter(box=>(box.dataset.spender||'')===name);
+    const active = mine.length>0 && boxes.every(box=>box.checked===((box.dataset.spender||'')===name));
+    button.classList.toggle('active',active);
+    button.setAttribute('aria-pressed',active?'true':'false');
+  });
+}
+
 function updateWorkflowSummary(status){
+  if(status==='input-complete') updateSpenderButtons();
   const box = document.querySelector(`[data-workflow-summary="${status}"]`);
   if(!box) return;
   const boxes = [...document.querySelectorAll(`[data-workflow-id][data-workflow-status="${status}"], [data-workflow-group][data-workflow-status="${status}"]`)];
@@ -3801,6 +3826,33 @@ function bindWorkflowControls(root){
         .forEach(box=>box.checked = input.checked);
       updateWorkflowSummary(status);
     }));
+  // 입력 내역: 체크박스가 아닌 행의 아무 곳이나 클릭하면 위 입력 폼에서 수정
+  root.querySelectorAll('tr[data-entry-row]').forEach(row=>{
+    const open = ()=>{
+      const entry = ledger.find(item=>item.id===row.dataset.entryRow);
+      if(!entry || entry.status!=='input-complete' || entry.locked) return;
+      beginEntryEdit(entry);
+    };
+    row.addEventListener('click',event=>{
+      if(event.target.closest('.workflow-select, input, button, a, select, textarea, label')) return;
+      if(window.getSelection && String(window.getSelection())) return;   // 글자 드래그 선택 중이면 무시
+      open();
+    });
+    row.addEventListener('keydown',event=>{
+      if(event.key==='Enter' && event.target===row){ event.preventDefault(); open(); }
+    });
+  });
+  // 담당자 버튼: 해당 담당자의 입력 내역만 체크
+  root.querySelectorAll('[data-spender-pick]').forEach(button=>{
+    button.addEventListener('click',()=>{
+      const name = button.dataset.spenderPick;
+      const boxes = [...root.querySelectorAll('[data-workflow-id][data-workflow-status="input-complete"]')];
+      const mine = boxes.filter(box=>(box.dataset.spender||'')===name);
+      const alreadyOnly = mine.length>0 && mine.every(box=>box.checked) && boxes.every(box=>box.checked===((box.dataset.spender||'')===name));
+      boxes.forEach(box=>{ box.checked = alreadyOnly ? false : (box.dataset.spender||'')===name; });   // 한 번 더 누르면 선택 해제
+      updateWorkflowSummary('input-complete');
+    });
+  });
   root.querySelectorAll('.submitted-group-row').forEach(row=>{
     row.addEventListener('click',event=>{
       if(event.target.closest('input[type="checkbox"]')) return;
@@ -3826,6 +3878,7 @@ function renderPendingBox(){
   list.innerHTML = `
     <div class="workflow-stage">
       <h3>입력 내역 · 결의 대기 (${inputComplete.length}건)</h3>
+      ${spenderPickerBar(inputComplete)}
       ${workflowTable(inputComplete,'input-complete',checkedIds)}
       <p class="workflow-summary" data-workflow-summary="input-complete" role="status"></p>
       <div class="workflow-actions">
@@ -3905,6 +3958,7 @@ function beginEntryEdit(entry){
   document.getElementById('btn-add').textContent = '수정 저장';
   document.getElementById('btn-cancel-entry-edit').classList.remove('hidden');
   showExistingReceipt(entry);
+  markEditingRow();
   setStatus('선택한 내역을 수정한 뒤 수정 저장을 눌러주세요.');
   document.querySelector('#view-entry .form-grid').scrollIntoView({behavior:'smooth',block:'center'});
   return true;
@@ -5158,8 +5212,13 @@ function clearEntryForm(){
   resetReceiptInput();
 }
 
+function markEditingRow(){
+  document.querySelectorAll('tr[data-entry-row]').forEach(row=>row.classList.toggle('input-row-editing',row.dataset.entryRow===editingEntryId));
+}
+
 function cancelEntryEdit(clearForm=true){
   editingEntryId = '';
+  markEditingRow();
   if(clearForm) clearEntryForm();
   document.getElementById('btn-add').textContent = '내역 추가';
   document.getElementById('btn-cancel-entry-edit').classList.add('hidden');

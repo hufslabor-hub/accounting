@@ -1109,3 +1109,16 @@ button{transition:background-color .12s,color .12s,box-shadow .12s;}
   .btn-primary:not(.btn-soft):hover:not(:disabled) .btn-step{background:var(--navy);color:var(--paper-2);}
   .btn-primary.btn-soft:hover:not(:disabled) .btn-step{background:var(--paper-2);color:var(--navy);}
 }
+
+/* 입력 내역: 행 클릭 수정 · 담당자 버튼 */
+.pending-transaction-table tr.input-row-clickable{cursor:pointer;}
+.pending-transaction-table tr.input-row-clickable:hover td{background:rgba(180,140,40,.08);}
+.pending-transaction-table tr.input-row-clickable:focus-visible{outline:2px solid #b48c28;outline-offset:-2px;}
+.pending-transaction-table tr.input-row-editing td{background:rgba(180,140,40,.18);}
+.spender-picker{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:6px 0 10px;}
+.spender-picker-label{font-size:12px;color:#64748b;margin-right:2px;}
+.spender-chip{border:1px solid #cbd5e1;background:#fff;color:#26394d;border-radius:999px;padding:4px 12px;font-size:13px;cursor:pointer;font-family:inherit;}
+.spender-chip small{color:#64748b;margin-left:2px;}
+.spender-chip:hover{border-color:#b48c28;}
+.spender-chip.active{background:#26394d;border-color:#26394d;color:#fff;}
+.spender-chip.active small{color:#e2e8f0;}
