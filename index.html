@@ -474,6 +474,17 @@
     </div>
   </section>
 </div>
+  <dialog class="app-confirm-dialog" id="app-confirm-dialog" aria-labelledby="app-confirm-title">
+    <div class="app-confirm-panel">
+      <h2 id="app-confirm-title">확인</h2>
+      <p id="app-confirm-message" class="app-confirm-message"></p>
+      <div class="app-confirm-actions">
+        <button type="button" class="btn-revert" id="app-confirm-cancel">취소</button>
+        <button type="button" class="btn-primary" id="app-confirm-ok">확인</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog class="payment-report-dialog" id="payment-report-dialog" aria-labelledby="payment-report-dialog-title">
     <div class="payment-dialog-header">
       <h2 id="payment-report-dialog-title">지급 보고서</h2>
@@ -500,13 +511,22 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
+<!-- APP_BUILD: stamp-version.mjs 실행 시 자동으로 갱신됩니다 -->
+<script>window.APP_BUILD = '20261005-0143';</script>
+<script src="domain.js"></script>
 <script>
 /* 초기 데이터(data.json)를 먼저 읽은 뒤 app.js를 실행합니다.
-   data.json을 못 읽어도 빈 데이터로 앱은 동작합니다. */
+   data.json을 못 읽어도 빈 데이터로 앱은 동작합니다.
+   CSS/JS 캐시 버스팅은 APP_BUILD 값을 사용합니다 (수동 ?v= 불필요). */
 (function(){
+  var build = window.APP_BUILD || String(Date.now());
+  var css = document.querySelector('link[href*="style.css"]');
+  if(css) css.href = 'style.css?v=' + encodeURIComponent(build);
+  var tag = document.querySelector('.version-tag');
+  if(tag) tag.textContent = 'v' + build;
   function start(){
     var s = document.createElement('script');
-    s.src = 'app.js?v=2.15';
+    s.src = 'app.js?v=' + encodeURIComponent(build);
     document.body.appendChild(s);
   }
   fetch('data.json', {cache:'no-cache'})

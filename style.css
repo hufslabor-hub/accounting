@@ -246,6 +246,40 @@ body { background-color:var(--paper); color:var(--ink); }
   color: inherit;
 }
 
+/* 중요 액션 확인 모달 (승인·마감·삭제) */
+.app-confirm-dialog{
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:0;
+  max-width:min(420px,92vw);
+  background:var(--paper-2);
+  color:var(--ink);
+  box-shadow:0 12px 40px rgba(59,73,83,.22);
+}
+.app-confirm-dialog::backdrop{background:rgba(59,73,83,.45);}
+.app-confirm-panel{padding:20px 20px 16px;}
+.app-confirm-panel h2{margin:0 0 10px;font-size:18px;color:var(--navy);}
+.app-confirm-message{
+  margin:0 0 18px;font-size:15px;line-height:1.55;color:var(--ink);
+  white-space:pre-wrap;word-break:keep-all;
+}
+.app-confirm-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;}
+.app-confirm-actions .btn-primary,
+.app-confirm-actions .btn-revert{min-height:44px;min-width:96px;}
+#app-confirm-ok.btn-danger-confirm{
+  background:var(--expense);color:var(--paper-2);
+}
+@media (hover:hover){
+  #app-confirm-ok.btn-danger-confirm:hover{
+    background:var(--paper-2);color:var(--expense);box-shadow:inset 0 0 0 1px var(--expense);
+  }
+}
+@media (max-width:600px){
+  .app-confirm-actions{flex-direction:column-reverse;}
+  .app-confirm-actions .btn-primary,
+  .app-confirm-actions .btn-revert{width:100%;}
+}
+
   @media (max-width:600px){
     .transaction-table th,.transaction-table td{padding:6px 3px;font-size:12px;}
     .transaction-table td.num{font-size:11px;white-space:normal;}

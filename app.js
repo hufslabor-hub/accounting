@@ -824,7 +824,28 @@ const SUMMARY_VERSION = 1;
 const reportSummaryKey = y => 'report-summary:' + y;
 const reportSummaryRef = year => db.collection('accountingData').doc(reportSummaryKey(year));
   let appReady = false;
-const APPROVED_STATES = ['approved','paid','confirmed'];
+const APPROVED_STATES = (typeof ShowMeDomain !== 'undefined' && ShowMeDomain.APPROVED_STATES)
+  ? ShowMeDomain.APPROVED_STATES.slice()
+  : ['approved','paid','confirmed'];
+
+/**
+ * 승인 건 변경 후 집계 캐시 무효화 — 한곳만 사용.
+ * plan: ShowMeDomain.buildInvalidation / invalidationForEntryChange 결과
+ * 또는 { clearSummary, clearAllMonthCaches, dirtyMonthly, months:['1월',...] }
+ */
+function invalidateReportAggregates(plan){
+  const p = plan || { clearSummary:true, clearAllMonthCaches:true, dirtyMonthly:true, months:[] };
+  if(p.clearSummary){
+    reportSummary = null;
+    reportLoadToken++;
+  }
+  if(p.clearAllMonthCaches){
+    reportMonthCache = {};
+  }else if(Array.isArray(p.months)){
+    p.months.forEach(m=>{ delete reportMonthCache[m]; });
+  }
+  if(p.dirtyMonthly) monthlyReportDirty = true;
+}
 
 async function docMutate(key,def,mutator){
   const ref = db.collection('accountingData').doc(key);
@@ -2194,7 +2215,7 @@ function renderYearSelect(){
   sel.innerHTML = years.map(y => `<option value="${y}"${y===currentYear?' selected':''}>${y}년</option>`).join('')
     + '<option value="__add__">＋ 연도 추가…</option>';
   document.getElementById('title-year').textContent = currentYear + ' 회계연도';
-  //document.getElementById('fy-range').textContent = `${currentYear}.01.01 ~ ${currentYear}.12.31`;
+  document.getElementById('fy-range').textContent = `${currentYear}.01.01 ~ ${currentYear}.12.31`;
   document.getElementById('budget-year-label').textContent = `${currentYear}년`;
   document.getElementById('budget-year-column').textContent = currentYear;
   const datePicker = document.getElementById('f-date-picker');
@@ -2712,8 +2733,12 @@ async function entryTransaction(ids,work){
     applyLocalChanges(upserts,deletes);
     if(committedSummary){
       reportSummary = committedSummary;
-      monthlyReportDirty = true;     // 월별 누적 보고서·마지막 그래프는 보고서 탭을 열 때 다시 조회
-      touchedMonths.forEach(month=>{ delete reportMonthCache[month]; });
+      // 집계 무효화 규칙 단일 진입점 (월별 캐시·월별 누적 보고서 dirty)
+      const months = [...touchedMonths];
+      const plan = (typeof ShowMeDomain !== 'undefined' && ShowMeDomain.buildInvalidation)
+        ? ShowMeDomain.buildInvalidation('months', months)
+        : { clearSummary:false, clearAllMonthCaches:false, dirtyMonthly:true, months };
+      invalidateReportAggregates(plan);
     }
   }
 }
@@ -2750,7 +2775,12 @@ async function repairLedger(){
   }
    if(patches.some(({id,patch})=>APPROVED_STATES.includes(originals.get(id).status) || APPROVED_STATES.includes(patch.status))){
     try{ await reportSummaryRef(year).set({value:JSON.stringify({version:0}),...writeMeta()}); }catch(e){ console.error(e); }
-    if(year===currentYear) reportSummary = null;
+    if(year===currentYear){
+      const plan = (typeof ShowMeDomain !== 'undefined' && ShowMeDomain.buildInvalidation)
+        ? ShowMeDomain.buildInvalidation('full')
+        : { clearSummary:true, clearAllMonthCaches:true, dirtyMonthly:true, months:[] };
+      invalidateReportAggregates(plan);
+    }
   }
   if(year===currentYear) ledger = draft.sort(compareEntries);
   return patches.length;
@@ -3349,9 +3379,10 @@ function bindRowActions(container){
     btn.addEventListener('click', async ()=>{
       const id = btn.getAttribute('data-id');
       const act = btn.getAttribute('data-act');
-      if(act==='unapprove' && !window.confirm('승인을 취소하고 선택 내역을 결의완료 대기 목록으로 되돌리시겠습니까?')) return;
-      if(act==='reject-submitted' && !window.confirm('이 내역을 반려하여 입력 내역으로 되돌리시겠습니까?')) return;
-      if(act==='edit' && !window.confirm('이 내역을 입력 내역으로 되돌려 수정합니다.\n결의·승인 상태와 결의번호는 해제됩니다. 계속하시겠습니까?')) return;
+      if(act==='unapprove' && !(await confirmAction('승인을 취소하고 선택 내역을 결의완료 대기 목록으로 되돌리시겠습니까?',{title:'승인 취소',confirmLabel:'승인 취소',danger:true}))) return;
+      if(act==='reject-submitted' && !(await confirmAction('이 내역을 반려하여 입력 내역으로 되돌리시겠습니까?',{title:'반려',confirmLabel:'반려',danger:true}))) return;
+      if(act==='edit' && !(await confirmAction('이 내역을 입력 내역으로 되돌려 수정합니다.\n결의·승인 상태와 결의번호는 해제됩니다. 계속하시겠습니까?',{title:'수정',confirmLabel:'수정 진행'}))) return;
+      if(act==='delete' && !(await confirmAction('이 내역을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.',{title:'삭제',confirmLabel:'삭제',danger:true}))) return;
       const approvedStates = ['approved','paid','confirmed'];
       let editedEntry = null;
       try{
@@ -3374,7 +3405,10 @@ function bindRowActions(container){
             api.set(next);
           }else if(act==='edit'){
             if(entry.status==='input-complete') throw stateChangedError('이미 입력 내역에 있는 내역입니다.');
-            if(approvedStates.includes(entry.status) && entry.acctMonth && monthNo(entry.acctMonth)<=closedThrough){
+            if(typeof ShowMeDomain !== 'undefined'){
+              const gate = ShowMeDomain.assertNotClosedForEdit({...entry, txnMonth: entry.acctMonth || monthNo(entry.month)}, closedThrough);
+              if(!gate.ok) throw stateChangedError(gate.reason);
+            }else if(approvedStates.includes(entry.status) && entry.acctMonth && monthNo(entry.acctMonth)<=closedThrough){
               throw stateChangedError(`${entry.acctMonth}월은 마감되어 수정할 수 없습니다. 마감을 취소한 뒤 시도해 주세요.`);
             }
             const next = {...entry, status:'input-complete', locked:false, editReopenedAt:new Date().toISOString(), editReopenedBy:currentUser?.email || currentUser?.displayName || ''};
@@ -3384,7 +3418,10 @@ function bindRowActions(container){
             api.set(next);
           }else if(act==='unapprove'){
             if(!approvedStates.includes(entry.status)) throw stateChangedError('이미 승인 상태가 아닙니다.');
-            if(entry.acctMonth && monthNo(entry.acctMonth)<=closedThrough){
+            if(typeof ShowMeDomain !== 'undefined'){
+              const gate = ShowMeDomain.assertNotClosedForUnapprove(entry, closedThrough);
+              if(!gate.ok) throw stateChangedError(gate.reason);
+            }else if(entry.acctMonth && monthNo(entry.acctMonth)<=closedThrough){
               throw stateChangedError(`${entry.acctMonth}월은 마감되어 승인 취소할 수 없습니다. 마감을 취소한 뒤 시도해 주세요.`);
             }
             const next = {
@@ -3663,7 +3700,7 @@ function beginEntryEdit(entry){
 async function deleteSelectedInputEntries(){
   const entries = selectedWorkflowEntries('input-complete');
   if(!entries.length){ setStatus('삭제할 내역을 체크해 주세요.'); return; }
-  if(!window.confirm(`입력완료 내역 ${entries.length}건을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) return;
+  if(!(await confirmAction(`입력완료 내역 ${entries.length}건을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`,{title:'선택 삭제',confirmLabel:'삭제',danger:true}))) return;
     const ids = new Set(entries.map(entry=>entry.id));
   try{
     await entryTransaction([...ids],(found,api)=>{
@@ -4472,7 +4509,11 @@ async function changeClosure(delta){
   const question = delta>0
     ? `${target}월을 마감합니다. ${target}월의 승인 내역은 결산 관리에서 숨겨지고 보고서에서만 보입니다. 계속할까요?`
     : `${expected}월 마감을 취소합니다. 계속할까요?`;
-  if(!window.confirm(question)) return;
+  if(!(await confirmAction(question,{
+    title: delta>0 ? '월 마감' : '마감 취소',
+    confirmLabel: delta>0 ? '마감하기' : '마감 취소',
+    danger: delta>0
+  }))) return;
   const ref = db.collection('accountingData').doc(closureKey(currentYear));
   try{
     await db.runTransaction(async tx=>{
@@ -4510,6 +4551,49 @@ function renderStatusFilters(){
     btn.textContent = s==='전체' ? '전체' : (plainLabels[s] || s);
     btn.addEventListener('click', ()=>{ currentStatusEntry=s; renderEntryView(); });
     el.appendChild(btn);
+  });
+}
+
+/**
+ * 중요 액션 확인 (승인·마감·삭제 등). 모바일에서도 읽기 쉬운 모달.
+ * window.confirm 대체. Promise<boolean>
+ */
+function confirmAction(message, options={}){
+  const {
+    title = '확인',
+    confirmLabel = '확인',
+    cancelLabel = '취소',
+    danger = false
+  } = options;
+  const dialog = document.getElementById('app-confirm-dialog');
+  if(!dialog || typeof dialog.showModal !== 'function'){
+    return Promise.resolve(window.confirm(message));
+  }
+  const titleEl = document.getElementById('app-confirm-title');
+  const msgEl = document.getElementById('app-confirm-message');
+  const okBtn = document.getElementById('app-confirm-ok');
+  const cancelBtn = document.getElementById('app-confirm-cancel');
+  if(titleEl) titleEl.textContent = title;
+  if(msgEl) msgEl.textContent = message;
+  if(okBtn){
+    okBtn.textContent = confirmLabel;
+    okBtn.classList.toggle('btn-danger-confirm', !!danger);
+  }
+  if(cancelBtn) cancelBtn.textContent = cancelLabel;
+  return new Promise(resolve=>{
+    const done = (value)=>{
+      okBtn?.removeEventListener('click', onOk);
+      cancelBtn?.removeEventListener('click', onCancel);
+      dialog.removeEventListener('cancel', onCancel);
+      if(dialog.open) dialog.close();
+      resolve(value);
+    };
+    const onOk = (e)=>{ e.preventDefault(); done(true); };
+    const onCancel = (e)=>{ e.preventDefault(); done(false); };
+    okBtn?.addEventListener('click', onOk);
+    cancelBtn?.addEventListener('click', onCancel);
+    dialog.addEventListener('cancel', onCancel);
+    dialog.showModal();
   });
 }
 
@@ -5156,10 +5240,21 @@ document.getElementById('btn-load-more-entries').addEventListener('click',loadMo
 document.getElementById('btn-monthly-exact').addEventListener('click',()=>{
   if(currentMonthlyReportMonth>=1 && currentMonthlyReportMonth<=12) loadMonthlyBudgetReport(currentMonthlyReportMonth,{exact:true});
 });
-document.getElementById('btn-reload-report').addEventListener('click',()=>{ reportSummary = null; reportMonthCache = {}; renderReport(); });
+document.getElementById('btn-reload-report').addEventListener('click',()=>{
+  invalidateReportAggregates(
+    (typeof ShowMeDomain !== 'undefined' && ShowMeDomain.buildInvalidation)
+      ? ShowMeDomain.buildInvalidation('full')
+      : { clearSummary:true, clearAllMonthCaches:true, dirtyMonthly:true, months:[] }
+  );
+  renderReport();
+});
 document.getElementById('btn-rebuild-report').addEventListener('click',async ()=>{
-  if(!window.confirm('승인된 내역 전체를 읽어 집계를 다시 계산합니다. 읽기가 승인 건수만큼 발생합니다. 계속할까요?')) return;
-  reportSummary = null; reportMonthCache = {};
+  if(!(await confirmAction('승인된 내역 전체를 읽어 집계를 다시 계산합니다. 읽기가 승인 건수만큼 발생합니다. 계속할까요?',{title:'집계 다시 계산',confirmLabel:'다시 계산'}))) return;
+  invalidateReportAggregates(
+    (typeof ShowMeDomain !== 'undefined' && ShowMeDomain.buildInvalidation)
+      ? ShowMeDomain.buildInvalidation('full')
+      : { clearSummary:true, clearAllMonthCaches:true, dirtyMonthly:true, months:[] }
+  );
   await loadReportSummary(true);
 });
   // ---------- init ----------
