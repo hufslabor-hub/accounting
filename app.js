@@ -3390,8 +3390,7 @@ function bindRowActions(container){
               approvalCancelledAt:new Date().toISOString(),
               approvalCancelledBy:currentUser?.email || currentUser?.displayName || ''
             };
-            // 승인 취소 시 승인번호(managementNo)만 제거하고, 결의번호(submissionSequence)는 유지
-            // managementNo는 결의번호로 복원
+            // 승인 취소 시 승인번호만 제거하고 결의번호(submissionSequence)는 유지
             ['approvedAt','approvedBy','paidAt','paidBy','confirmedAt','confirmedBy','acctMonth','acctYear']
               .forEach(key=>delete next[key]);
             if(next.submissionSequence != null && String(next.submissionSequence).trim() !== ''){
