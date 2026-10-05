@@ -2408,23 +2408,194 @@ document.addEventListener('paste', function (event) {
 });
 
 // 3. 영수증 파일 설정 및 미리보기 출력
+const PDF_PLACEHOLDER_SRC = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="96" height="120"><rect width="96" height="120" fill="#f1f5f9" stroke="#94a3b8"/><text x="48" y="68" font-size="22" text-anchor="middle" fill="#475569" font-family="sans-serif">PDF</text></svg>');
+let receiptRemoveOnSave = false;      // 수정 중 기존 영수증을 지우기로 한 경우
+let receiptExistingShown = false;     // 수정 중 기존 영수증 미리보기를 보여주는 중
+const receiptCache = new Map();
+
 function setReceiptFile(file) {
   selectedReceiptFile = file;
-  
+  receiptRemoveOnSave = false;
+  receiptExistingShown = false;
+  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+  const img = document.getElementById('receipt-preview-img');
+  document.getElementById('receipt-preview-container').style.display = 'block';
+  if (isPdf) { img.src = PDF_PLACEHOLDER_SRC; return; }
   const reader = new FileReader();
-  reader.onload = function (e) {
-    document.getElementById('receipt-preview-img').src = e.target.result;
-    document.getElementById('receipt-preview-container').style.display = 'block';
-  };
+  reader.onload = function (e) { img.src = e.target.result; };
   reader.readAsDataURL(file);
 }
 
-// 4. 첨부된 영수증 취소/삭제
+// 4. 첨부된 영수증 취소/삭제 (사용자가 '삭제' 버튼을 누른 경우)
 function clearReceipt() {
+  if (editingEntryId && receiptExistingShown) receiptRemoveOnSave = true;  // 저장 시 기존 영수증 삭제
+  resetReceiptInput();
+}
+
+// 입력 상태만 초기화 (폼 비우기용; 저장된 영수증은 건드리지 않음)
+function resetReceiptInput() {
   selectedReceiptFile = null;
+  receiptExistingShown = false;
   document.getElementById('f-receipt-file').value = '';
   document.getElementById('receipt-preview-img').src = '';
   document.getElementById('receipt-preview-container').style.display = 'none';
+}
+
+// ---- 영수증 저장소: accountingData/ledger:{연도}/receipts/{내역ID} ----
+const RECEIPT_MAX_CHARS = 900000;   // Firestore 문서 1MiB 제한 안쪽
+const receiptsRef = year => db.collection('accountingData').doc(ledgerKey(year)).collection('receipts');
+
+function readAsDataURL(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>resolve(reader.result);
+    reader.onerror = ()=>reject(new Error('파일을 읽지 못했습니다.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageFromFile(file){
+  return new Promise((resolve,reject)=>{
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = ()=>{ URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error('이미지를 열 수 없습니다. JPG/PNG 형식인지 확인해 주세요.')); };
+    img.src = url;
+  });
+}
+
+// 이미지는 JPEG로 줄여서(긴 변 최대 1800px) 한 문서에 들어가게 만든다
+async function buildReceiptPayload(file){
+  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+  if(isPdf){
+    const data = await readAsDataURL(file);
+    if(data.length > RECEIPT_MAX_CHARS) throw new Error('PDF가 너무 큽니다(약 650KB 이하만 가능). 이미지로 캡처해 첨부해 주세요.');
+    return {name:file.name||'receipt.pdf', type:'application/pdf', data, size:file.size};
+  }
+  if(!String(file.type).startsWith('image/')) throw new Error('이미지 또는 PDF 파일만 첨부할 수 있습니다.');
+  const img = await loadImageFromFile(file);
+  const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height;
+  let maxSide = 1800, quality = 0.85;
+  for(let i=0;i<12;i++){
+    const scale = Math.min(1, maxSide/Math.max(w0,h0));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1,Math.round(w0*scale));
+    canvas.height = Math.max(1,Math.round(h0*scale));
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    const data = canvas.toDataURL('image/jpeg',quality);
+    if(data.length <= RECEIPT_MAX_CHARS){
+      return {name:file.name||'receipt.jpg', type:'image/jpeg', data, size:file.size};
+    }
+    if(quality>0.55) quality -= 0.1; else maxSide = Math.round(maxSide*0.8);
+  }
+  throw new Error('이미지를 저장 가능한 크기로 줄이지 못했습니다.');
+}
+
+async function saveReceipt(entryId,payload){
+  if(!hasSharedStorage()) throw new Error('Firebase에 로그인한 뒤 다시 시도해주세요.');
+  await receiptsRef(currentYear).doc(entryId).set({
+    name:payload.name, type:payload.type, data:payload.data, size:payload.size||0,
+    updatedAt:new Date().toISOString(), updatedBy:currentUser.uid
+  });
+  receiptCache.set(`${currentYear}:${entryId}`,payload);
+}
+
+async function fetchReceipt(entryId){
+  const key = `${currentYear}:${entryId}`;
+  if(receiptCache.has(key)) return receiptCache.get(key);
+  const snapshot = await receiptsRef(currentYear).doc(entryId).get();
+  const receipt = snapshot.exists ? snapshot.data() : null;
+  if(receipt) receiptCache.set(key,receipt);
+  return receipt;
+}
+
+function deleteReceiptsQuiet(year,ids){
+  ids.forEach(id=>{
+    receiptCache.delete(`${year}:${id}`);
+    receiptsRef(year).doc(id).delete().catch(error=>console.warn('영수증 삭제 실패',id,error));
+  });
+}
+
+function applyReceiptMeta(entry,payload,remove){
+  if(payload){
+    entry.hasReceipt = true;
+    entry.receiptName = payload.name;
+    entry.receiptType = payload.type;
+  }else if(remove){
+    delete entry.hasReceipt;
+    delete entry.receiptName;
+    delete entry.receiptType;
+  }
+  return entry;
+}
+
+// 수정 모드 진입 시 저장돼 있는 영수증을 미리보기로 보여준다
+async function showExistingReceipt(entry){
+  resetReceiptInput();
+  receiptRemoveOnSave = false;
+  if(!entry.hasReceipt) return;
+  try{
+    const receipt = await fetchReceipt(entry.id);
+    if(!receipt || editingEntryId!==entry.id) return;
+    document.getElementById('receipt-preview-img').src = receipt.type==='application/pdf' ? PDF_PLACEHOLDER_SRC : receipt.data;
+    document.getElementById('receipt-preview-container').style.display = 'block';
+    receiptExistingShown = true;
+  }catch(error){
+    setStatus(`저장된 영수증을 불러오지 못했습니다: ${error.message || String(error)}`,true);
+  }
+}
+
+// 지출내역보고(결의 내역 선택 시 열리는 보고서)의 '영수증 첨부' 칸에 저장된 영수증을 채운다
+async function fillReceiptBox(sheet,entries){
+  const box = sheet.querySelector('.payment-report-receipt-box');
+  if(!box) return;
+  const targets = entries.filter(entry=>entry.hasReceipt)
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||'') || String(a.id).localeCompare(String(b.id)));
+  if(!targets.length){ box.textContent = '첨부된 영수증이 없습니다.'; box.classList.add('is-empty'); return; }
+  box.textContent = '영수증을 불러오는 중…';
+  const results = await Promise.all(targets.map(async entry=>{
+    try{ return {entry,receipt:await fetchReceipt(entry.id)}; }
+    catch(error){ return {entry,receipt:null,error}; }
+  }));
+  box.replaceChildren();
+  box.classList.remove('is-empty');
+  for(const {entry,receipt} of results){
+    const figure = document.createElement('figure');
+    figure.className = 'payment-report-receipt-item';
+    if(receipt && String(receipt.type).startsWith('image/')){
+      const img = document.createElement('img');
+      img.alt = `${entry.desc||'내역'} 영수증`;
+      img.src = receipt.data;
+      figure.appendChild(img);
+    }else if(receipt){
+      const note = document.createElement('div');
+      note.className = 'payment-report-receipt-pdf';
+      note.textContent = `PDF 첨부: ${receipt.name||'receipt.pdf'}`;
+      try{
+        const blob = await (await fetch(receipt.data)).blob();
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.textContent = ' (열기)';
+        note.appendChild(link);
+      }catch(error){ /* 링크 없이 이름만 표시 */ }
+      figure.appendChild(note);
+    }else{
+      const note = document.createElement('div');
+      note.className = 'payment-report-receipt-pdf';
+      note.textContent = '영수증을 불러오지 못했습니다.';
+      figure.appendChild(note);
+    }
+    const caption = document.createElement('figcaption');
+    caption.textContent = `${entry.desc||''}${entry.amount!=null?' · '+fmtShort(entry.amount)+'원':''}`;
+    figure.appendChild(caption);
+    box.appendChild(figure);
+  }
+  await Promise.all([...box.querySelectorAll('img')].map(img=>img.decode ? img.decode().catch(()=>{}) : Promise.resolve()));
 }
 
   
@@ -2735,9 +2906,10 @@ async function entryTransaction(ids,work){
   const sumRef = reportSummaryRef(year);
   let upserts = new Map(), deletes = new Set();
   let committedSummary = null, touchedMonths = new Set();
+  let receiptDeleteIds = new Set();
   await db.runTransaction(async tx=>{
     upserts = new Map(); deletes = new Set();            // reset if Firestore retries
-    committedSummary = null; touchedMonths = new Set();
+    committedSummary = null; touchedMonths = new Set(); receiptDeleteIds = new Set();
     // 모든 읽기를 쓰기보다 먼저 수행
     const [snapshots,sumSnapshot] = await Promise.all([
       Promise.all(ids.map(id=>tx.get(col.doc(id)))),
@@ -2751,6 +2923,7 @@ async function entryTransaction(ids,work){
       set:entry=>{ tx.set(col.doc(entry.id),entry); upserts.set(entry.id,entry); deletes.delete(entry.id); },
       remove:id=>{ tx.delete(col.doc(id)); deletes.add(id); upserts.delete(id); }
     });
+    deletes.forEach(id=>{ if(found.get(id)?.hasReceipt) receiptDeleteIds.add(id); });
     // 승인 상태가 바뀐 내역만 집계 문서에 반영 (집계 문서가 있을 때만)
     if(!summary) return;
     let changed = false;
@@ -2767,6 +2940,7 @@ async function entryTransaction(ids,work){
       committedSummary = summary;
     }
   });
+  if(receiptDeleteIds.size) deleteReceiptsQuiet(year,[...receiptDeleteIds]);
   if(year===currentYear){
     applyLocalChanges(upserts,deletes);
     if(committedSummary){
@@ -3730,6 +3904,7 @@ function beginEntryEdit(entry){
   mokSelect.value = classification;
   document.getElementById('btn-add').textContent = '수정 저장';
   document.getElementById('btn-cancel-entry-edit').classList.remove('hidden');
+  showExistingReceipt(entry);
   setStatus('선택한 내역을 수정한 뒤 수정 저장을 눌러주세요.');
   document.querySelector('#view-entry .form-grid').scrollIntoView({behavior:'smooth',block:'center'});
   return true;
@@ -3881,6 +4056,7 @@ async function buildReportPdfBlob(entries,spender,approval=null,managementNo=nul
   document.body.appendChild(wrapper);
   try{
     renderPaymentReport(entries,spender,approval,managementNo,host);
+    await host._receiptsReady;
     if(document.fonts?.ready) await document.fonts.ready;
     await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));  // 렌더링 완료 대기
     window.scrollTo(0,0);
@@ -4503,6 +4679,8 @@ const rows = ordered.map((entry,index)=>`
     ${approval
       ? `<p class="payment-report-note">승인자: ${escapeHTML(approval.approver)} · ${escapeHTML(approval.date)} · 지급 승인 도장이 포함된 보고서입니다.</p>`
       : '<p class="payment-report-note">승인하면 승인 도장이 포함된 보고서가 됩니다.</p>'}`;
+  // 저장된 영수증을 비동기로 채움 (PDF 생성 시에는 이 promise를 기다린다)
+  sheet._receiptsReady = fillReceiptBox(sheet,entries);
 }
 
 async function approvePaymentReport(){
@@ -4813,8 +4991,11 @@ function refreshMokOptions(){
         ? {group,account,mok,value:JSON.stringify({gwan:group.name,hang:account.name,mok})}
         : null;
     })
-    .filter(item=>item && !recentClassificationKeys.has(item.value) && recentClassificationKeys.add(item.value))
+    .filter(Boolean)
+    .filter((item,index,all)=>all.findIndex(other=>other.value===item.value)===index)
     .slice(0,5);
+  // 실제로 '최근' 그룹에 표시되는 항목만 아래 전체 목록에서 제외한다
+  recentClassifications.forEach(item=>recentClassificationKeys.add(item.value));
   if(recentClassifications.length){
     const optgroup=document.createElement('optgroup');
     optgroup.label='최근 1개월 선택';
@@ -4904,7 +5085,14 @@ if(!Number.isFinite(amount) || !Number.isInteger(amount) || amount===0){
     return;
   }
      const month = (parseInt(date.split('-')[1],10)) + '월';
-  
+
+  let receiptPayload = null;
+  if(selectedReceiptFile){
+    try{ receiptPayload = await buildReceiptPayload(selectedReceiptFile); }
+    catch(error){ setStatus(`영수증을 처리하지 못했습니다: ${error.message || String(error)}`,true); return; }
+  }
+  const receiptRemove = !!editingEntryId && receiptRemoveOnSave && !receiptPayload;
+
   const values = {
     date, month, gubun:currentGubun, desc, payee, spender, amount,
     gwan:classification.gwan, hang:classification.hang, category:classification.mok
@@ -4913,12 +5101,13 @@ if(!Number.isFinite(amount) || !Number.isInteger(amount) || amount===0){
   if(editingEntryId){
     const editId = editingEntryId;
     try{
+      if(receiptPayload) await saveReceipt(editId,receiptPayload);
       await entryTransaction([editId],(found,api)=>{
         const entry = found.get(editId);
         if(!entry || entry.status!=='input-complete' || entry.locked){
           throw stateChangedError('선택한 내역은 더 이상 수정할 수 없습니다. 목록을 새로 확인해 주세요.');
         }
-        api.set({...entry,...values});
+        api.set(applyReceiptMeta({...entry,...values},receiptPayload,receiptRemove));
       });
     }catch(error){
       if(error.code==='accounting/state-changed') cancelEntryEdit();
@@ -4926,6 +5115,7 @@ if(!Number.isFinite(amount) || !Number.isInteger(amount) || amount===0){
       renderEntryView();
       return;
     }
+    if(receiptRemove) deleteReceiptsQuiet(currentYear,[editId]);
     cancelEntryEdit();
     setStatus('내역을 수정했습니다.');
   }else{
@@ -4937,6 +5127,10 @@ if(!Number.isFinite(amount) || !Number.isInteger(amount) || amount===0){
       status:'input-complete'
     };
     try{
+      if(receiptPayload){
+        await saveReceipt(entry.id,receiptPayload);
+        applyReceiptMeta(entry,receiptPayload,false);
+      }
       await entryTransaction([entry.id],(found,api)=>{
         if(found.has(entry.id)) throw stateChangedError('같은 id의 내역이 이미 있습니다. 다시 시도해 주세요.');
         api.set(entry);
@@ -4960,6 +5154,8 @@ function clearEntryForm(){
   document.getElementById('f-desc').value = '';
   document.getElementById('f-payee').value = '';
   document.getElementById('f-spender').value = '';
+  receiptRemoveOnSave = false;
+  resetReceiptInput();
 }
 
 function cancelEntryEdit(clearForm=true){

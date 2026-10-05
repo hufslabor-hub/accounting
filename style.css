@@ -533,7 +533,11 @@ body { background-color:var(--paper); color:var(--ink); }
   .payment-report-document .report-total-label{text-align:center!important;}
   .payment-report-receipts{margin-top:12px;page-break-inside:avoid;break-inside:avoid;}
   .payment-report-receipts strong{display:block;margin-bottom:6px;}
-  .payment-report-receipt-box{height:125px;border:1px solid #26394d;}
+  .payment-report-receipt-box{min-height:125px;border:1px solid #26394d;padding:8px;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;}
+  .payment-report-receipt-box.is-empty{align-items:center;justify-content:center;color:#64748b;font-size:12px;}
+  .payment-report-receipt-item{margin:0;flex:1 1 45%;max-width:100%;text-align:center;page-break-inside:avoid;break-inside:avoid;}
+  .payment-report-receipt-item img{max-width:100%;max-height:420px;object-fit:contain;border:1px solid #cbd5e1;}
+  .payment-report-receipt-item figcaption,.payment-report-receipt-pdf{margin-top:4px;font-size:11px;color:#475569;}
   .payment-report-note{margin:9px 0 0;color:#64748b;font-size:12px;line-height:1.5;}
   .payment-report-sheet .report-row{page-break-inside:avoid;break-inside:avoid;}
   @media(max-width:650px){

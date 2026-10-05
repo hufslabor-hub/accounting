@@ -41,6 +41,16 @@ service cloud.firestore {
       match /entries/{entryId} {
         allow read, create, update, delete: if isAllowedUser();
       }
+
+      // 영수증 증빙(회계연도별): accountingData/ledger:{연도}/receipts/{내역ID}
+      match /receipts/{entryId} {
+        allow read, delete: if isAllowedUser();
+        allow create, update: if isAllowedUser()
+          && request.resource.data.keys().hasOnly(['name', 'type', 'data', 'size', 'updatedAt', 'updatedBy'])
+          && request.resource.data.data is string
+          && request.resource.data.data.size() < 950000
+          && request.resource.data.updatedBy == request.auth.uid;
+      }
     }
   }
 }
