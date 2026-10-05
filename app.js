@@ -2215,13 +2215,13 @@ function renderYearSelect(){
   sel.innerHTML = years.map(y => `<option value="${y}"${y===currentYear?' selected':''}>${y}년</option>`).join('')
     + '<option value="__add__">＋ 연도 추가…</option>';
   document.getElementById('title-year').textContent = currentYear + ' 회계연도';
-  document.getElementById('fy-range').textContent = `${currentYear}.01.01 ~ ${currentYear}.12.31`;
+  //document.getElementById('fy-range').textContent = `${currentYear}.01.01 ~ ${currentYear}.12.31`;
   document.getElementById('budget-year-label').textContent = `${currentYear}년`;
   document.getElementById('budget-year-column').textContent = currentYear;
   const datePicker = document.getElementById('f-date-picker');
   datePicker.min = fyStart(currentYear - 1);
   datePicker.max = fyEnd(currentYear);
-  //document.getElementById('f-date').value = '';
+  document.getElementById('f-date').value = '';
   datePicker.value = '';
 }
 
