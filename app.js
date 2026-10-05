@@ -4193,8 +4193,10 @@ async function downloadReportFromDialog(){
     const approved = paymentReportApproval;
     const fileName = await downloadReportPdf(paymentReportEntryIds,spender,approved ? '승인보고서' : '보고서',approved?.approval||null,approved?.managementNo||null);
     status.textContent = `PDF를 저장했습니다: ${fileName}`;
+    return fileName;
   }catch(error){
     status.textContent = `PDF 생성 실패: ${error.message || String(error)}`;
+    return null;
   }
 }
 document.getElementById('btn-download-payment-report').addEventListener('click',downloadReportFromDialog);
@@ -4834,8 +4836,17 @@ async function approvePaymentReport(){
     const approvedEntries = ids.map(id=>ledger.find(entry=>entry.id===id)).filter(Boolean);
     renderPaymentReport(approvedEntries,spender,approval,managementNo);
     paymentReportApproval = {approval, managementNo};   // PDF 다운로드 시 승인 도장 포함
-    status.textContent = `승인 완료 (${mgmtNoLabel(approvedEntries[0] || {})} ${managementNo}). 결의 내역에 승인으로 표시됩니다. 도장이 찍힌 PDF는 ‘PDF 다운로드’ 버튼으로 저장할 수 있습니다.`;
     button.classList.add('hidden');
+    const approvedLabel = `${mgmtNoLabel(approvedEntries[0] || {})} ${managementNo}`;
+    status.textContent = `승인 완료 (${approvedLabel}). 승인 도장이 찍힌 PDF를 저장하는 중입니다…`;
+    // 승인 도장이 포함된 PDF를 자동 저장하고, 성공하면 팝업을 닫는다
+    const pdfName = await downloadReportFromDialog();
+    if(pdfName){
+      document.getElementById('payment-report-dialog').close();
+      setStatus(`승인 완료 (${approvedLabel}). PDF를 저장했습니다: ${pdfName}`);
+    }else{
+      status.textContent += ' 승인은 완료되었습니다. ‘PDF 다운로드’ 버튼으로 다시 저장할 수 있습니다.';
+    }
   }catch(error){
     status.textContent = `선택 내역 처리 실패: ${error.message || String(error)}`;
   }finally{
