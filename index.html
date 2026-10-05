@@ -431,10 +431,13 @@
         </details>
       </div>
 
-      <div class="don-box">
-        <div class="don-box-head"><b>노동조합 파일 암호</b><span id="don-pw-status" class="don-hint"></span></div>
-    <!-- div를 form 태그로 변경하고 onsubmit 속성을 추가합니다 -->
+     <div class="don-box">
+  <div class="don-box-head"><b>노동조합 파일 암호</b><span id="don-pw-status" class="don-hint"></span></div>
+  
   <form class="don-inline" id="don-pw-edit" onsubmit="return false;">
+    <!-- 브라우저 경고를 없애기 위한 숨겨진 username 필드입니다 -->
+    <input type="text" name="username" value="hufslabor_user" autocomplete="username" style="display: none;">
+
     <input type="password" id="don-password" autocomplete="new-password" placeholder="새 암호">
     <button class="btn-primary btn-soft" id="don-btn-pw-save" type="button">암호 저장</button>
     <button class="btn-text" id="don-btn-pw-cancel" type="button">취소</button>
@@ -442,7 +445,6 @@
   
   <button class="btn-text" id="don-btn-pw-change" type="button">암호 변경</button>
 </div>
-
       <div class="don-grid">
         <div class="field">
           <label for="don-file-union">노동조합 조합비</label>
