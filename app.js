@@ -2567,38 +2567,30 @@ async function loadReportSummary(force=false){
   renderReport();
 }
 
-// ---------- 세부 거래 내역: 선택한 월만 읽기 ----------
+// ---------- 세부 거래 내역: 선택한 월만 읽기 (승인일·승인번호 기준 월) ----------
 async function loadReportMonth(month){
   if(reportMonthCache[month]) return;
   const year = currentYear, n = monthNo(month);
-  // 승인 건 전체를 읽어 거래 결제일 월로 필터 (승인월과 무관)
+  // 승인 건 전체를 읽어 **승인 월**로 필터 (예: 승인번호 20261005… → 10월)
   const snapshot = await entriesRef(year).where('status','in',APPROVED_STATES).get();
   if(year!==currentYear) return;
   const list = [];
   snapshot.docs.forEach(doc=>{
     const t = doc.data();
     t.id = doc.id;
-    let m = entryTxnMonth(t);
-    if(!m && t.month) m = monthNo(t.month);
+    const m = entryApprovalMonth(t);
     if(m !== n) return;
-    const dateYear = Number(String(t.date||'').slice(0,4));
-    if(dateYear && dateYear !== year) return;
+    const ay = entryApprovalYear(t);
+    if(ay && ay !== year) return;
     list.push(t);
   });
   reportMonthCache[month] = list;
 }
 
 function reportMonthsFromSummary(approved){
-  const set = new Set();
-  (approved||[]).forEach(t=>{
-    if(t.month && monthList.includes(t.month)) set.add(t.month);
-    else {
-      const m = monthNo(t.month) || entryTxnMonth(t);
-      if(m>=1 && m<=12) set.add(m+'월');
-    }
-  });
-  // 집계에 월이 없으면 1~12 중 캐시/실데이터가 있는 월은 아래에서 보완
-  return monthList.filter(m=>set.has(m));
+  // 세부 거래 내역 월 버튼: 오늘(또는 마감)까지 표시 — 승인월 기준으로 조회하므로 빈 월도 선택 가능
+  const maxM = typeof maxReportMonthAvailable === 'function' ? maxReportMonthAvailable() : 12;
+  return monthList.filter(m => monthNo(m) >= 1 && monthNo(m) <= Math.max(maxM, 1));
 }
   
 function renderReportMonthFilters(approved){
@@ -2606,7 +2598,6 @@ function renderReportMonthFilters(approved){
   if(!el) return;
   el.innerHTML = '';
   let months = reportMonthsFromSummary(approved);
-  // 집계 월이 비어 있으면 월 버튼 전부 제공 (클릭 시 실제 승인 건 조회)
   if(!months.length) months = monthList.slice();
   if(!months.includes(currentMonthReport)) currentMonthReport = months[months.length-1] || '1월';
   months.forEach(m=>{
@@ -2633,6 +2624,26 @@ function entryApprovalDateKey(t){
     return `${mgmt.slice(0,4)}-${mgmt.slice(4,6)}-${mgmt.slice(6,8)}`;
   }
   return t?.date || '';
+}
+/** 승인 월(1~12). 세부 거래 내역 월 필터용 — 결제일과 무관 */
+function entryApprovalMonth(t){
+  if(t?.approvedAt){
+    const iso = /^(\d{4})-(\d{2})/.exec(String(t.approvedAt));
+    if(iso) return parseInt(iso[2], 10) || 0;
+  }
+  const mgmt = String(t?.managementNo || '');
+  if(/^\d{8}/.test(mgmt)) return parseInt(mgmt.slice(4, 6), 10) || 0;
+  return entryTxnMonth(t);
+}
+function entryApprovalYear(t){
+  if(t?.approvedAt){
+    const iso = /^(\d{4})/.exec(String(t.approvedAt));
+    if(iso) return parseInt(iso[1], 10) || 0;
+  }
+  const mgmt = String(t?.managementNo || '');
+  if(/^\d{8}/.test(mgmt)) return parseInt(mgmt.slice(0, 4), 10) || 0;
+  const d = String(t?.date || '');
+  return parseInt(d.slice(0, 4), 10) || 0;
 }
 function formatApprovalDate(t){
   const key = entryApprovalDateKey(t);
@@ -2688,7 +2699,7 @@ async function renderReportDetail(){
   const expense = list.reduce((sum,t)=>sum+(t.gubun==='지출'?Number(t.amount||0):0),0);
   total.innerHTML = `<tr class="report-total-row"><th colspan="5">${month} 합계 · ${list.length}건</th><td class="num">${fmtShort(income)}</td><td class="num">${fmtShort(expense)}</td><td></td></tr>`;
   note.textContent = list.length
-    ? `${month} 승인 거래 ${list.length.toLocaleString('ko-KR')}건 · 승인일 기준 정렬 · 행을 클릭하면 지출내역보고를 볼 수 있습니다`
+    ? `${month} 승인 거래 ${list.length.toLocaleString('ko-KR')}건 · 승인일(승인번호) 기준 · 행을 클릭하면 지출내역보고를 볼 수 있습니다`
     : `${month}에 승인된 거래가 없습니다.`;
   bindReportDetailClicks();
 }

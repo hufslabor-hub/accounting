@@ -133,6 +133,20 @@ body { background-color:var(--paper); color:var(--ink); }
   .transaction-table th,.transaction-table td{overflow-wrap:anywhere;vertical-align:middle;}
   .transaction-table th{white-space:normal;word-break:keep-all;}
   .transaction-table td:first-child{white-space:nowrap;}
+  /* 결의 내역: 창이 좁아지면 결제일 줄바꿈 */
+  .entry-table td:first-child,
+  .entry-table td.col-date{
+    white-space:normal;
+    word-break:keep-all;
+    overflow-wrap:anywhere;
+    line-height:1.35;
+  }
+  @media (max-width:900px){
+    .entry-table td:first-child,
+    .entry-table td.col-date{
+      word-break:break-all;
+    }
+  }
   .entry-table{min-width:0;width:100%;}
   .income-row{background:var(--income-row);}
   .expense-row{background:var(--paper-2);}
