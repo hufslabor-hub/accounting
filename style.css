@@ -37,7 +37,7 @@ body { background-color:var(--paper); color:var(--ink); }
   header.masthead{
     max-width:none;width:100%;margin:0;
     background:linear-gradient(180deg, var(--navy) 0%, var(--navy-2) 100%);
-    color:var(--paper-2); padding:44px 24px 28px; position:relative;
+    color:var(--paper-2); padding:28px 24px 16px; position:relative;
   }
   header.masthead::after{ display:none; }
   .masthead-inner{max-width:1600px;margin:0 auto;}
@@ -108,7 +108,7 @@ body { background-color:var(--paper); color:var(--ink); }
   .view{display:none;}
   .view.active{display:block;}
 
-  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-top:16px;}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-top:32px;}
   .stat{background:var(--paper-2);padding:22px 20px;}
   .stat .label{font-size:18px;color:var(--ink-soft);margin:0 0 8px;}
   .stat .value{font-family:'Pretendard',sans-serif;font-weight:700;font-size:clamp(19px,2.4vw,25px);margin:}
