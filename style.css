@@ -72,7 +72,7 @@ body { background-color:var(--paper); color:var(--ink); }
   nav.tabs::-webkit-scrollbar{display:none;}
   .tab-btn{
     background:rgba(247,250,242,.08); border:none; color:var(--paper);
-    font-family:'Pretendard',sans-serif; font-size:14.5px; font-weight:500;
+    font-family:'Pretendard',sans-serif; font-size:16px; font-weight:500;
     padding:12px 18px; cursor:pointer; border-radius:6px 6px 0 0;
     flex:0 0 auto; white-space:nowrap;
   }
