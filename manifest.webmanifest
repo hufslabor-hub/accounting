@@ -1,0 +1,17 @@
+{
+  "name": "쇼미더머니 — 한국외국어대학교 노동조합 회계",
+  "short_name": "쇼미더머니",
+  "description": "한국외국어대학교 노동조합 회계 프로그램",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "lang": "ko",
+  "background_color": "#EBF4DD",
+  "theme_color": "#3B4953",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

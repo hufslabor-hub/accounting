@@ -27,7 +27,7 @@
   --paper:#EBF4DD; --paper-2:#F7FAF2;
   --gold:#90AB8B; --gold-soft:#D5E3CB;
   --income:#5A7863; --income-row:#E3EED8; --income-tone:#E3EED8; --expense:#3B4953;
-  --ink:#3B4953; --ink-soft:#5A7863; --line:#CFDDC3;
+  --ink:#3B4953; --ink-soft:#4E6A57; --line:#CFDDC3;
 }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
@@ -154,7 +154,7 @@ body { background-color:var(--paper); color:var(--ink); }
 
   section{margin-top:56px;}
   .sec-head{display:flex;align-items:baseline;gap:12px;border-bottom:2px solid var(--navy);padding-bottom:10px;margin-bottom:22px;}
-  .sec-num{font-family:'Pretendard',sans-serif;font-weight:700;color:var(--gold);font-size:15px;}
+  .sec-num{font-family:'Pretendard',sans-serif;font-weight:700;color:var(--ink-soft);font-size:15px;}
   h2{font-family:'Pretendard',sans-serif;font-weight:700;font-size:21px;margin:0;}
   p.sec-desc{color:var(--ink-soft);font-size:14px;margin:0 0 20px;max-width:64ch;}
 
@@ -418,8 +418,7 @@ body { background-color:var(--paper); color:var(--ink); }
   .form-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:18px;}
   .field{display:flex;flex-direction:column;gap:5px;}
   .field.span2{grid-column:span 2;}
-  .field.span3{grid-column:span 3;}
-  label{font-size:14px;color:var(--ink);}
+    label{font-size:14px;color:var(--ink);}
   select{border:1px solid var(--line);padding:9px 10px;font-size:14px;background:var(--paper-2);font-family:'Pretendard',sans-serif;}
   input[type=text], input[type=date], input[type=number]{
     border:1px solid var(--line); padding:9px 10px; font-size:14px;
@@ -531,11 +530,7 @@ body { background-color:var(--paper); color:var(--ink); }
   .payment-approval-signature{width:100%;height:42px;}
   .payment-approval-stamp{position:absolute;top:24px;left:50%;width:max-content;max-width:140px;transform:translateX(-50%) rotate(-9deg);border:3px double #b42318;color:#b42318;padding:5px 8px;font-weight:800;font-size:12px;line-height:1.4;text-align:center;background:rgba(255,255,255,.82);}
   .payment-approval-stamp small{font-size:10px;}
-  .approved-status {
-    color: #2E7D32;
-    font-weight: bold;
-  }
-  .approved-status {
+    .approved-status {
     color: #2E7D32;
     font-weight: bold;
   }
@@ -543,9 +538,7 @@ body { background-color:var(--paper); color:var(--ink); }
   .payment-report-section-title{text-align:center;font-weight:700;letter-spacing:.18em;background:#e9eef4;}
   .payment-report-document .report-seq{width:7%;}
   .payment-report-document .report-date{width:16%;white-space:nowrap;}
-  .payment-report-document .report-description{width:30%;}
-  .payment-report-document .report-payee{width:20%;}
-  .payment-report-document .report-amount{width:14%;white-space:nowrap;}
+      .payment-report-document .report-amount{width:14%;white-space:nowrap;}
   .payment-report-document .report-note{width:13%;}
   .payment-report-document .report-row td{text-align:center;overflow-wrap:anywhere;}
   .payment-report-document .report-row td.report-amount,.payment-report-document .report-total-amount{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
@@ -572,11 +565,7 @@ body { background-color:var(--paper); color:var(--ink); }
 
   footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-soft);display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;}
   @media (max-width:600px){.hierarchy-table-scroll{max-height:70vh;}}
-  .usage-box{margin-top:14px;padding:12px 14px;background:rgba(247,250,242,.10);border:1px solid rgba(247,250,242,.35);}
-.usage-head,.usage-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--paper);}
-.usage-head strong{color:var(--paper-2);font-weight:700;}
-.usage-track{height:12px;background:rgba(247,250,242,.2);margin:8px 0;overflow:hidden;}
-.usage-fill{height:100%;width:0;background:var(--paper);transition:width .4s,background .4s;}
+  .usage-fill{height:100%;width:0;background:var(--paper);transition:width .4s,background .4s;}
 .usage-fill.warn{background:#f2c14e;}
 .usage-fill.danger{background:#e5484d;}
   #quota-countdown{margin:16px 0;padding:14px 16px;background:var(--paper);border-left:5px solid var(--navy);color:var(--navy);font-weight:700;line-height:1.7;}
@@ -977,7 +966,11 @@ body {
 
 /* 1) 글자 크기: 제목(h1~h4, 섹션 번호, 머리말 기관명, 차트 제목)과 PDF 지급 보고서 서식은 제외 */
 body *:not(h1):not(h2):not(h3):not(h4):not(h1 *):not(h2 *):not(h3 *):not(h4 *):not(.sec-num):not(.org):not(.title):not(.chart-title):not(.app-clock):not(.payment-report-sheet):not(.payment-report-sheet *):not(canvas):not(svg):not(svg *){
-  font-size:var(--fs-base) !important;
+  font-size:var(--fs-ctl,var(--fs-base)) !important;
+}
+/* 터치 기기·모바일의 입력칸은 16px (아이폰이 입력 시 화면을 확대하지 않도록) */
+@media (pointer:coarse),(max-width:767px){
+  input,select,textarea{--fs-ctl:16px;}
 }
 
 /* 2) 표 제목 행 높이 통일 (지급 보고서 서식 표는 제외) */
@@ -1218,3 +1211,53 @@ button.btn-unapprove{background:#FBEDE5;border:1px solid #B5502A;color:#9A3F1D;f
     font-size: 32px !important;
   font-weight: 800;
 }
+
+/* =====================================================================
+   v2.13 알림(토스트) · 예산 잔액 · 중복 경고 · 검색 · 증빙 묶음
+   ===================================================================== */
+.toast-mirrored{display:none !important;}
+.toast-stack{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:10000;display:flex;flex-direction:column;gap:8px;width:min(92vw,460px);pointer-events:none;}
+.toast{pointer-events:auto;display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--navy);color:#fff;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.25);animation:toast-in .18s ease-out;}
+.toast-error{background:#8E2F22;}
+.toast-success{background:#3F6B4E;}
+.toast-text{flex:1;min-width:0;overflow-wrap:anywhere;white-space:pre-line;}
+.toast-action{flex:none;min-height:36px;padding:4px 12px;font-weight:700;color:var(--navy);background:#fff;border:0;border-radius:8px;cursor:pointer;}
+.toast-close{flex:none;width:32px;height:32px;font-size:20px;line-height:1;color:#fff;background:transparent;border:0;cursor:pointer;opacity:.8;}
+.toast-out{opacity:0;transform:translateY(6px);transition:opacity .18s,transform .18s;}
+@keyframes toast-in{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+
+.budget-hint,.dup-hint{margin-top:8px;padding:10px 12px;border:1px solid var(--line);background:var(--paper-2);border-radius:8px;}
+.budget-hint[hidden],.dup-hint[hidden]{display:none;}
+.budget-hint-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 12px;}
+.budget-hint-row span{min-width:0;color:var(--ink-soft);}
+.budget-hint-row b{color:var(--ink);font-variant-numeric:tabular-nums;}
+.budget-bar{height:8px;margin:8px 0 6px;background:var(--line);border-radius:4px;overflow:hidden;}
+.budget-bar i{display:block;height:100%;background:var(--income);}
+.budget-hint-msg{font-weight:700;}
+.budget-hint.level-warn{border-color:#C9962B;background:#FBF3DC;}
+.budget-hint.level-warn .budget-bar i{background:#C9962B;}
+.budget-hint.level-warn .budget-hint-msg{color:#7A5509;}
+.budget-hint.level-over{border-color:#B5483A;background:#FBE9E5;}
+.budget-hint.level-over .budget-bar i{background:#B5483A;}
+.budget-hint.level-over .budget-hint-msg{color:#8E2F22;}
+.dup-hint{border-color:#C9962B;background:#FBF3DC;color:#7A5509;font-weight:600;}
+
+.tx-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);}
+.tx-tools input[type="search"]{flex:1 1 220px;min-width:0;}
+.tx-range{display:flex;align-items:center;gap:6px;flex:0 1 300px;min-width:0;}
+.tx-range input{flex:1 1 0;min-width:0;text-align:right;}
+.tx-tools .tx-sep{color:var(--ink-soft);}
+.tx-tools button{min-height:36px;}
+.tx-tools .tx-export{margin-left:auto;}
+@media (max-width:600px){
+  .tx-tools input[type="search"]{flex-basis:100%;}
+  .tx-range{flex:1 1 100%;}
+  .tx-tools button{flex:1 1 0;}
+  .tx-tools .tx-export{margin-left:0;}
+}
+
+.bundle-box{margin-top:18px;padding-top:14px;border-top:1px dashed var(--line);}
+.bundle-title{margin:0 0 4px;font-weight:700;}
+.bundle-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;}
+.bundle-row select{min-width:90px;}
+@media (max-width:600px){ .bundle-row .btn-primary{flex:1 1 100%;} }
