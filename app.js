@@ -128,21 +128,10 @@ function hasSharedStorage(){
   return !!db && !!currentUser;
 }
 
-// 이 화면이 마지막으로 읽거나 저장한 설정 문서 값 (null = 문서가 없었음).
-// 저장할 때 서버 값이 이것과 다르면 다른 담당자가 먼저 저장한 것이므로 덮어쓰지 않습니다.
-const knownValues = new Map();
-function conflictError(key){
-  const error = new Error('다른 담당자가 먼저 같은 설정을 저장했습니다. 화면을 최신 내용으로 갱신했으니 변경 내용을 다시 확인한 뒤 저장해 주세요.');
-  error.code = 'accounting/conflict';
-  error.key = key;
-  return error;
-}
-
 async function storageGet(key){
   if(!hasSharedStorage()) throw new Error('Firebase에 로그인한 뒤 다시 시도해주세요.');
   const snapshot = await db.collection('accountingData').doc(key).get();
-  if(snapshot.exists){ knownValues.set(key,snapshot.data().value); return {value:snapshot.data().value}; }
-  knownValues.set(key,null);
+  if(snapshot.exists) return {value:snapshot.data().value};
   const error = new Error(`Firestore 문서가 없습니다: ${key}`);
   error.code = 'accounting/not-found';
   throw error;
@@ -166,42 +155,27 @@ function writeMeta(){
 async function storageSet(key, value){
   lastStorageError = '';
   if(!hasSharedStorage()) throw new Error('Firebase에 로그인한 뒤 다시 시도해주세요.');
-  await storageWrite([[key,value]]);
+  await db.collection('accountingData').doc(key).set({
+    value,
+    updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy:currentUser.uid,
+    updatedByEmail:currentUser.email || ''
+  });
 }
 
 async function storageSetMany(entries){
   lastStorageError = '';
   if(!hasSharedStorage()) throw new Error('Firebase에 로그인한 뒤 다시 시도해주세요.');
-  await storageWrite(entries);
-}
-
-// 예산·분류·담당자·템플릿 같은 설정 문서는 읽은 뒤 서버 값이 바뀌었으면 저장하지 않고 충돌로 알립니다.
-async function storageWrite(entries){
-  const F = ShowMeFeatures;
-  const col = db.collection('accountingData');
-  const meta = ()=>({
-    updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
-    updatedBy:currentUser.uid,
-    updatedByEmail:currentUser.email || ''
-  });
-  const guarded = entries.filter(([key])=>F.isCasKey(key) && knownValues.has(key));
-  if(guarded.length){
-    await db.runTransaction(async tx=>{
-      const snapshots = await Promise.all(guarded.map(([key])=>tx.get(col.doc(key))));   // 읽기를 쓰기보다 먼저
-      guarded.forEach(([key],index)=>{
-        const server = snapshots[index].exists ? snapshots[index].data().value : null;
-        if(F.casConflict(knownValues.get(key),server)) throw conflictError(key);
-      });
-      entries.forEach(([key,value])=>tx.set(col.doc(key),{value,...meta()}));
+  const batch = db.batch();
+  entries.forEach(([key,value])=>{
+    batch.set(db.collection('accountingData').doc(key),{
+      value,
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy:currentUser.uid,
+      updatedByEmail:currentUser.email || ''
     });
-  }else if(entries.length===1){
-    await col.doc(entries[0][0]).set({value:entries[0][1],...meta()});
-  }else{
-    const batch = db.batch();
-    entries.forEach(([key,value])=>batch.set(col.doc(key),{value,...meta()}));
-    await batch.commit();
-  }
-  entries.forEach(([key,value])=>knownValues.set(key,value));
+  });
+  await batch.commit();
 }
 
 function renderStorageNotice(){
@@ -427,7 +401,7 @@ function collectTemplateDraft(){
     if(!t) return;
     const val = key => item.querySelector('[data-qt="'+key+'"]').value;
     t.name = val('name'); t.desc = val('desc'); t.payee = val('payee'); t.spender = val('spender');
-    t.amount = val('amount').replace(/[,\s]/g,'');
+    { const raw = val('amount'); const n = parseEntryAmount(raw); t.amount = Number.isFinite(n) ? String(n) : raw.replace(/[,\s]/g,''); }
     try{ const c = JSON.parse(val('cls')||'null'); t.cls = c && c.mok ? c : null; }catch(e){ t.cls = null; }
   });
 }
@@ -576,7 +550,6 @@ function watchSharedData(){
       if(!snapshot.exists) return;
       const value = snapshot.data().value;
       if(typeof value !== 'string') return;
-      knownValues.set(key,value);
       try{
         const data = JSON.parse(value);
         if(key===YEARS_KEY){
@@ -751,11 +724,6 @@ function connectFirebase(){
     const app = firebase.initializeApp(window.FIREBASE_CONFIG);
     auth = app.auth();
     db = app.firestore();
-    // 오프라인 캐시: 재방문 시 읽기 횟수를 줄이고 연결이 불안정해도 마지막 내용을 보여 줍니다.
-    try{
-      db.enablePersistence({synchronizeTabs:true})
-        .catch(error=>console.warn('오프라인 캐시를 켜지 못했습니다:', error && error.code));
-    }catch(error){ console.warn('오프라인 캐시를 켜지 못했습니다:', error); }
 
     // Handle redirect result (must be after auth is created)
     auth.getRedirectResult()
@@ -1106,16 +1074,16 @@ async function handleFundAction(act,id){
       return;
     }
     if(act==='delete-event'){
-      if(!(await confirmAction('이 거래를 삭제할까요?',{title:'거래 삭제',confirmLabel:'삭제',danger:true}))) return;
+      if(!window.confirm('이 거래를 삭제할까요?')) return;
       fundData = await docMutate(FUND_KEY,FUND_DEFAULT,d=>{ d.events = d.events.filter(e=>e.id!==id); });
      }else if(act==='toggle-account'){
       const target = fundData.accounts.find(a=>a.id===id);
       const balance = fundBalances()[id] || 0;
       if(target && !target.closed && balance!==0 &&
-        !(await confirmAction(`이 계좌에 아직 ${fmt(balance)}이 남아 있습니다. 그래도 종료할까요?\n(해지·갈아타기라면 먼저 "인출·해지" 또는 "계좌 간 이동"을 입력해 잔액을 0으로 만드세요.)`,{title:'계좌 종료',confirmLabel:'그래도 종료',danger:true}))) return;
+        !window.confirm(`이 계좌에 아직 ${fmt(balance)}이 남아 있습니다. 그래도 종료할까요?\n(해지·갈아타기라면 먼저 "인출·해지" 또는 "계좌 간 이동"을 입력해 잔액을 0으로 만드세요.)`)) return;
       fundData = await docMutate(FUND_KEY,FUND_DEFAULT,d=>{ const a=d.accounts.find(x=>x.id===id); if(a) a.closed=!a.closed; });
     }else if(act==='delete-account'){
-      if(!(await confirmAction('이 계좌를 삭제할까요?',{title:'계좌 삭제',confirmLabel:'삭제',danger:true}))) return;
+      if(!window.confirm('이 계좌를 삭제할까요?')) return;
       fundData = await docMutate(FUND_KEY,FUND_DEFAULT,d=>{
         if(d.events.some(e=>e.accountId===id||e.toAccountId===id)) throw new Error('거래가 있는 계좌는 삭제할 수 없습니다. "종료"를 사용해 주세요.');
         d.accounts = d.accounts.filter(a=>a.id!==id);
@@ -1233,7 +1201,7 @@ async function addDeposit(){
 
 async function handleDepositAction(act,id){
   const msg = document.getElementById('deposit-msg');
-  if(act==='delete' && !(await confirmAction('이 예치 기록을 삭제할까요?',{title:'예치 기록 삭제',confirmLabel:'삭제',danger:true}))) return;
+  if(act==='delete' && !window.confirm('이 예치 기록을 삭제할까요?')) return;
   try{
     deposits = await docMutate(DEPOSITS_KEY,[],list=>{
       const i = list.findIndex(d=>d.id===id);
@@ -2080,6 +2048,28 @@ function formatBudgetAmount(value){
   return Math.trunc(amount).toLocaleString('en-US');
 }
 
+/**
+ * 새 내역 입력 금액 파싱: "50000", "50,000", "\50,000", "₩50,000", "50,000원", "-50,000", "△50,000" 등.
+ * 정수가 아니면 NaN. (전각 숫자·기호도 허용)
+ */
+function parseEntryAmount(value){
+  const WON = /[\\\u20A9\uFFE6\uFF3C\u00A5\uFFE5]/g; // \ ₩ ￦ ＼ ¥ ￥ (원 기호)
+  let s = String(value ?? '')
+    .replace(/[\uFF10-\uFF19]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)) // 전각 숫자
+    .replace(/[\uFF0C]/g, ',')
+    .replace(/[\u2212\u2013\u2014\uFF0D]/g, '-') // 유니코드 마이너스·대시
+    .trim();
+  let negative = false;
+  if(/^\(.*\)$/.test(s)){ negative = true; s = s.slice(1,-1); } // (50,000) 회계식 음수
+  s = s.replace(/[\s,]/g,'').replace(WON,'').replace(/원$/,'');
+  if(s[0] === '\u25B3' || s[0] === '\u25B2'){ negative = !negative; s = s.slice(1); } // △ ▲ 음수 표기
+  if(s[0] === '-'){ negative = !negative; s = s.slice(1); }
+  s = s.replace(WON,''); // -₩50,000 처럼 부호 뒤에 오는 기호
+  if(!/^\d+$/.test(s)) return NaN;
+  const n = Number(s);
+  return negative ? -n : n;
+}
+
 function parseBudgetAmount(value){
   const raw = String(value).replace(/,/g,'').trim();
   if(!raw) return 0;
@@ -2496,8 +2486,7 @@ function loadImageFromFile(file){
   });
 }
 
-// 이미지는 JPEG로 줄여서 약 220KB(문자 30만 자) 안쪽으로 만든다. 읽을 때마다 비용이 들고 문서가 커지는 것을 막기 위해서다.
-const RECEIPT_IMAGE_TARGET_CHARS = 300000;
+// 이미지는 JPEG로 줄여서(긴 변 최대 1280px, 품질 0.7부터) 한 문서에 들어가게 만든다
 async function buildReceiptPayload(file){
   const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
   if(isPdf){
@@ -2508,8 +2497,8 @@ async function buildReceiptPayload(file){
   if(!String(file.type).startsWith('image/')) throw new Error('이미지 또는 PDF 파일만 첨부할 수 있습니다.');
   const img = await loadImageFromFile(file);
   const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height;
-  let maxSide = 1600, quality = 0.75, last = null;
-  for(let i=0;i<16;i++){
+  let maxSide = 1280, quality = 0.7;
+  for(let i=0;i<12;i++){
     const scale = Math.min(1, maxSide/Math.max(w0,h0));
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1,Math.round(w0*scale));
@@ -2519,11 +2508,11 @@ async function buildReceiptPayload(file){
     ctx.fillRect(0,0,canvas.width,canvas.height);
     ctx.drawImage(img,0,0,canvas.width,canvas.height);
     const data = canvas.toDataURL('image/jpeg',quality);
-    last = {name:file.name||'receipt.jpg', type:'image/jpeg', data, size:file.size};
-    if(data.length <= RECEIPT_IMAGE_TARGET_CHARS) return last;
-    if(quality>0.5) quality -= 0.08; else maxSide = Math.round(maxSide*0.85);
+    if(data.length <= RECEIPT_MAX_CHARS){
+      return {name:file.name||'receipt.jpg', type:'image/jpeg', data, size:file.size};
+    }
+    if(quality>0.55) quality -= 0.1; else maxSide = Math.round(maxSide*0.8);
   }
-  if(last && last.data.length <= RECEIPT_MAX_CHARS) return last;      // 목표에는 못 미쳐도 문서 한도 안이면 저장
   throw new Error('이미지를 저장 가능한 크기로 줄이지 못했습니다.');
 }
 
@@ -2754,7 +2743,6 @@ async function loadReportSummary(force=false){
     if(token!==reportLoadToken) return;
     reportSummary = summary;
     reportMonthCache = {};
-    if(typeof updateBudgetHint==='function') updateBudgetHint();
     const total = Object.values(summary.cells).reduce((sum,cell)=>sum+cell.n,0);
     setReportNote(
       `승인된 ${total.toLocaleString('ko-KR')}건 기준 집계입니다.` +
@@ -3034,7 +3022,7 @@ async function repairLedger(){
 }
 
 async function exportLedgerBackup(){
-  if(!(await confirmAction('백업을 위해 이 회계연도의 모든 내역을 서버에서 읽습니다. 계속할까요?',{title:'장부 백업',confirmLabel:'백업 시작'}))) return;
+  if(!window.confirm('백업을 위해 이 회계연도의 모든 내역을 서버에서 읽습니다. 계속할까요?')) return;
   try{
     const snapshot = await entriesRef(currentYear).get();
     const all = snapshot.docs.map(doc=>doc.data()).sort(compareEntries);
@@ -3567,7 +3555,7 @@ function renderTxTable(mode){
   body.innerHTML = '';
 
 const source = ledger;
-  let filtered = source
+  const filtered = source
     .filter(t => monthSel==='전체' || t.month===monthSel)
     .filter(t => isReport || currentStatusEntry==='전체' || t.status===currentStatusEntry)
     // 결의 내역에는 입력완료(미결의) 건을 넣지 않음 — 입력 내역 상자에서만 관리
@@ -3577,8 +3565,6 @@ const source = ledger;
             .slice()
     .sort(isReport ? ((a,b) => (b.date||'').localeCompare(a.date||'')) : compareByResolution);
 
-  if(ShowMeFeatures.isFilterActive(txTools[mode])) filtered = applyTxFilter(filtered,txTools[mode]);
-  lastTxFiltered[mode] = filtered;
   const shown = filtered;
 
   shown.forEach(t=>{
@@ -3621,7 +3607,6 @@ const source = ledger;
   }
 
   let countText = `${monthSel} 거래 ${filtered.length.toLocaleString('ko-KR')}건`;
-  if(ShowMeFeatures.isFilterActive(txTools[mode])) countText += ' · 검색 조건 적용 중';
   if(!isReport && olderHasMore) countText += ' · 최근 내역만 불러온 상태입니다. 이전 내역은 아래 "더 보기"로 불러오세요.';
   document.getElementById(countId).textContent = countText;
   
@@ -4022,7 +4007,6 @@ function beginEntryEdit(entry){
   document.getElementById('f-spender').value = entry.spender || '';
   document.getElementById('f-amount').value = entry.amount ?? '';
   mokSelect.value = classification;
-  refreshEntryHints();
   document.getElementById('btn-add').textContent = '수정 저장';
   document.getElementById('btn-cancel-entry-edit').classList.remove('hidden');
   showExistingReceipt(entry);
@@ -4038,53 +4022,15 @@ async function deleteSelectedInputEntries(){
   if(!(await confirmAction(`입력완료 내역 ${entries.length}건을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`,{title:'선택 삭제',confirmLabel:'삭제',danger:true}))) return;
     const ids = new Set(entries.map(entry=>entry.id));
   try{
-    const backup = await backupEntriesForUndo(entries);    // 실행 취소용 사본 (영수증 포함)
     await entryTransaction([...ids],(found,api)=>{
       if(found.size!==ids.size || [...found.values()].some(entry=>entry.status!=='input-complete' || entry.locked)){
         throw stateChangedError('선택한 내역의 상태가 바뀌었습니다. 목록을 새로 확인해 주세요.');
       }
       ids.forEach(id=>api.remove(id));
     });
-    showToast(`${entries.length}건을 삭제했습니다.`,{actionLabel:'실행 취소',onAction:()=>undoDeleteEntries(backup)});
+    setStatus(`${entries.length}건을 삭제했습니다.`);
   }catch(error){
     setStatus(`내역 삭제에 실패했습니다: ${error.message || String(error)}`,true);
-  }
-  renderReport();
-  renderEntryView();
-}
-
-async function backupEntriesForUndo(entries){
-  const items = [];
-  for(const entry of entries){
-    let receipt = null;
-    if(entry.hasReceipt){
-      try{ receipt = await fetchReceipt(entry.id); }catch(error){ console.warn('영수증 사본을 만들지 못했습니다',entry.id,error); }
-    }
-    items.push({entry:JSON.parse(JSON.stringify(entry)),receipt});
-  }
-  return {year:currentYear,items};
-}
-
-async function undoDeleteEntries(backup){
-  if(backup.year!==currentYear){
-    showToast('회계연도를 바꾼 뒤에는 실행 취소할 수 없습니다.',{type:'error'});
-    return;
-  }
-  try{
-    for(const {entry,receipt} of backup.items){
-      if(receipt) await saveReceipt(entry.id,receipt);          // 영수증을 먼저 되살림
-    }
-    await entryTransaction(backup.items.map(item=>item.entry.id),(found,api)=>{
-      if(found.size) throw stateChangedError('같은 내역이 이미 있어 복원할 수 없습니다.');
-      backup.items.forEach(({entry,receipt})=>{
-        const restored = {...entry};
-        if(restored.hasReceipt && !receipt) applyReceiptMeta(restored,null,true);
-        api.set(restored);
-      });
-    });
-    showToast(`${backup.items.length}건을 복원했습니다.`,{type:'success'});
-  }catch(error){
-    showToast(`복원하지 못했습니다: ${error.message || String(error)}`,{type:'error'});
   }
   renderReport();
   renderEntryView();
@@ -4939,7 +4885,6 @@ function renderEntryView(){
   refreshMokOptions();
   renderTxTable('entry');
     updateLoadMoreButton();
-  refreshEntryHints();
 }
 
 function renderClosing(){
@@ -4957,7 +4902,6 @@ function renderClosing(){
   closeBtn.textContent = `${next}월 마감하기`;
   closeBtn.classList.toggle('hidden', next>12);
   document.getElementById('btn-reopen-month').classList.toggle('hidden', closedThrough===0);
-  renderBundleControls();
 }
 
 async function changeClosure(delta){
@@ -5055,368 +4999,17 @@ function confirmAction(message, options={}){
   });
 }
 
-// 처리 결과는 줄글 대신 잠깐 떴다 사라지는 알림으로 보여 줍니다.
 function setStatus(msg,isError=false){
   const el = document.getElementById('save-status');
-  if(el){ el.textContent = ''; el.classList.remove('status-error'); }
-  if(msg) showToast(msg,{type:isError?'error':'info'});
-}
-
-function showToast(message,{type='info',duration,actionLabel,onAction}={}){
-  const stack = document.getElementById('toast-stack');
-  if(!stack) return null;
-  const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
-  toast.setAttribute('role',type==='error'?'alert':'status');
-  const text = document.createElement('span');
-  text.className = 'toast-text';
-  text.textContent = message;
-  toast.appendChild(text);
-  let timer = null;
-  const close = ()=>{
-    clearTimeout(timer);
-    toast.classList.add('toast-out');
-    setTimeout(()=>toast.remove(),200);
-  };
-  if(actionLabel && typeof onAction==='function'){
-    const action = document.createElement('button');
-    action.type = 'button';
-    action.className = 'toast-action';
-    action.textContent = actionLabel;
-    action.addEventListener('click',()=>{ close(); onAction(); });
-    toast.appendChild(action);
-  }
-  const closeBtn = document.createElement('button');
-  closeBtn.type = 'button';
-  closeBtn.className = 'toast-close';
-  closeBtn.setAttribute('aria-label','알림 닫기');
-  closeBtn.textContent = '×';
-  closeBtn.addEventListener('click',close);
-  toast.appendChild(closeBtn);
-  while(stack.children.length>=4) stack.firstElementChild.remove();
-  stack.appendChild(toast);
-  timer = setTimeout(close, duration ?? (type==='error' ? 9000 : (actionLabel ? 10000 : 4500)));
-  return {close};
-}
-
-// 화면 곳곳의 결과 문구(role="status")를 같은 알림으로 보여 주고 자리에 있던 줄글은 숨깁니다.
-function mirrorStatusToToast(ids){
-  ids.forEach(id=>{
-    const el = document.getElementById(id);
-    if(!el) return;
-    el.classList.add('toast-mirrored');
-    new MutationObserver(()=>{
-      const text = (el.textContent||'').trim();
-      if(text) showToast(text,{type:/실패|오류|못했|거부|올바르지|불일치|초과|없습니다/.test(text)?'error':'info'});
-    }).observe(el,{childList:true,characterData:true,subtree:true});
-  });
-}
-
-// ===================== v2.13: 예산 잔액 · 중복 경고 · 검색 · 증빙 묶음 =====================
-function currentMokClassification(){
-  try{
-    const value = JSON.parse(document.getElementById('f-mok').value);
-    return value && value.mok ? value : null;
-  }catch(error){ return null; }
-}
-
-let budgetHintToken = 0;
-// 세부 계정과목을 고르면 그 목의 예산·집행·잔여를 보여 주고, 지금 입력한 금액을 넣으면 어떻게 되는지 알려 줍니다.
-async function updateBudgetHint(){
-  const box = document.getElementById('budget-hint');
-  if(!box) return;
-  const cls = currentMokClassification();
-  if(!cls || !hasSharedStorage()){ box.hidden = true; return; }
-  const F = ShowMeFeatures;
-  const token = ++budgetHintToken;
-  if(!reportSummary && !reportLoading){
-    box.hidden = false;
-    box.className = 'budget-hint';
-    box.textContent = '예산 집행 현황을 불러오는 중…';
-    try{ await loadReportSummary(); }catch(error){ /* 아래에서 집계 없이 표시 */ }
-    if(token!==budgetHintToken) return;
-  }
-  const type = currentGubun==='수입' ? 'income' : 'expense';
-  const gubun = type==='income' ? '수입' : '지출';
-  const budgetAmount = Number(budget[mokBudgetKey(type,cls.gwan,cls.hang,cls.mok)]) || 0;
-  const approved = reportSummary ? F.approvedSpentFromSummary(reportSummary.cells,gubun,cls.gwan,cls.hang,cls.mok) : 0;
-  const pending = F.pendingSpent(ledger,{gubun,gwan:cls.gwan,hang:cls.hang,category:cls.mok},
-    {excludeId:editingEntryId,resolve:resolveEntryClassification});
-  const parsed = F.parseAmount(document.getElementById('f-amount').value);
-  const st = F.budgetStatus({type,budget:budgetAmount,approved,pending,newAmount:Number.isFinite(parsed)?parsed:0});
-  const pct = v=>v==null ? '-' : `${v.toFixed(1)}%`;
-  let msg = '';
-  if(st.level==='over'){
-    msg = budgetAmount>0
-      ? `⛔ 이 금액을 넣으면 예산을 ${fmt(st.overBy)} 초과합니다.`
-      : '⛔ 이 목에는 배정된 예산이 없습니다.';
-  }else if(st.level==='warn'){
-    msg = `⚠ 이 금액을 넣으면 집행률이 ${pct(st.pctAfter)}가 됩니다. (잔여 ${fmt(st.remainingAfter)})`;
-  }else if(st.level==='nobudget'){
-    msg = '이 목에는 배정된 예산이 없습니다.';
-  }else if(st.level==='info'){
-    msg = budgetAmount>0 ? `수입 예산 대비 ${pct(st.pctAfter)}` : '수입 예산이 없는 항목입니다.';
-  }else if(st.newAmount){
-    msg = `이 금액을 넣으면 잔여는 ${fmt(st.remainingAfter)} (집행률 ${pct(st.pctAfter)})`;
-  }else{
-    msg = `현재 집행률 ${pct(st.pctNow)}`;
-  }
-  const label = type==='income' ? '수입' : '집행';
-  const width = st.pctAfter==null ? (st.level==='over'?100:0) : Math.max(0,Math.min(100,st.pctAfter));
-  box.hidden = false;
-  box.className = `budget-hint level-${st.level}`;
-  box.innerHTML =
-    `<div class="budget-hint-row"><span>예산 <b>${fmt(st.budget)}</b></span><span>승인 ${label} <b>${fmt(st.approved)}</b></span>` +
-    `<span>진행 중 <b>${fmt(st.pending)}</b></span><span>${type==='income'?'남은 목표':'잔여'} <b>${fmt(st.remaining)}</b></span></div>` +
-    `<div class="budget-bar"><i style="width:${width.toFixed(1)}%"></i></div>` +
-    `<div class="budget-hint-msg">${escapeHTML(msg)}</div>` +
-    (reportSummary ? '' : '<div>승인 집계를 불러오지 못해 진행 중 금액만 반영했습니다.</div>');
-}
-
-function currentDuplicateCandidate(){
-  const amount = ShowMeFeatures.parseAmount(document.getElementById('f-amount').value);
-  return {
-    date:parseEntryDate(document.getElementById('f-date').value) || '',
-    amount:Number.isFinite(amount) ? amount : null,
-    payee:document.getElementById('f-payee').value,
-    gubun:currentGubun
-  };
-}
-
-function describeDuplicate(entry){
-  const status = STATUS_LABEL[entry.status] || entry.status || '';
-  return `· ${entry.date} ${entry.payee||''} ${fmt(entry.amount)} (${status}${entry.managementNo?`, ${entry.managementNo}`:''}) ${entry.desc||''}`.trim();
-}
-
-function updateDupHint(){
-  const box = document.getElementById('dup-hint');
-  if(!box) return;
-  const dups = ShowMeFeatures.findDuplicates(ledger,currentDuplicateCandidate(),{excludeId:editingEntryId});
-  if(!dups.length){ box.hidden = true; box.textContent = ''; return; }
-  box.hidden = false;
-  box.textContent = `⚠ 같은 결제일·금액·지급처의 내역이 ${dups.length}건 있습니다. ${describeDuplicate(dups[0]).replace(/^· /,'')}`;
-}
-
-function refreshEntryHints(){
-  updateBudgetHint();
-  updateDupHint();
-}
-
-// ---------- 검색·필터·엑셀 내보내기 ----------
-const txTools = {
-  report:{text:'',min:'',max:''},
-  entry:{text:'',min:'',max:''}
-};
-const lastTxFiltered = {report:[],entry:[]};
-
-function applyTxFilter(list,filter){
-  const views = list.map(t=>({...t,
-    resolutionNo:entryResolutionNo(t)||'',
-    managementNo:String(t.managementNo || entryApprovalNo(t) || '')}));
-  const ids = new Set(ShowMeFeatures.filterEntries(views,filter).map(v=>v.id));
-  return list.filter(t=>ids.has(t.id));
-}
-
-function mountTxTools(mode){
-  const host = document.getElementById(`tx-tools-${mode}`);
-  if(!host || host.dataset.mounted) return;
-  host.dataset.mounted = '1';
-  host.innerHTML =
-    '<input type="search" data-tx-field="text" placeholder="내용·지급처·담당자·목·번호 검색" aria-label="내역 검색" autocomplete="off">' +
-    '<div class="tx-range"><input type="text" data-tx-field="min" inputmode="numeric" placeholder="최소 금액" aria-label="최소 금액" autocomplete="off">' +
-    '<span class="tx-sep">~</span>' +
-    '<input type="text" data-tx-field="max" inputmode="numeric" placeholder="최대 금액" aria-label="최대 금액" autocomplete="off"></div>' +
-    '<button type="button" class="btn-revert" data-tx-reset>초기화</button>' +
-    '<button type="button" class="btn-revert tx-export" data-tx-export>엑셀 내보내기</button>';
-  let timer = null;
-  host.addEventListener('input',event=>{
-    const field = event.target.dataset && event.target.dataset.txField;
-    if(!field) return;
-    txTools[mode][field] = event.target.value;
-    clearTimeout(timer);
-    timer = setTimeout(()=>renderTxTable(mode),150);
-  });
-  host.addEventListener('click',event=>{
-    if(event.target.closest('[data-tx-reset]')){
-      txTools[mode] = {text:'',min:'',max:''};
-      host.querySelectorAll('[data-tx-field]').forEach(input=>{ input.value = ''; });
-      renderTxTable(mode);
-    }else if(event.target.closest('[data-tx-export]')){
-      exportTxTable(mode);
+  el.textContent = msg;
+  el.classList.toggle('status-error',isError);
+  if(statusMessageTimer) clearTimeout(statusMessageTimer);
+  statusMessageTimer = setTimeout(()=>{
+    if(el.textContent===msg){
+      el.textContent='';
+      el.classList.remove('status-error');
     }
-  });
-}
-
-function exportTxTable(mode){
-  const rows = lastTxFiltered[mode] || [];
-  if(!rows.length){ showToast('내보낼 내역이 없습니다.',{type:'error'}); return; }
-  if(typeof XLSX==='undefined'){ showToast('엑셀 라이브러리를 불러오지 못했습니다. 새로고침한 뒤 다시 시도해 주세요.',{type:'error'}); return; }
-  const aoa = ShowMeFeatures.entriesToRows(rows,{
-    mode:mode==='report' ? 'report' : 'entry',
-    resolutionNo:entryResolutionNo,
-    approvalNo:entryApprovalNo,
-    statusLabel:status=>STATUS_LABEL[status]||status
-  });
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = aoa[0].map((_,i)=>({wch:[6,7,8,8,8,8].includes(i)?14:(i===6?28:16)}));
-  const wb = XLSX.utils.book_new();
-  const title = mode==='report' ? '세부거래내역' : '결의내역';
-  XLSX.utils.book_append_sheet(wb,ws,title);
-  const month = mode==='report' ? currentMonthReport : currentMonthEntry;
-  const filtered = ShowMeFeatures.isFilterActive(txTools[mode]);
-  XLSX.writeFile(wb,`${currentYear}_${title}_${month}${filtered?'_검색결과':''}.xlsx`);
-  showToast(`${rows.length}건을 엑셀로 내보냈습니다.`,{type:'success'});
-}
-
-// ---------- 월 마감 증빙 묶음 ----------
-let bundleBusy = false;
-
-function renderBundleControls(){
-  const select = document.getElementById('bundle-month');
-  const button = document.getElementById('btn-bundle-download');
-  const status = document.getElementById('bundle-status');
-  if(!select || !button) return;
-  const previous = select.value;
-  select.innerHTML = '';
-  for(let month=1;month<=closedThrough;month++){
-    const option = document.createElement('option');
-    option.value = String(month);
-    option.textContent = `${month}월`;
-    select.appendChild(option);
-  }
-  if(previous && Number(previous)<=closedThrough) select.value = previous;
-  else if(closedThrough) select.value = String(closedThrough);
-  const none = closedThrough<1;
-  select.disabled = none;
-  button.disabled = none || bundleBusy;
-  if(status && !bundleBusy){
-    const hint = '마감한 달이 생기면 증빙 묶음을 받을 수 있습니다.';
-    if(none) status.textContent = hint;
-    else if(status.textContent===hint) status.textContent = '';
-  }
-}
-
-function approvalFromEntries(entries){
-  const at = entries.map(e=>e.approvedAt).filter(Boolean).sort().slice(-1)[0] || '';
-  const by = entries.map(e=>e.approvedBy).filter(Boolean)[0] || '';
-  const dateLabel = at ? formatEntryDate(String(at).slice(0,10)) : formatApprovalDate(entries[0]);
-  return {label:'지급 승인 완료',date:dateLabel + (at && at.length>10 ? ' ' + String(at).slice(11,16) : ''),approver:by};
-}
-
-async function downloadMonthBundle(){
-  if(bundleBusy) return;
-  const month = Number(document.getElementById('bundle-month').value);
-  if(!(month>=1 && month<=closedThrough)){ showToast('마감한 달을 선택해 주세요.',{type:'error'}); return; }
-  if(typeof JSZip==='undefined' || typeof XLSX==='undefined' || typeof window.html2pdf==='undefined'){
-    showToast('ZIP·엑셀·PDF 라이브러리를 불러오지 못했습니다. 새로고침한 뒤 다시 시도해 주세요.',{type:'error'});
-    return;
-  }
-  const ok = await confirmAction(
-    `${currentYear}년 ${month}월 승인 내역을 서버에서 읽어 지급신청서 PDF와 영수증을 ZIP 한 파일로 만듭니다.\\n내역이 많으면 몇 분 걸릴 수 있으니 완료될 때까지 이 화면을 닫지 마세요. 계속할까요?`,
-    {title:'증빙 묶음 만들기',confirmLabel:'만들기'});
-  if(!ok) return;
-  const year = currentYear;
-  const button = document.getElementById('btn-bundle-download');
-  const status = document.getElementById('bundle-status');
-  const progress = text=>{ status.textContent = text; };
-  bundleBusy = true;
-  button.disabled = true;
-  try{
-    progress('승인 내역을 읽는 중…');
-    const snapshot = await entriesRef(year).where('status','in',APPROVED_STATES).get();
-    const entries = snapshot.docs.map(doc=>doc.data()).filter(entry=>monthNo(entrySummaryMonth(entry))===month);
-    if(!entries.length) throw new Error(`${month}월에 승인된 내역이 없습니다.`);
-    const F = ShowMeFeatures;
-    const groups = F.groupForBundle(entries);
-    const receiptMeta = new Map();
-    entries.filter(entry=>entry.hasReceipt).forEach(entry=>receiptMeta.set(entry.id,{type:entry.receiptType,name:entry.receiptName}));
-    const plan = F.bundlePlan({year,month,groups,receipts:receiptMeta});
-    const zip = new JSZip();
-    const missing = [];
-
-    // 1) 영수증 원본 (지급신청서 PDF보다 먼저: 파일 이름을 승인내역 엑셀에도 적기 위해)
-    const receiptItems = plan.items.filter(item=>item.kind==='receipt');
-    const receiptFileByEntry = new Map();
-    for(let i=0;i<receiptItems.length;i++){
-      if(year!==currentYear) throw new Error('작업 중 회계연도가 바뀌어 중단했습니다.');
-      const item = receiptItems[i];
-      progress(`영수증 내려받는 중 (${i+1}/${receiptItems.length})…`);
-      let receipt = null;
-      try{ receipt = await fetchReceipt(item.entryId); }catch(error){ console.warn('영수증을 읽지 못했습니다',item.entryId,error); }
-      if(receipt && receipt.data){
-        zip.file(item.path,F.dataUrlToBytes(receipt.data));
-        receiptFileByEntry.set(item.entryId,item.path.split('/').pop());
-      }else{
-        missing.push(item.entryId);
-      }
-    }
-
-    // 2) 지급신청서 PDF (관리번호 묶음마다 한 개)
-    const pdfItems = plan.items.filter(item=>item.kind==='pdf');
-    for(let i=0;i<pdfItems.length;i++){
-      if(year!==currentYear) throw new Error('작업 중 회계연도가 바뀌어 중단했습니다.');
-      const group = groups.find(g=>g.key===pdfItems[i].groupKey);
-      progress(`지급신청서 PDF 만드는 중 (${i+1}/${pdfItems.length})…`);
-      const blob = await buildReportPdfBlob(group.entries,group.spender,approvalFromEntries(group.entries),group.managementNo||null);
-      zip.file(pdfItems[i].path,blob);
-    }
-
-    // 3) 승인내역 엑셀
-    progress('승인내역 엑셀 만드는 중…');
-    const strip = value=>String(value||'').replace(/_(관|항)$/,'');
-    const aoa = [['관리번호','결제일','구분','관','항','목','내용','지급처','담당자','수입','지출','승인일시','승인자','영수증 파일']];
-    let income = 0, expense = 0, count = 0;
-    groups.forEach(group=>group.entries.forEach(entry=>{
-      const amount = Number(entry.amount)||0;
-      if(entry.gubun==='수입') income += amount; else expense += amount;
-      count++;
-      aoa.push([entry.managementNo||'',entry.date||'',entry.gubun||'',strip(entry.gwan),strip(entry.hang),entry.category||'',
-        entry.desc||'',entry.payee||'',entry.spender||'',entry.gubun==='수입'?amount:'',entry.gubun==='지출'?amount:'',
-        String(entry.approvedAt||'').replace('T',' ').slice(0,16),entry.approvedBy||'',
-        receiptFileByEntry.get(entry.id) || (entry.hasReceipt ? '(영수증 읽기 실패)' : '')]);
-    }));
-    aoa.push(['합계',`${count}건`,'','','','','','','',income,expense,'','','']);
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = [16,12,6,14,14,18,28,16,10,12,12,17,24,34].map(wch=>({wch}));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,ws,`${month}월 승인내역`);
-    zip.file(plan.items[0].path,XLSX.write(wb,{bookType:'xlsx',type:'array'}));
-    if(missing.length){
-      zip.file(`${plan.root}/누락_영수증.txt`,`읽지 못한 영수증이 있습니다. 해당 내역 ID:\\n${missing.join('\\n')}\\n`);
-    }
-
-    const blob = await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}},meta=>{
-      progress(`ZIP 압축 중… ${Math.round(meta.percent)}%`);
-    });
-    downloadBlob(blob,`${plan.root}.zip`);
-    progress(`완료: 지급신청서 ${pdfItems.length}개, 영수증 ${receiptFileByEntry.size}개, 합계 ${fmt(expense - income >= 0 ? expense : income)}`);
-    showToast(missing.length
-      ? `증빙 묶음을 만들었습니다. 읽지 못한 영수증 ${missing.length}건은 누락_영수증.txt에 적었습니다.`
-      : `증빙 묶음을 만들었습니다. (지급신청서 ${pdfItems.length}개 · 영수증 ${receiptFileByEntry.size}개)`,
-      {type:missing.length?'error':'success'});
-  }catch(error){
-    progress('');
-    showToast(`증빙 묶음을 만들지 못했습니다: ${error.message || String(error)}`,{type:'error'});
-  }finally{
-    bundleBusy = false;
-    renderBundleControls();
-  }
-}
-
-function bindFeatureUI(){
-  mountTxTools('report');
-  mountTxTools('entry');
-  const mok = document.getElementById('f-mok');
-  if(mok) mok.addEventListener('change',refreshEntryHints);
-  ['f-amount','f-date','f-payee'].forEach(id=>{
-    const el = document.getElementById(id);
-    if(el) el.addEventListener('input',()=>{ if(id==='f-amount') updateBudgetHint(); updateDupHint(); });
-  });
-  const picker = document.getElementById('f-date-picker');
-  if(picker) picker.addEventListener('change',updateDupHint);
-  const bundle = document.getElementById('btn-bundle-download');
-  if(bundle) bundle.addEventListener('click',downloadMonthBundle);
-  mirrorStatusToToast(['staff-name-status','transfer-status','closing-msg','fund-account-msg','fund-event-msg','deposit-msg']);
+  },4000);
 }
 
 // ---------- form ----------
@@ -5610,9 +5203,9 @@ async function addEntry(){
     setStatus(`${currentYear} 회계연도 이후 날짜는 입력할 수 없습니다.`, true);
     return;
   }
-const amount = Number(amountRaw);
+const amount = parseEntryAmount(amountRaw);
 if(!Number.isFinite(amount) || !Number.isInteger(amount) || amount===0){
-  setStatus('금액은 0이 아닌 정수로 입력해주세요. 환불·반환은 음수로 입력합니다.', true);
+  setStatus('금액은 0이 아닌 정수로 입력해주세요. (50,000 / ₩50,000 / 50,000원 형식 가능, 환불·반환은 음수)', true);
   return;
 }
   if(!classification || !hasAccount(currentGubun==='수입' ? 'income' : 'expense',classification)){
@@ -5620,16 +5213,6 @@ if(!Number.isFinite(amount) || !Number.isInteger(amount) || amount===0){
     return;
   }
      const month = (parseInt(date.split('-')[1],10)) + '월';
-
-  const duplicates = ShowMeFeatures.findDuplicates(ledger,{date,amount,payee,gubun:currentGubun},{excludeId:editingEntryId});
-  if(duplicates.length){
-    const lines = duplicates.slice(0,3).map(describeDuplicate).join('\n');
-    const more = duplicates.length>3 ? `\n… 외 ${duplicates.length-3}건` : '';
-    const proceed = await confirmAction(
-      `같은 결제일·금액·지급처의 내역이 이미 ${duplicates.length}건 있습니다.\n\n${lines}${more}\n\n그래도 저장할까요?`,
-      {title:'중복 가능성',confirmLabel:'그래도 저장'});
-    if(!proceed) return;
-  }
 
   let receiptPayload = null;
   if(selectedReceiptFile){
@@ -5701,7 +5284,6 @@ function clearEntryForm(){
   document.getElementById('f-spender').value = '';
   receiptRemoveOnSave = false;
   resetReceiptInput();
-  refreshEntryHints();
 }
 
 function markEditingRow(){
@@ -5746,7 +5328,6 @@ document.getElementById('btn-export-ledger').addEventListener('click',exportLedg
 document.getElementById('btn-gubun-income').addEventListener('click', ()=>setGubun('수입'));
 document.getElementById('btn-gubun-expense').addEventListener('click', ()=>setGubun('지출'));
 document.getElementById('btn-add').addEventListener('click', addEntry);
-bindFeatureUI();
 document.getElementById('btn-cancel-entry-edit').addEventListener('click',()=>{
   cancelEntryEdit();
   setStatus('수정을 취소했습니다.');
@@ -5832,7 +5413,7 @@ document.getElementById('btn-transfer-download').addEventListener('click',downlo
           desc:document.getElementById('f-desc').value.trim(),
           payee:document.getElementById('f-payee').value.trim(),
           spender:document.getElementById('f-spender').value.trim(),
-          amount:/^-?\d+$/.test(document.getElementById('f-amount').value.replace(/[,\s]/g,'')) ? document.getElementById('f-amount').value.replace(/[,\s]/g,'') : ''
+          amount:(()=>{ const n = parseEntryAmount(document.getElementById('f-amount').value); return Number.isFinite(n) ? String(n) : ''; })()
         };
       }
       templateDraft.push(newTemplateDraft(base));
@@ -6195,66 +5776,30 @@ document.getElementById('some-button')?.addEventListener('click', async function
   }
 });
 
-
-// 탭 영역 오른쪽 KST 시계 (시:분:초) 및 날짜 추가
+// 탭 영역 오른쪽 KST 시계 (시:분:초)
 function startAppClock(){
   const el = document.getElementById('app-clock');
-  const dateEl = document.getElementById('app-date'); // 1. 날짜 엘리먼트 가져오기
   if(!el) return;
   const pad = n => String(n).padStart(2,'0');
-  
-  // 요일 배열 생성
-  const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
-  let lastDateStr = ""; // 날짜가 바뀔 때만 화면을 갱신하기 위한 변수
-
   const tick = ()=>{
     try{
-      const now = new Date();
-      
-      // --- 날짜 처리 영역 시작 ---
-      if (dateEl) {
-        // KST 기준으로 연, 월, 일, 요일 추출
-        const dateParts = new Intl.DateTimeFormat('ko-KR', {
-          timeZone: 'Asia/Seoul',
-          year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short'
-        }).formatToParts(now);
-        
-        const getValue = type => dateParts.find(p => p.type === type)?.value || '';
-        
-        // "2026년 10월 5일 (월)" 형식으로 문자열 조립
-        const dateText = `${getValue('year')}년 ${getValue('month')}월 ${getValue('day')}일 (${getValue('weekday')})`;
-        
-        // 매초 화면을 다시 그리지 않고, 날짜가 바뀔 때만(또는 처음 실행 시) 딱 한 번 갱신
-        if (lastDateStr !== dateText) {
-          dateEl.textContent = dateText;
-          lastDateStr = dateText;
-        }
-      }
-      // --- 날짜 처리 영역 끝 ---
-
       const parts = new Intl.DateTimeFormat('en-GB',{
         timeZone:'Asia/Seoul',
         hour:'2-digit', minute:'2-digit', second:'2-digit',
         hour12:false
-      }).formatToParts(now);
+      }).formatToParts(new Date());
       const get = type => parts.find(p=>p.type===type)?.value || '00';
       const h = get('hour'), m = get('minute'), s = get('second');
       const text = `${h}:${m}:${s}`;
       el.textContent = text;
       const dParts = new Intl.DateTimeFormat('en-CA',{
         timeZone:'Asia/Seoul', year:'numeric', month:'2-digit', day:'2-digit'
-      }).format(now);
+      }).format(new Date());
       el.setAttribute('datetime', `${dParts}T${text}+09:00`);
     }catch(e){
       const now = new Date();
       const kst = new Date(now.getTime() + (9*60 - now.getTimezoneOffset())*60000);
       el.textContent = `${pad(kst.getHours())}:${pad(kst.getMinutes())}:${pad(kst.getSeconds())}`;
-      
-      // try 블록에서 에러가 날 경우 대비한 catch 영역 날짜 처리
-      if (dateEl) {
-        const day = dayNames[kst.getUTCDay()];
-        dateEl.textContent = `${kst.getUTCFullYear()}년 ${kst.getUTCMonth() + 1}월 ${kst.getUTCDate()}일 (${day})`;
-      }
     }
   };
   tick();
