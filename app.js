@@ -427,7 +427,7 @@ function collectTemplateDraft(){
     if(!t) return;
     const val = key => item.querySelector('[data-qt="'+key+'"]').value;
     t.name = val('name'); t.desc = val('desc'); t.payee = val('payee'); t.spender = val('spender');
-    t.amount = val('amount').replace(/[,\s]/g,'');
+    { const raw = val('amount'); const n = parseEntryAmount(raw); t.amount = Number.isFinite(n) ? String(n) : raw.replace(/[,\s]/g,''); }
     try{ const c = JSON.parse(val('cls')||'null'); t.cls = c && c.mok ? c : null; }catch(e){ t.cls = null; }
   });
 }
@@ -2078,6 +2078,28 @@ function mokBudgetKey(type, gwan, hang, mok){
 function formatBudgetAmount(value){
   const amount = Number(value) || 0;
   return Math.trunc(amount).toLocaleString('en-US');
+}
+
+/**
+ * 새 내역 입력 금액 파싱: "50000", "50,000", "\50,000", "₩50,000", "50,000원", "-50,000", "△50,000" 등.
+ * 정수가 아니면 NaN. (전각 숫자·기호도 허용)
+ */
+function parseEntryAmount(value){
+  const WON = /[\\\u20A9\uFFE6\uFF3C\u00A5\uFFE5]/g; // \ ₩ ￦ ＼ ¥ ￥ (원 기호)
+  let s = String(value ?? '')
+    .replace(/[\uFF10-\uFF19]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)) // 전각 숫자
+    .replace(/[\uFF0C]/g, ',')
+    .replace(/[\u2212\u2013\u2014\uFF0D]/g, '-') // 유니코드 마이너스·대시
+    .trim();
+  let negative = false;
+  if(/^\(.*\)$/.test(s)){ negative = true; s = s.slice(1,-1); } // (50,000) 회계식 음수
+  s = s.replace(/[\s,]/g,'').replace(WON,'').replace(/원$/,'');
+  if(s[0] === '\u25B3' || s[0] === '\u25B2'){ negative = !negative; s = s.slice(1); } // △ ▲ 음수 표기
+  if(s[0] === '-'){ negative = !negative; s = s.slice(1); }
+  s = s.replace(WON,''); // -₩50,000 처럼 부호 뒤에 오는 기호
+  if(!/^\d+$/.test(s)) return NaN;
+  const n = Number(s);
+  return negative ? -n : n;
 }
 
 function parseBudgetAmount(value){
@@ -5142,7 +5164,7 @@ async function updateBudgetHint(){
   const approved = reportSummary ? F.approvedSpentFromSummary(reportSummary.cells,gubun,cls.gwan,cls.hang,cls.mok) : 0;
   const pending = F.pendingSpent(ledger,{gubun,gwan:cls.gwan,hang:cls.hang,category:cls.mok},
     {excludeId:editingEntryId,resolve:resolveEntryClassification});
-  const parsed = F.parseAmount(document.getElementById('f-amount').value);
+  const parsed = parseEntryAmount(document.getElementById('f-amount').value);
   const st = F.budgetStatus({type,budget:budgetAmount,approved,pending,newAmount:Number.isFinite(parsed)?parsed:0});
   const pct = v=>v==null ? '-' : `${v.toFixed(1)}%`;
   let msg = '';
@@ -5174,7 +5196,7 @@ async function updateBudgetHint(){
 }
 
 function currentDuplicateCandidate(){
-  const amount = ShowMeFeatures.parseAmount(document.getElementById('f-amount').value);
+  const amount = parseEntryAmount(document.getElementById('f-amount').value);
   return {
     date:parseEntryDate(document.getElementById('f-date').value) || '',
     amount:Number.isFinite(amount) ? amount : null,
@@ -5223,9 +5245,9 @@ function mountTxTools(mode){
   host.dataset.mounted = '1';
   host.innerHTML =
     '<input type="search" data-tx-field="text" placeholder="내용·지급처·담당자·목·번호 검색" aria-label="내역 검색" autocomplete="off">' +
-    '<div class="tx-range"><input type="text" data-tx-field="min" inputmode="numeric" placeholder="최소 금액" aria-label="최소 금액" autocomplete="off">' +
+    '<input type="text" data-tx-field="min" inputmode="numeric" placeholder="최소 금액" aria-label="최소 금액" autocomplete="off">' +
     '<span class="tx-sep">~</span>' +
-    '<input type="text" data-tx-field="max" inputmode="numeric" placeholder="최대 금액" aria-label="최대 금액" autocomplete="off"></div>' +
+    '<input type="text" data-tx-field="max" inputmode="numeric" placeholder="최대 금액" aria-label="최대 금액" autocomplete="off">' +
     '<button type="button" class="btn-revert" data-tx-reset>초기화</button>' +
     '<button type="button" class="btn-revert tx-export" data-tx-export>엑셀 내보내기</button>';
   let timer = null;
@@ -5289,11 +5311,7 @@ function renderBundleControls(){
   const none = closedThrough<1;
   select.disabled = none;
   button.disabled = none || bundleBusy;
-  if(status && !bundleBusy){
-    const hint = '마감한 달이 생기면 증빙 묶음을 받을 수 있습니다.';
-    if(none) status.textContent = hint;
-    else if(status.textContent===hint) status.textContent = '';
-  }
+  if(none && !bundleBusy && status) status.textContent = '마감한 달이 생기면 증빙 묶음을 받을 수 있습니다.';
 }
 
 function approvalFromEntries(entries){
@@ -5610,9 +5628,9 @@ async function addEntry(){
     setStatus(`${currentYear} 회계연도 이후 날짜는 입력할 수 없습니다.`, true);
     return;
   }
-const amount = Number(amountRaw);
+const amount = parseEntryAmount(amountRaw);
 if(!Number.isFinite(amount) || !Number.isInteger(amount) || amount===0){
-  setStatus('금액은 0이 아닌 정수로 입력해주세요. 환불·반환은 음수로 입력합니다.', true);
+  setStatus('금액은 0이 아닌 정수로 입력해주세요. (50,000 / ₩50,000 / 50,000원 형식 가능, 환불·반환은 음수)', true);
   return;
 }
   if(!classification || !hasAccount(currentGubun==='수입' ? 'income' : 'expense',classification)){
@@ -5832,7 +5850,7 @@ document.getElementById('btn-transfer-download').addEventListener('click',downlo
           desc:document.getElementById('f-desc').value.trim(),
           payee:document.getElementById('f-payee').value.trim(),
           spender:document.getElementById('f-spender').value.trim(),
-          amount:/^-?\d+$/.test(document.getElementById('f-amount').value.replace(/[,\s]/g,'')) ? document.getElementById('f-amount').value.replace(/[,\s]/g,'') : ''
+          amount:(()=>{ const n = parseEntryAmount(document.getElementById('f-amount').value); return Number.isFinite(n) ? String(n) : ''; })()
         };
       }
       templateDraft.push(newTemplateDraft(base));
@@ -6195,66 +6213,30 @@ document.getElementById('some-button')?.addEventListener('click', async function
   }
 });
 
-
-// 탭 영역 오른쪽 KST 시계 (시:분:초) 및 날짜 추가
+// 탭 영역 오른쪽 KST 시계 (시:분:초)
 function startAppClock(){
   const el = document.getElementById('app-clock');
-  const dateEl = document.getElementById('app-date'); // 1. 날짜 엘리먼트 가져오기
   if(!el) return;
   const pad = n => String(n).padStart(2,'0');
-  
-  // 요일 배열 생성
-  const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
-  let lastDateStr = ""; // 날짜가 바뀔 때만 화면을 갱신하기 위한 변수
-
   const tick = ()=>{
     try{
-      const now = new Date();
-      
-      // --- 날짜 처리 영역 시작 ---
-      if (dateEl) {
-        // KST 기준으로 연, 월, 일, 요일 추출
-        const dateParts = new Intl.DateTimeFormat('ko-KR', {
-          timeZone: 'Asia/Seoul',
-          year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short'
-        }).formatToParts(now);
-        
-        const getValue = type => dateParts.find(p => p.type === type)?.value || '';
-        
-        // "2026년 10월 5일 (월)" 형식으로 문자열 조립
-        const dateText = `${getValue('year')}년 ${getValue('month')}월 ${getValue('day')}일 (${getValue('weekday')})`;
-        
-        // 매초 화면을 다시 그리지 않고, 날짜가 바뀔 때만(또는 처음 실행 시) 딱 한 번 갱신
-        if (lastDateStr !== dateText) {
-          dateEl.textContent = dateText;
-          lastDateStr = dateText;
-        }
-      }
-      // --- 날짜 처리 영역 끝 ---
-
       const parts = new Intl.DateTimeFormat('en-GB',{
         timeZone:'Asia/Seoul',
         hour:'2-digit', minute:'2-digit', second:'2-digit',
         hour12:false
-      }).formatToParts(now);
+      }).formatToParts(new Date());
       const get = type => parts.find(p=>p.type===type)?.value || '00';
       const h = get('hour'), m = get('minute'), s = get('second');
       const text = `${h}:${m}:${s}`;
       el.textContent = text;
       const dParts = new Intl.DateTimeFormat('en-CA',{
         timeZone:'Asia/Seoul', year:'numeric', month:'2-digit', day:'2-digit'
-      }).format(now);
+      }).format(new Date());
       el.setAttribute('datetime', `${dParts}T${text}+09:00`);
     }catch(e){
       const now = new Date();
       const kst = new Date(now.getTime() + (9*60 - now.getTimezoneOffset())*60000);
       el.textContent = `${pad(kst.getHours())}:${pad(kst.getMinutes())}:${pad(kst.getSeconds())}`;
-      
-      // try 블록에서 에러가 날 경우 대비한 catch 영역 날짜 처리
-      if (dateEl) {
-        const day = dayNames[kst.getUTCDay()];
-        dateEl.textContent = `${kst.getUTCFullYear()}년 ${kst.getUTCMonth() + 1}월 ${kst.getUTCDate()}일 (${day})`;
-      }
     }
   };
   tick();

@@ -24,14 +24,37 @@
   /** 검색·비교용: 공백 제거 + 소문자 + 한글 정규화 */
   const norm = (v) => str(v).normalize('NFC').replace(/\s+/g, '').toLowerCase();
 
-  /** '1,000' → 1000, '' → null, 숫자가 아니면 NaN */
+  /**
+   * 금액 해석: '50000', '50,000', '₩50,000', '50,000원', '-50,000', '△50,000', '(50,000)', 전각 숫자 모두 허용.
+   * 앱의 parseEntryAmount(새 내역 입력)와 같은 규칙. 비어 있으면 null, 정수가 아니면 NaN.
+   */
   function parseAmount(v) {
     if (v == null) return null;
-    const s = str(v).replace(/[,\s원]/g, '');
+    let s = str(v)
+      .replace(/[\uFF10-\uFF19]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+      .replace(/\uFF0C/g, ',')
+      .replace(/[\u2212\u2013\u2014\uFF0D]/g, '-')
+      .trim();
     if (s === '') return null;
-    if (!/^-?\d+$/.test(s)) return NaN;
+    let negative = false;
+    if (/^\(.*\)$/.test(s)) {
+      negative = true;
+      s = s.slice(1, -1);
+    }
+    const WON = /[\\\u20A9\uFFE6\uFF3C\u00A5\uFFE5]/g;
+    s = s.replace(/[\s,]/g, '').replace(WON, '').replace(/원$/, '');
+    if (s[0] === '\u25B3' || s[0] === '\u25B2') {
+      negative = !negative;
+      s = s.slice(1);
+    }
+    if (s[0] === '-') {
+      negative = !negative;
+      s = s.slice(1);
+    }
+    s = s.replace(WON, '');
+    if (!/^\d+$/.test(s)) return NaN;
     const n = Number(s);
-    return Number.isSafeInteger(n) ? n : NaN;
+    return Number.isSafeInteger(n) ? (negative ? -n : n) : NaN;
   }
 
   // ---------- 1) 예산 잔액 ----------

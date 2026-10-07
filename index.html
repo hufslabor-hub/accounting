@@ -52,7 +52,6 @@
       <button class="tab-btn" data-view="staff">담당자·계좌</button>
       <button class="tab-btn" data-view="donation">기부금영수증</button>
     </nav>
-     <span id="app-date" class="app-date"></span>
     <time id="app-clock" class="app-clock" datetime="" aria-label="한국 표준시">--:--:--</time>
   </div>
 </div>
@@ -342,7 +341,7 @@
           <div class="field"><label for="f-mok">세부 계정과목</label><select id="f-mok"></select><div id="budget-hint" class="budget-hint" role="status" aria-live="polite" hidden></div></div>
           <div class="field"><label>내용</label><input type="text" id="f-desc" placeholder="예: 집행부 회의 식비" list="dl-desc" autocomplete="off"></div>
           <div class="field span2"><label>지급처</label><input type="text" id="f-payee" placeholder="예: 배달의민족" list="recent-payee-options"><datalist id="recent-payee-options"></datalist></div>
-          <div class="field"><label>금액(원)</label><input type="text" id="f-amount" inputmode="numeric" placeholder="예: 50000 (환불은 -50000)" list="dl-amount" autocomplete="off"><div id="dup-hint" class="dup-hint" role="status" aria-live="polite" hidden></div></div>
+          <div class="field"><label>금액(원)</label><input type="text" id="f-amount" inputmode="numeric" placeholder="예: 50,000 또는 ₩50,000 (환불은 -50,000)" list="dl-amount" autocomplete="off"><div id="dup-hint" class="dup-hint" role="status" aria-live="polite" hidden></div></div>
           <div class="field span2"><label>담당자</label><input type="text" id="f-spender" placeholder="입력자 이름" list="staff-name-options"><datalist id="staff-name-options"></datalist></div>
         </div>
         <datalist id="dl-desc"></datalist>
@@ -446,20 +445,16 @@
         </details>
       </div>
 
-     <div class="don-box">
-  <div class="don-box-head"><b>노동조합 파일 암호</b><span id="don-pw-status" class="don-hint"></span></div>
-  
-  <form class="don-inline" id="don-pw-edit" onsubmit="return false;">
-    <!-- 브라우저 경고를 없애기 위한 숨겨진 username 필드입니다 -->
-    <input type="text" name="username" value="hufslabor_user" autocomplete="username" style="display: none;">
+      <div class="don-box">
+        <div class="don-box-head"><b>노동조합 파일 암호</b><span id="don-pw-status" class="don-hint"></span></div>
+        <div class="don-inline" id="don-pw-edit">
+          <input type="password" id="don-password" autocomplete="new-password" placeholder="새 암호">
+          <button class="btn-primary btn-soft" id="don-btn-pw-save" type="button">암호 저장</button>
+          <button class="btn-text" id="don-btn-pw-cancel" type="button">취소</button>
+        </div>
+        <button class="btn-text" id="don-btn-pw-change" type="button">암호 변경</button>
+      </div>
 
-    <input type="password" id="don-password" autocomplete="new-password" placeholder="새 암호">
-    <button class="btn-primary btn-soft" id="don-btn-pw-save" type="button">암호 저장</button>
-    <button class="btn-text" id="don-btn-pw-cancel" type="button">취소</button>
-  </form>
-  
-  <button class="btn-text" id="don-btn-pw-change" type="button">암호 변경</button>
-</div>
       <div class="don-grid">
         <div class="field">
           <label for="don-file-union">노동조합 조합비</label>
@@ -634,7 +629,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <!-- APP_BUILD: stamp-version.mjs 실행 시 자동으로 갱신됩니다 -->
-<script>window.APP_BUILD = '20261006-1131';</script>
+<script>window.APP_BUILD = '20261007-2058';</script>
 <script src="domain.js"></script>
 <script>
 /* 초기 데이터(data.json)를 먼저 읽은 뒤 app.js를 실행합니다.

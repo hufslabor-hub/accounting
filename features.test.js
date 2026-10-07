@@ -15,6 +15,10 @@ assert(F.parseAmount('1,000') === 1000 && F.parseAmount(' 50,000원 ') === 50000
 assert(F.parseAmount('') === null && F.parseAmount(null) === null, '빈 값은 null');
 assert(Number.isNaN(F.parseAmount('12a')) && Number.isNaN(F.parseAmount('1.5')), '숫자가 아니면 NaN');
 assert(F.parseAmount('-5000') === -5000, '음수(환불)');
+assert(F.parseAmount('₩50,000') === 50000 && F.parseAmount('￦50,000') === 50000, '원 기호(₩)');
+assert(F.parseAmount('△50,000') === -50000 && F.parseAmount('(50,000)') === -50000 && F.parseAmount('-₩50,000') === -50000, '△·괄호·기호 뒤 음수');
+assert(F.parseAmount('５０，０００') === 50000, '전각 숫자·쉼표');
+assert(Number.isNaN(F.parseAmount('₩')) && Number.isNaN(F.parseAmount('-')), '기호만 있으면 NaN');
 
 console.log('2) 예산 잔액·경고');
 const ok = F.budgetStatus({ type: 'expense', budget: 1000000, approved: 300000, pending: 100000, newAmount: 0 });
