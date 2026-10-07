@@ -965,7 +965,7 @@ body {
 }
 
 /* 1) 글자 크기: 제목(h1~h4, 섹션 번호, 머리말 기관명, 차트 제목)과 PDF 지급 보고서 서식은 제외 */
-body *:not(h1):not(h2):not(h3):not(h4):not(h1 *):not(h2 *):not(h3 *):not(h4 *):not(.sec-num):not(.org):not(.title):not(.chart-title):not(.app-clock):not(.payment-report-sheet):not(.payment-report-sheet *):not(canvas):not(svg):not(svg *){
+body *:not(h1):not(h2):not(h3):not(h4):not(h1 *):not(h2 *):not(h3 *):not(h4 *):not(.sec-num):not(.org):not(.title):not(.chart-title):not(.app-clock):not(.app-date):not(.payment-report-sheet):not(.payment-report-sheet *):not(canvas):not(svg):not(svg *){
   font-size:var(--fs-ctl,var(--fs-base)) !important;
 }
 /* 터치 기기·모바일의 입력칸은 16px (아이폰이 입력 시 화면을 확대하지 않도록) */
