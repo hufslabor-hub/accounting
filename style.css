@@ -965,7 +965,7 @@ body {
 }
 
 /* 1) 글자 크기: 제목(h1~h4, 섹션 번호, 머리말 기관명, 차트 제목)과 PDF 지급 보고서 서식은 제외 */
-body *:not(h1):not(h2):not(h3):not(h4):not(h1 *):not(h2 *):not(h3 *):not(h4 *):not(.sec-num):not(.org):not(.title):not(.chart-title):not(.app-clock):not(.app-date):not(.payment-report-sheet):not(.payment-report-sheet *):not(canvas):not(svg):not(svg *){
+body *:not(h1):not(h2):not(h3):not(h4):not(h1 *):not(h2 *):not(h3 *):not(h4 *):not(.sec-num):not(.org):not(.title):not(.chart-title):not(.app-clock):not(.payment-report-sheet):not(.payment-report-sheet *):not(canvas):not(svg):not(svg *){
   font-size:var(--fs-ctl,var(--fs-base)) !important;
 }
 /* 터치 기기·모바일의 입력칸은 16px (아이폰이 입력 시 화면을 확대하지 않도록) */
@@ -1261,3 +1261,20 @@ button.btn-unapprove{background:#FBEDE5;border:1px solid #B5502A;color:#9A3F1D;f
 .bundle-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;}
 .bundle-row select{min-width:90px;}
 @media (max-width:600px){ .bundle-row .btn-primary{flex:1 1 100%;} }
+
+/* 이월 자료 일괄 입력 */
+.carryover-box{margin-top:18px;padding-top:12px;border-top:1px dashed var(--line);}
+.carryover-box > summary{cursor:pointer;font-weight:700;padding:6px 0;}
+.carryover-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:8px 0 12px;}
+.carryover-grid > .field{min-width:0;}
+.carryover-grid input{width:100%;min-width:0;}
+.carryover-table td.num,.carryover-table th.num{text-align:right;font-variant-numeric:tabular-nums;}
+.carryover-table select{width:100%;min-width:200px;}
+.carryover-table tr.co-skip td{background:#FBE9E5;}
+.carryover-table tr.co-ignore td{background:#EEF1EC;color:var(--ink-soft);}
+.carryover-summary{white-space:pre-line;font-weight:600;}
+.carryover-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+@media (max-width:600px){
+  .carryover-grid{grid-template-columns:minmax(0,1fr);}
+  .carryover-actions .btn-primary{flex:1 1 100%;}
+}

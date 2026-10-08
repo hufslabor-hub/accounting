@@ -5432,6 +5432,258 @@ async function downloadMonthBundle(){
   }
 }
 
+// ---------- 이월 자료(엑셀) 일괄 입력 ----------
+// 기준일까지의 누계 집행액 엑셀을 항목별로 "승인된 내역"으로 한 번에 입력한다. 같은 기준일로는 한 번만 입력되고,
+// 잘못 넣었으면 같은 기준일의 입력을 통째로 되돌릴 수 있다(문서의 carryoverBatch 값으로 찾음).
+const carryOver = {items:[], totals:{income:null,expense:null}, zeroCount:0, fileName:'', existing:0, busy:false};
+
+function carryOverMokOptions(type){
+  const list = [];
+  (accountCategories[type]||[]).forEach(group=>(group.accounts||[]).forEach(account=>(account.items||[]).forEach(mok=>{
+    list.push({gwan:group.name,hang:account.name,mok});
+  })));
+  return list;
+}
+
+const carryOverTargetValue = target => target ? JSON.stringify({gwan:target.gwan,hang:target.hang,mok:target.mok}) : '';
+
+function renderCarryOverPreview(){
+  const box = document.getElementById('carryover-preview');
+  if(!box) return;
+  if(!carryOver.items.length){ box.innerHTML = ''; updateCarryOverSummary(); return; }
+  const options = {'수입':carryOverMokOptions('income'),'지출':carryOverMokOptions('expense')};
+  const optionHtml = (gubun,selected)=>'<option value="">건너뜀 (입력 안 함)</option>' + options[gubun].map(option=>{
+    const value = carryOverTargetValue(option);
+    return `<option value="${escapeHTML(value)}"${value===selected?' selected':''}>${escapeHTML(option.gwan.replace(/_관$/,''))} › ${escapeHTML(option.mok)}</option>`;
+  }).join('');
+  box.innerHTML = '<div class="staff-table-scroll"><table class="staff-table carryover-table"><thead><tr>' +
+    '<th>구분</th><th>엑셀 항목</th><th class="num">금액</th><th>입력할 세부 계정과목</th></tr></thead><tbody>' +
+    carryOver.items.map((item,index)=>{
+      const label = item.gubun==='수입' && item.parents.length ? `${item.parents.join(' ')} › ${item.label}` : item.label;
+      const rowClass = item.ignored ? 'co-ignore' : (item.target ? '' : 'co-skip');
+      const select = item.ignored
+        ? `<select data-co-select="${index}" disabled><option>입력 안 함 (앱에서 기록하지 않는 항목)</option></select>`
+        : `<select data-co-select="${index}">${optionHtml(item.gubun,carryOverTargetValue(item.target))}</select>`;
+      return `<tr data-co-row="${index}" class="${rowClass}"><td>${item.gubun}</td><td>${escapeHTML(label)}</td>` +
+        `<td class="num">${fmtShort(item.amount)}</td><td>${select}</td></tr>`;
+    }).join('') + '</tbody></table></div>';
+  updateCarryOverSummary();
+}
+
+function updateCarryOverSummary(){
+  const summary = document.getElementById('carryover-summary');
+  const button = document.getElementById('btn-carryover-import');
+  if(!summary || !button) return;
+  if(!carryOver.items.length){
+    summary.textContent = carryOver.fileName ? '입력할 항목이 없습니다.' : '';
+    button.disabled = true;
+    return;
+  }
+  const mapped = carryOver.items.filter(item=>item.target);
+  const skipped = carryOver.items.filter(item=>!item.target && !item.ignored);
+  const ignored = carryOver.items.filter(item=>item.ignored);
+  const sum = (list,gubun)=>list.filter(item=>item.gubun===gubun).reduce((total,item)=>total+item.amount,0);
+  const income = sum(mapped,'수입'), expense = sum(mapped,'지출');
+  let text = `입력할 항목 ${mapped.length}건 · 수입 ${fmt(income)} · 지출 ${fmt(expense)} · 차액 ${fmt(income-expense)}`;
+  if(skipped.length) text += `\n건너뜀 ${skipped.length}건 (수입 ${fmt(sum(skipped,'수입'))} · 지출 ${fmt(sum(skipped,'지출'))}) — 세부 계정과목을 고르면 함께 입력됩니다.`;
+  if(ignored.length) text += `\n입력하지 않는 항목: ${ignored.map(item=>`${item.label} ${fmt(item.amount)}`).join(', ')} (앱에서 기록하지 않는 항목)`;
+  if(carryOver.zeroCount) text += `\n0원 항목 ${carryOver.zeroCount}개는 표시하지 않았습니다.`;
+  const all = carryOver.items;
+  const sheet = carryOver.totals;
+  if(sheet.income!==null && sheet.income!==sum(all,'수입') || sheet.expense!==null && sheet.expense!==sum(all,'지출')){
+    text += '\n⚠ 엑셀의 총계와 항목 합계가 다릅니다. 엑셀을 다시 확인해 주세요.';
+  }
+  if(expense>income) text += `\n⚠ 지출 합계가 수입 합계보다 ${fmt(expense-income)} 큽니다. 입력하면 현재 잔액이 음수가 됩니다. 엑셀의 수입·지출 열이 같은 기간인지, 예비비처럼 집행이 아닌 금액이 섞이지 않았는지 확인해 주세요.`;
+  summary.textContent = text;
+  button.disabled = !mapped.length || carryOver.busy || carryOver.existing>0;
+}
+
+async function loadCarryOverFile(file){
+  if(!file) return;
+  if(typeof XLSX==='undefined'){ showToast('엑셀 라이브러리를 불러오지 못했습니다. 새로고침한 뒤 다시 시도해 주세요.',{type:'error'}); return; }
+  try{
+    const workbook = XLSX.read(await file.arrayBuffer(),{type:'array'});
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet,{header:1,defval:null,raw:true});
+    const parsed = ShowMeFeatures.parseCarryOverRows(rows);
+    if(!parsed.items.length) throw new Error('"1. 수입", "2. 지출" 표에서 금액이 있는 항목을 찾지 못했습니다.');
+    const nonZero = parsed.items.filter(item=>item.amount!==0);
+    carryOver.fileName = file.name;
+    carryOver.totals = parsed.totals;
+    carryOver.zeroCount = parsed.items.length - nonZero.length;
+    // 대학노조회비는 앱에서 어느 곳에도 기록하지 않는 항목이라 입력하지 않는다
+    carryOver.items = nonZero.map(item=>{
+      const ignored = item.label.replace(/\s+/g,'')==='대학노조회비';
+      return {...item,ignored,target:ignored ? null : ShowMeFeatures.suggestMok(item,accountCategories)};
+    });
+    renderCarryOverPreview();
+    const unmapped = carryOver.items.filter(item=>!item.target && !item.ignored);
+    if(unmapped.length) showToast(`세부 계정과목을 찾지 못한 항목 ${unmapped.length}건: ${unmapped.map(item=>item.label).join(', ')}. 직접 골라 주세요.`,{type:'error',duration:12000});
+  }catch(error){
+    carryOver.items = [];
+    carryOver.fileName = file.name;
+    renderCarryOverPreview();
+    showToast(`엑셀을 읽지 못했습니다: ${error.message || String(error)}`,{type:'error'});
+  }
+}
+
+function carryOverBaseDate(){
+  return parseEntryDate(document.getElementById('carryover-date').value) || '';
+}
+
+function defaultCarryOverDate(){
+  const now = new Date();
+  const last = new Date(now.getFullYear(),now.getMonth(),0);               // 지난달 마지막 날
+  const text = `${last.getFullYear()}-${String(last.getMonth()+1).padStart(2,'0')}-${String(last.getDate()).padStart(2,'0')}`;
+  return text.startsWith(String(currentYear)) ? text : `${currentYear}-12-31`;
+}
+
+// 같은 기준일로 이미 입력된 이월 자료가 있는지 서버에서 확인
+async function refreshCarryOverStatus(){
+  const note = document.getElementById('carryover-existing');
+  const undo = document.getElementById('btn-carryover-undo');
+  if(!note || !undo) return;
+  const baseDate = carryOverBaseDate();
+  carryOver.existing = 0;
+  undo.hidden = true;
+  if(!baseDate || !hasSharedStorage()){ note.textContent = baseDate ? '' : '기준일을 YYYY-MM-DD 형식으로 입력해 주세요.'; updateCarryOverSummary(); return; }
+  if(!baseDate.startsWith(String(currentYear))){ note.textContent = `기준일은 현재 회계연도(${currentYear}년) 안의 날짜여야 합니다.`; updateCarryOverSummary(); return; }
+  try{
+    const snapshot = await entriesRef(currentYear).where('carryoverBatch','==',ShowMeFeatures.carryOverBatchId(baseDate)).get();
+    carryOver.existing = snapshot.size;
+    if(snapshot.size){
+      const docs = snapshot.docs.map(doc=>doc.data());
+      const total = gubun=>docs.filter(entry=>entry.gubun===gubun).reduce((sum,entry)=>sum+Number(entry.amount||0),0);
+      note.textContent = `이 기준일(${baseDate})로 이미 입력된 이월 자료가 ${snapshot.size}건 있습니다 (수입 ${fmt(total('수입'))} · 지출 ${fmt(total('지출'))}). 다시 입력하려면 먼저 되돌려 주세요.`;
+      undo.hidden = false;
+    }else{
+      note.textContent = '';
+    }
+  }catch(error){
+    note.textContent = `입력 여부를 확인하지 못했습니다: ${error.message || String(error)}`;
+  }
+  updateCarryOverSummary();
+}
+
+function carryOverClosedMessage(baseDate){
+  const month = Number(baseDate.slice(5,7));
+  return baseDate.startsWith(String(currentYear)) && month<=closedThrough
+    ? `${month}월은 이미 마감되어 있습니다. 월 마감을 취소한 뒤 다시 시도해 주세요.` : '';
+}
+
+async function importCarryOver(){
+  if(carryOver.busy) return;
+  const baseDate = carryOverBaseDate();
+  const spender = document.getElementById('carryover-spender').value.trim() || '전월 이월 자료';
+  const rows = carryOver.items.filter(item=>item.target);
+  const fail = message=>showToast(message,{type:'error'});
+  if(!baseDate || !baseDate.startsWith(String(currentYear))) return fail(`기준일을 ${currentYear}년 안의 날짜(YYYY-MM-DD)로 입력해 주세요.`);
+  if(!rows.length) return fail('입력할 항목이 없습니다.');
+  if(rows.some(item=>!hasAccount(item.gubun==='수입'?'income':'expense',item.target))) return fail('예산 관리에 없는 세부 계정과목이 선택되어 있습니다.');
+  const closed = carryOverClosedMessage(baseDate);
+  if(closed) return fail(closed);
+  const sum = gubun=>rows.filter(item=>item.gubun===gubun).reduce((total,item)=>total+item.amount,0);
+  const skipped = carryOver.items.filter(item=>!item.target && !item.ignored);
+  const ignoredItems = carryOver.items.filter(item=>item.ignored);
+  const proceed = await confirmAction(
+    `${baseDate} 기준 이월 자료 ${rows.length}건을 승인된 내역으로 입력합니다.\n\n` +
+    `담당자: ${spender}\n수입 ${fmt(sum('수입'))} · 지출 ${fmt(sum('지출'))}\n` +
+    (skipped.length ? `건너뜀 ${skipped.length}건: ${skipped.map(item=>item.label).join(', ')}\n` : '') +
+    (ignoredItems.length ? `입력하지 않음: ${ignoredItems.map(item=>`${item.label} ${fmt(item.amount)}`).join(', ')}\n` : '') +
+    '\n입력 후에는 보고서·예산 집행률에 바로 반영됩니다. 잘못 입력했으면 "되돌리기"로 통째로 지울 수 있습니다. 계속할까요?',
+    {title:'이월 자료 일괄 입력',confirmLabel:'입력하기'});
+  if(!proceed) return;
+  carryOver.busy = true;
+  updateCarryOverSummary();
+  try{
+    const existing = await entriesRef(currentYear).where('carryoverBatch','==',ShowMeFeatures.carryOverBatchId(baseDate)).get();
+    if(!existing.empty) throw new Error('이 기준일로 이미 입력된 이월 자료가 있습니다. 먼저 되돌려 주세요.');
+    const dateKey = baseDate.replace(/-/g,'');
+    const monthKey = dateKey.slice(0,6);
+    const submissionRef = db.collection('accountingData').doc(`${SUBMISSION_SEQUENCE_KEY}:${monthKey}`);
+    const paymentRef = db.collection('accountingData').doc(`management-sequence:payment:${dateKey}`);
+    const actor = currentUser.email || currentUser.displayName || '';
+    const nowISO = new Date().toISOString();
+    const ids = rows.map((_,index)=>ShowMeFeatures.carryOverEntryId(baseDate,index));
+    let managementNo = '';
+    await entryTransaction(ids,async (found,api)=>{
+      if(found.size) throw stateChangedError('이미 같은 이월 자료가 입력되어 있습니다.');
+      const [submissionSnap,paymentSnap] = await Promise.all([api.tx.get(submissionRef),api.tx.get(paymentRef)]);   // 쓰기보다 먼저 읽기
+      const submissionStored = checkSequence(submissionSnap.exists ? Number(submissionSnap.data().value) : highestSubmissionSequenceForMonth(ledger,monthKey),'결의번호');
+      const paymentStored = checkSequence(paymentSnap.exists ? Number(paymentSnap.data().value) : highestPaymentSequence(ledger,dateKey),'지급 결의번호');
+      const submissionSequence = submissionStored + 1;
+      const sequence = paymentStored + 1;
+      managementNo = `${dateKey}${String(sequence).padStart(3,'0')}`;
+      ShowMeFeatures.buildCarryOverEntries({
+        rows:rows.map(item=>({gubun:item.gubun,label:item.label,amount:item.amount,gwan:item.target.gwan,hang:item.target.hang,mok:item.target.mok})),
+        baseDate,spender,actor,submissionSequence,managementNo,nowISO
+      }).forEach(entry=>api.set(entry));
+      api.tx.set(submissionRef,{value:String(submissionSequence),...writeMeta()});
+      api.tx.set(paymentRef,{value:String(sequence),...writeMeta()});
+    });
+    showToast(`이월 자료 ${rows.length}건을 승인 내역으로 입력했습니다. (승인번호 ${managementNo})`,{type:'success',duration:9000});
+    renderReport();
+    renderEntryView();
+  }catch(error){
+    showToast(`이월 자료를 입력하지 못했습니다: ${error.message || String(error)}`,{type:'error'});
+  }finally{
+    carryOver.busy = false;
+    await refreshCarryOverStatus();
+  }
+}
+
+async function undoCarryOver(){
+  if(carryOver.busy) return;
+  const baseDate = carryOverBaseDate();
+  if(!baseDate) return;
+  const closed = carryOverClosedMessage(baseDate);
+  if(closed){ showToast(closed,{type:'error'}); return; }
+  const ok = await confirmAction(
+    `${baseDate} 기준으로 입력된 이월 자료 ${carryOver.existing}건을 모두 삭제합니다. 보고서·예산 집행률에서도 빠집니다. 계속할까요?`,
+    {title:'이월 입력 되돌리기',confirmLabel:'모두 삭제',danger:true});
+  if(!ok) return;
+  carryOver.busy = true;
+  updateCarryOverSummary();
+  try{
+    const snapshot = await entriesRef(currentYear).where('carryoverBatch','==',ShowMeFeatures.carryOverBatchId(baseDate)).get();
+    const ids = snapshot.docs.map(doc=>doc.id);
+    if(!ids.length) throw new Error('되돌릴 이월 자료가 없습니다.');
+    await entryTransaction(ids,(found,api)=>{ ids.forEach(id=>{ if(found.has(id)) api.remove(id); }); });
+    showToast(`이월 자료 ${ids.length}건을 되돌렸습니다.`,{type:'success'});
+    renderReport();
+    renderEntryView();
+  }catch(error){
+    showToast(`되돌리지 못했습니다: ${error.message || String(error)}`,{type:'error'});
+  }finally{
+    carryOver.busy = false;
+    await refreshCarryOverStatus();
+  }
+}
+
+function bindCarryOverUI(){
+  const box = document.getElementById('carryover-box');
+  if(!box) return;
+  box.addEventListener('toggle',()=>{
+    if(!box.open) return;
+    const date = document.getElementById('carryover-date');
+    if(!date.value) date.value = defaultCarryOverDate();
+    refreshCarryOverStatus();
+  });
+  document.getElementById('carryover-file').addEventListener('change',event=>loadCarryOverFile(event.target.files[0]));
+  document.getElementById('carryover-date').addEventListener('change',refreshCarryOverStatus);
+  document.getElementById('carryover-preview').addEventListener('change',event=>{
+    const select = event.target.closest('[data-co-select]');
+    if(!select) return;
+    let target = null;
+    try{ target = select.value ? JSON.parse(select.value) : null; }catch(error){ target = null; }
+    carryOver.items[Number(select.dataset.coSelect)].target = target;
+    select.closest('tr').classList.toggle('co-skip',!target && !carryOver.items[Number(select.dataset.coSelect)].ignored);
+    updateCarryOverSummary();
+  });
+  document.getElementById('btn-carryover-import').addEventListener('click',importCarryOver);
+  document.getElementById('btn-carryover-undo').addEventListener('click',undoCarryOver);
+}
+
 function bindFeatureUI(){
   mountTxTools('report');
   mountTxTools('entry');
@@ -5445,6 +5697,7 @@ function bindFeatureUI(){
   if(picker) picker.addEventListener('change',updateDupHint);
   const bundle = document.getElementById('btn-bundle-download');
   if(bundle) bundle.addEventListener('click',downloadMonthBundle);
+  bindCarryOverUI();
   mirrorStatusToToast(['staff-name-status','transfer-status','closing-msg','fund-account-msg','fund-event-msg','deposit-msg']);
 }
 

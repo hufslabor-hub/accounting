@@ -349,6 +349,148 @@
     return new Uint8Array(Buffer.from(b64, 'base64'));
   }
 
+  // ---------- 6) 이월 자료(엑셀) 일괄 입력 ----------
+  /** 항목 이름 비교용: 공백·구두점·괄호 제거 + 소문자 */
+  const normKey = (v) => str(v).normalize('NFC').replace(/[\s.,/()\-_·ㆍ]+/g, '').toLowerCase();
+
+  /** 엑셀 항목 이름 → 앱의 목 이름 (이름이 다른 것만) */
+  const CARRYOVER_ALIASES = {
+    산학협력: '조합비(산단)',
+    후생파트: '조합비(후생)',
+    '대의원,중집위원수련회': '대의원/중집수련회비',
+    '간부.교섭위원교육': '간부/교섭위원교육비',
+    '홍보물.선전물 제작': '홍보물/선전물제작비',
+    '홈페이지 관리': '홈페이지 관리비',
+    퇴직조합원기념품: '퇴직조합원기념품구입비',
+    '연대사업(교내외)': '교내외 연대사업비',
+    '임원/중집/대의원회의(7+14명)': '임원/중집/대의원회의비',
+    '회계감사.선거관리위원 회의': '회계감사/선관위회의비',
+    '조합원총회(120명)': '조합원총회비',
+    '퇴직조합원 환송회': '퇴직조합원 환송회비',
+    '중앙집행위원(13명)': '중앙집행위원활동비',
+    '대의원(17명)': '대의원활동비',
+    '교통비.유류비': '교통유류비',
+    '조합비 환불': '조합비환불비'
+  };
+
+  /**
+   * 결산 엑셀(수입·지출 표) → 항목 목록.
+   * rows: 2차원 배열. "1. 수입" / "2. 지출" 제목으로 구역을 나누고, 각 행의 가장 오른쪽 글자 칸을 항목 이름,
+   *       숫자 칸을 금액으로 읽는다. 합계·총계·제목 행은 건너뛰고 총계는 totals 로 돌려준다.
+   * 병합 셀은 첫 칸에만 값이 있으므로 왼쪽의 큰 분류(parents)는 참고용으로만 쓴다.
+   */
+  function parseCarryOverRows(rows) {
+    const clean = (v) => str(v).replace(/\s+/g, ' ').trim();
+    let section = '';
+    const items = [];
+    const totals = { income: null, expense: null };
+    let lastGroup = ''; // 병합된 첫 칸(큰 분류)은 첫 행에만 값이 있어서 아래 행에도 이어 붙인다
+    (rows || []).forEach((r, i) => {
+      const cells = (r || []).map((v) => (v == null ? '' : v));
+      const first = clean(cells[0]);
+      if (/^1\.\s*수입/.test(first)) return void ((section = 'income'), (lastGroup = ''));
+      if (/^2\.\s*지출/.test(first)) return void ((section = 'expense'), (lastGroup = ''));
+      if (!section) return;
+      if (first) lastGroup = first;
+      let amountIdx = -1;
+      for (let k = cells.length - 1; k >= 0; k--) {
+        if (typeof cells[k] === 'number' && Number.isFinite(cells[k])) {
+          amountIdx = k;
+          break;
+        }
+      }
+      if (amountIdx < 1) return;
+      const labels = cells.slice(0, amountIdx).map(clean).filter(Boolean);
+      if (!labels.length) return;
+      if (!first && lastGroup) labels.unshift(lastGroup);
+      const label = labels[labels.length - 1];
+      const amount = cells[amountIdx];
+      if (/총계/.test(label)) {
+        if (/수입/.test(label)) totals.income = amount;
+        else if (/지출/.test(label)) totals.expense = amount;
+        return;
+      }
+      if (/^(합계|계정과목)$/.test(label)) return;
+      items.push({ gubun: section === 'income' ? '수입' : '지출', label, parents: labels.slice(0, -1), amount, row: i + 1 });
+    });
+    return { items, totals };
+  }
+
+  /**
+   * 항목 하나에 맞는 세부 계정과목을 찾는다. 확실한 하나가 있을 때만 돌려주고, 애매하면 null.
+   * categories: { income:[{name,accounts:[{name,items:[...]}]}], expense:[...] }
+   */
+  function suggestMok(item, categories) {
+    const type = item.gubun === '수입' ? 'income' : 'expense';
+    const all = [];
+    ((categories && categories[type]) || []).forEach((g) =>
+      (g.accounts || []).forEach((h) => (h.items || []).forEach((m) => all.push({ gwan: g.name, hang: h.name, mok: m, key: normKey(m) })))
+    );
+    const aliasName = CARRYOVER_ALIASES[item.label] || CARRYOVER_ALIASES[str(item.label).replace(/\s+/g, ' ')];
+    const candidates = [aliasName, item.label, (item.parents || []).join('') + item.label].filter(Boolean).map(normKey);
+    for (const cand of candidates) {
+      const exact = all.filter((a) => a.key === cand);
+      if (exact.length === 1) return { gwan: exact[0].gwan, hang: exact[0].hang, mok: exact[0].mok };
+      if (exact.length > 1) return null;
+    }
+    for (const cand of candidates) {
+      if (cand.length < 3) continue;
+      const loose = all.filter((a) => a.key.startsWith(cand) || cand.startsWith(a.key));
+      if (loose.length === 1) return { gwan: loose[0].gwan, hang: loose[0].hang, mok: loose[0].mok };
+    }
+    return null;
+  }
+
+  const carryOverBatchId = (baseDate) => `carryover-${baseDate}`;
+  const carryOverEntryId = (baseDate, index) => `carry_${str(baseDate).replace(/-/g, '')}_${String(index + 1).padStart(3, '0')}`;
+
+  /**
+   * 승인된 내역으로 만들 문서 목록. 결의·승인 일시는 기준일 23:59(한국 시간)로 기록해 기준일이 속한 달의 내역이 되게 한다.
+   * p: { rows:[{gubun,label,amount,gwan,hang,mok}], baseDate:'YYYY-MM-DD', spender, actor,
+   *      submissionSequence, managementNo, nowISO }
+   */
+  function buildCarryOverEntries(p) {
+    const [y, m] = p.baseDate.split('-').map(Number);
+    const stamp = new Date(`${p.baseDate}T23:59:00+09:00`).toISOString();
+    return p.rows.map((r, i) => {
+      const entry = {
+        id: carryOverEntryId(p.baseDate, i),
+        date: p.baseDate,
+        month: `${m}월`,
+        gubun: r.gubun,
+        desc: `${r.label} (${m}월말 누계 이월)`,
+        payee: p.spender,
+        spender: p.spender,
+        amount: r.amount,
+        gwan: r.gwan,
+        hang: r.hang,
+        category: r.mok,
+        createdAt: p.nowISO,
+        locked: false,
+        status: 'approved',
+        submittedAt: stamp,
+        submittedBy: p.actor,
+        submissionSequence: p.submissionSequence,
+        approvedAt: stamp,
+        approvedBy: p.actor,
+        acctYear: y,
+        acctMonth: m,
+        managementNo: p.managementNo,
+        source: 'carryover',
+        carryoverBatch: carryOverBatchId(p.baseDate),
+        importedAt: p.nowISO
+      };
+      if (r.gubun === '수입') {
+        entry.confirmedAt = stamp;
+        entry.confirmedBy = p.actor;
+      } else {
+        entry.paidAt = stamp;
+        entry.paidBy = p.actor;
+      }
+      return entry;
+    });
+  }
+
   // ---------- 5) 설정 문서 동시 저장 충돌 ----------
   const CAS_PREFIXES = ['budget:', 'categories:', 'staff-names:', 'staff-bank-details:', 'staff-groups:', 'quick-templates:', 'years:', 'account-balance:'];
   const isCasKey = (key) => CAS_PREFIXES.some((p) => str(key).startsWith(p));
@@ -382,6 +524,12 @@
     dataUrlToBytes,
     CAS_PREFIXES,
     isCasKey,
-    casConflict
+    casConflict,
+    normKey,
+    parseCarryOverRows,
+    suggestMok,
+    carryOverBatchId,
+    carryOverEntryId,
+    buildCarryOverEntries
   };
 });

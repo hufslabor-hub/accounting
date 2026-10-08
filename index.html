@@ -52,7 +52,6 @@
       <button class="tab-btn" data-view="staff">담당자·계좌</button>
       <button class="tab-btn" data-view="donation">기부금영수증</button>
     </nav>
-    <time id="app-date" class="app-date" datetime="" aria-label="한국 표준시 날짜"></time>
     <time id="app-clock" class="app-clock" datetime="" aria-label="한국 표준시">--:--:--</time>
   </div>
 </div>
@@ -422,6 +421,22 @@
           </div>
           <p class="count-note" id="bundle-status" role="status"></p>
         </div>
+        <details class="carryover-box" id="carryover-box">
+          <summary>이월 자료 일괄 입력 (엑셀 → 승인 내역)</summary>
+          <p class="count-note">기준일까지의 <b>누계 집행액</b>이 적힌 결산 엑셀을 올리면 항목마다 세부 계정과목을 맞춰, <b>승인된 내역</b>으로 한꺼번에 입력합니다. 결제일은 기준일로, 담당자는 아래 이름으로 기록됩니다.</p>
+          <div class="carryover-grid">
+            <div class="field"><label for="carryover-file">엑셀 파일 (.xlsx)</label><input type="file" id="carryover-file" accept=".xlsx,.xls"></div>
+            <div class="field"><label for="carryover-date">기준일 (결제일)</label><input type="text" id="carryover-date" placeholder="YYYY-MM-DD" autocomplete="off"></div>
+            <div class="field"><label for="carryover-spender">담당자 이름</label><input type="text" id="carryover-spender" value="전월 이월 자료" autocomplete="off"></div>
+          </div>
+          <div id="carryover-preview"></div>
+          <p class="count-note carryover-summary" id="carryover-summary" role="status"></p>
+          <div class="carryover-actions">
+            <button class="btn-primary" id="btn-carryover-import" type="button" disabled>승인 내역으로 일괄 입력</button>
+            <button class="btn-revert" id="btn-carryover-undo" type="button" hidden>이 기준일의 이월 입력 되돌리기</button>
+          </div>
+          <p class="count-note" id="carryover-existing" role="status"></p>
+        </details>
       </div>
     </section>
 
@@ -630,26 +645,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <!-- APP_BUILD: stamp-version.mjs 실행 시 자동으로 갱신됩니다 -->
-<script>
-/* 탭 영역 날짜: "2026년 10월 7일 (수)" (한국 표준시). 자정이 지나면 자동 갱신 */
-(function(){
-  var el = document.getElementById('app-date');
-  if(!el) return;
-  var fmt = new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'numeric',day:'numeric',weekday:'short'});
-  function update(){
-    var p = {};
-    fmt.formatToParts(new Date()).forEach(function(x){ p[x.type] = x.value; });
-    var text = p.year + '년 ' + p.month + '월 ' + p.day + '일 (' + p.weekday + ')';
-    if(el.textContent !== text){
-      el.textContent = text;
-      el.setAttribute('datetime', p.year + '-' + ('0'+p.month).slice(-2) + '-' + ('0'+p.day).slice(-2));
-    }
-  }
-  update();
-  setInterval(update, 30000);
-})();
-</script>
-<script>window.APP_BUILD = '20261007-2108';</script>
+<script>window.APP_BUILD = '20261008-2201';</script>
 <script src="domain.js"></script>
 <script>
 /* 초기 데이터(data.json)를 먼저 읽은 뒤 app.js를 실행합니다.

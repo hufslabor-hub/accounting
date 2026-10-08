@@ -141,5 +141,74 @@ assert(F.casConflict(undefined, 'x') === false, '처음 쓰는 키는 검사하�
 assert(F.casConflict('a', 'a') === false && F.casConflict('a', 'b') === true, '값이 달라졌으면 충돌');
 assert(F.casConflict(null, null) === false && F.casConflict(null, 'x') === true, '없던 문서를 다른 사람이 만들었으면 충돌');
 
+console.log('9) 이월 자료(엑셀) 읽기·분류 맞추기');
+const sheet = require('fs').existsSync(__dirname + '/fixtures/carryover-rows.json') ? require('./fixtures/carryover-rows.json') : null;
+const defaults = {
+  income: [
+    { name: '조합비_관', accounts: [{ name: '조합비_항', items: ['조합비(외대)', '조합비(후생)', '조합비(산단)', '조합비(지출원)'] }] },
+    { name: '창립행사지원금_관', accounts: [{ name: '창립행사지원금_항', items: ['창립행사지원금(학교)'] }] },
+    { name: '전기이월금_관', accounts: [{ name: '전기이월금_항', items: ['전기이월금'] }] },
+    { name: '이자수입_관', accounts: [{ name: '이자수입_항', items: ['이자수입'] }] },
+    { name: '기금회계전입금_관', accounts: [{ name: '기금회계전입금_항', items: ['기금회계 전입금'] }] },
+    { name: '기타수입_기부금등_관', accounts: [{ name: '기타수입_기부금등_항', items: ['기타수입(기부금 등)'] }] }
+  ],
+  expense: [
+    { name: '운영비_관', accounts: [{ name: '사무실운영비_항', items: ['사무실운영비'] }, { name: '신문도서비_항', items: ['신문도서비'] }, { name: '통신비_SMS등_항', items: ['통신비(SMS 등)'] }] },
+    { name: '사업비_관', accounts: [
+      { name: '조직사업비_항', items: ['조직강화비', '생일축하사업비', '부서별간담회비', '소모임지원비'] },
+      { name: '교육사업비_항', items: ['대의원/중집수련회비', '간부/교섭위원교육비'] },
+      { name: '홍보사업비_항', items: ['홍보물/선전물제작비', '홈페이지 관리비'] },
+      { name: '정책사업비_항', items: ['정책개발비', '법률자문비'] },
+      { name: '후생복지사업비_항', items: ['경조비', '퇴직조합원기념품구입비', '포상비', '문화사업지원비'] },
+      { name: '연대사업비_항', items: ['교내외 연대사업비'] }] },
+    { name: '회의비_관', accounts: [{ name: '임원중집위회의비_항', items: ['임원/중집/대의원회의비'] }, { name: '단체교섭회의비_항', items: ['단체교섭회의비'] }, { name: '회계감사선관위회의비_항', items: ['회계감사/선관위회의비'] }] },
+    { name: '행사비_관', accounts: [{ name: '조합원총회비_항', items: ['조합원총회비'] }, { name: '창립기념행사비_항', items: ['창립기념행사비'] }, { name: '야외행사비_항', items: ['야외행사비'] }, { name: '퇴직조합원환송회비_항', items: ['퇴직조합원 환송회비'] }, { name: '노동절행사비_항', items: ['노동절행사비'] }] },
+    { name: '활동비_관', accounts: [{ name: '중앙집행위원활동비_항', items: ['중앙집행위원활동비'] }, { name: '대의원활동비_항', items: ['대의원활동비'] }] },
+    { name: '예비비_관', accounts: [{ name: '교통유류비_항', items: ['교통유류비'] }, { name: '예비비_항', items: ['예비비'] }] },
+    { name: '조합비환불비_관', accounts: [{ name: '조합비환불비_항', items: ['조합비환불비'] }] },
+    { name: '차기이월금_관', accounts: [{ name: '차기이월금_항', items: ['차기이월금'] }] }
+  ]
+};
+if (sheet) {
+  const parsed = F.parseCarryOverRows(sheet);
+  assert(parsed.items.length === 42, `항목 42개를 읽음 (수입 9, 지출 33) → ${parsed.items.length}`);
+  assert(parsed.totals.income === 17350274 && parsed.totals.expense === 128947119, '엑셀의 수입·지출 총계 읽기');
+  const sum = (g) => parsed.items.filter((i) => i.gubun === g).reduce((s, i) => s + i.amount, 0);
+  assert(sum('수입') === 17350274 && sum('지출') === 128947119, '항목 합계가 엑셀 총계와 일치(조합비 합계 행은 이중 계산 안 함)');
+  assert(!parsed.items.some((i) => /합계|총계|계정과목/.test(i.label)), '합계·총계·제목 행 제외');
+  const outer = parsed.items.find((i) => i.label === '외대');
+  assert(outer && outer.parents.join('') === '조합비' && outer.amount === 420998, '조합비 하위 항목은 큰 분류와 함께 읽음');
+  const unmatched = [];
+  parsed.items.forEach((it) => {
+    if (!F.suggestMok(it, defaults)) unmatched.push(it.label);
+  });
+  assert(unmatched.join('|') === '대학노조회비', `기본 분류표에 없는 것은 대학노조회비뿐 → ${unmatched.join('|')}`);
+  const pick = (label) => {
+    const it = parsed.items.find((x) => x.label === label);
+    const r = F.suggestMok(it, defaults);
+    return r && r.mok;
+  };
+  assert(pick('외대') === '조합비(외대)' && pick('산학협력') === '조합비(산단)' && pick('후생파트') === '조합비(후생)' && pick('지출원') === '조합비(지출원)', '조합비 4종 연결');
+  assert(pick('생일축하사업') === '생일축하사업비' && pick('간부.교섭위원교육') === '간부/교섭위원교육비' && pick('교통비.유류비') === '교통유류비', '이름이 다른 항목 연결');
+  assert(pick('회계감사.선거관리위원 회의') === '회계감사/선관위회의비' && pick('대의원(17명)') === '대의원활동비', '괄호·구두점이 다른 항목 연결');
+  assert(pick('조합비 환불') === '조합비환불비' && pick('예비비') === '예비비', '환불·예비비 연결');
+}
+const withUnion = JSON.parse(JSON.stringify(defaults));
+withUnion.expense[0].accounts.push({ name: '대학노조회비_항', items: ['대학노조회비'] });
+assert(F.suggestMok({ gubun: '지출', label: '대학노조회비', parents: [] }, withUnion).mok === '대학노조회비', '분류표에 있으면 대학노조회비도 연결');
+assert(F.suggestMok({ gubun: '지출', label: '없는항목', parents: [] }, defaults) === null, '못 찾으면 null');
+const built = F.buildCarryOverEntries({
+  rows: [
+    { gubun: '수입', label: '외대', amount: 420998, gwan: '조합비_관', hang: '조합비_항', mok: '조합비(외대)' },
+    { gubun: '지출', label: '사무실운영비', amount: 100, gwan: '운영비_관', hang: '사무실운영비_항', mok: '사무실운영비' }
+  ],
+  baseDate: '2026-09-30', spender: '전월 이월 자료', actor: 'a@b.c', submissionSequence: 7, managementNo: '20260930001', nowISO: '2026-10-07T00:00:00.000Z'
+});
+assert(built.length === 2 && built[0].id === 'carry_20260930_001' && built[1].id === 'carry_20260930_002', '결정적인 문서 번호');
+assert(built[0].status === 'approved' && built[0].month === '9월' && built[0].acctMonth === 9 && built[0].acctYear === 2026, '승인 상태·9월·회계월');
+assert(built[0].approvedAt === '2026-09-30T14:59:00.000Z' && built[0].confirmedAt === built[0].approvedAt && !('paidAt' in built[0]), '기준일 23:59(한국) 승인 — 수입은 확인 기록');
+assert(built[1].paidAt === built[1].approvedAt && !('confirmedAt' in built[1]), '지출은 지급 기록');
+assert(built[0].spender === '전월 이월 자료' && built[0].managementNo === '20260930001' && built[0].carryoverBatch === 'carryover-2026-09-30' && built[0].source === 'carryover', '담당자·승인번호·배치 표시');
+
 console.log('\n결과:', passed, '통과,', failed, '실패');
 process.exit(failed ? 1 : 0);
