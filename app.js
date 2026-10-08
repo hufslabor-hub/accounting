@@ -4238,7 +4238,18 @@ const PDF_OPTIONS = {
 
 function safeFileName(text){ return String(text).replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').trim(); }
 
+// html2pdf 는 복제본을 담는 임시 영역(.html2pdf__container)을 A4 안쪽 폭(194mm)으로 만들고 가운데 정렬(margin:auto)합니다.
+// 문서는 794px 로 고정해 두었으므로 창 폭에 따라 좌우가 잘렸습니다. 폭을 794px·왼쪽 정렬로 고정해 항상 같은 모양이 되게 합니다.
+function ensurePdfContainerStyle(){
+  if(document.getElementById('pdf-container-fix')) return;
+  const style = document.createElement('style');
+  style.id = 'pdf-container-fix';
+  style.textContent = '.html2pdf__container{width:794px !important;left:0 !important;right:auto !important;margin:0 !important;}';
+  document.head.appendChild(style);
+}
+
 async function buildReportPdfBlob(entries,spender,approval=null,managementNo=null){
+  ensurePdfContainerStyle();
   // 화면 안에 두되 맨 뒤로 보내고 가려서, 캡처는 되지만 사용자에게는 안 보이게 함
   const wrapper = document.createElement('div');
   wrapper.style.cssText = 'position:absolute;left:0;top:0;width:794px;z-index:-1;opacity:0;pointer-events:none;';
