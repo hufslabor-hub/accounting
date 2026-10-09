@@ -6498,7 +6498,14 @@ function startAppDate() {
     const year = get('year');
     const month = get('month');
     const day = get('day');
+    
+    // 한국 표준시 기준 요일
+    const weekday = new Intl.DateTimeFormat('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      weekday: 'short'
+    }).format(now);
 
+    // 표시 형식: 2026.10.09(금)
     el.textContent = `${year}.${month}.${day}(${weekday})`;
     el.setAttribute('datetime', `${year}-${month}-${day}`);
   };
