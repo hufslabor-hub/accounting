@@ -6477,6 +6477,38 @@ document.getElementById('some-button')?.addEventListener('click', async function
   }
 });
 
+// 탭 영역 오른쪽 KST 날짜
+function startAppDate() {
+  const el = document.getElementById('app-date');
+  if (!el) return;
+
+  const tick = () => {
+    const now = new Date();
+
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(now);
+
+    const get = type =>
+      parts.find(p => p.type === type)?.value || '';
+
+    const year = get('year');
+    const month = get('month');
+    const day = get('day');
+
+    el.textContent = `${year}.${month}.${day}(${weekday})`;
+    el.setAttribute('datetime', `${year}-${month}-${day}`);
+  };
+
+  tick();
+  setInterval(tick, 60000);
+}
+
+startAppDate();
+
 // 탭 영역 오른쪽 KST 시계 (시:분:초)
 function startAppClock(){
   const el = document.getElementById('app-clock');
