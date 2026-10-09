@@ -6036,6 +6036,94 @@ document.getElementById('btn-cancel-entry-edit').addEventListener('click',()=>{
 document.getElementById('f-date-picker').addEventListener('change',event=>{
   document.getElementById('f-date').value=event.target.value;
 });
+
+/* 새 내역 입력: 선택·날짜 확정 후 다음 입력란으로 자동 이동 */
+(function setupEntryAutoAdvance() {
+  const get = id => document.getElementById(id);
+
+  const focusNext = id => {
+    const next = get(id);
+    if (next) {
+      next.focus();
+    }
+  };
+
+  // 구분 버튼(수입/지출) → 결제일
+  ['btn-gubun-income', 'btn-gubun-expense'].forEach(id => {
+    const el = get(id);
+    if (el) {
+      el.addEventListener('click', () => {
+        focusNext('f-date');
+      });
+    }
+  });
+
+  // 결제일을 입력하고 확정 → 세부 계정과목
+  const dateInput = get('f-date');
+  if (dateInput) {
+    dateInput.addEventListener('change', () => {
+      if (typeof parseEntryDate === 'function' &&
+          parseEntryDate(dateInput.value)) {
+        focusNext('f-mok');
+      }
+    });
+
+    // 날짜를 직접 입력한 뒤 Enter를 눌러도 이동
+    dateInput.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+
+        if (typeof parseEntryDate === 'function') {
+          const date = parseEntryDate(dateInput.value);
+          if (date) {
+            dateInput.value = date;
+            get('f-date-picker').value = date;
+            focusNext('f-mok');
+          }
+        }
+      }
+    });
+  }
+
+  // 달력에서 날짜 선택 → 세부 계정과목
+  const datePicker = get('f-date-picker');
+  if (datePicker) {
+    datePicker.addEventListener('change', () => {
+      if (datePicker.value) {
+        focusNext('f-mok');
+      }
+    });
+  }
+
+  // 세부 계정과목 선택 → 내용
+  const mok = get('f-mok');
+  if (mok) {
+    mok.addEventListener('change', () => {
+      if (mok.value) {
+        focusNext('f-desc');
+      }
+    });
+  }
+
+  // 드롭다운 제안 목록에서 선택하거나 입력을 확정하면 다음 칸으로
+  const fieldSequence = [
+    ['f-desc', 'f-payee'],
+    ['f-payee', 'f-amount'],
+    ['f-amount', 'f-spender']
+  ];
+
+  fieldSequence.forEach(([currentId, nextId]) => {
+    const el = get(currentId);
+    if (el) {
+      el.addEventListener('change', () => {
+        if (el.value.trim() !== '') {
+          focusNext(nextId);
+        }
+      });
+    }
+  });
+})();
+
 document.getElementById('f-date').addEventListener('blur',event=>{
   const date=parseEntryDate(event.target.value);
   if(date){
