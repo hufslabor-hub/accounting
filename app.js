@@ -122,6 +122,18 @@ const CATEGORY_SCHEMA_VERSION = 2;
 const categoryKey = y => 'categories:' + y;
 const fyStart = y => `${y}-01-01`;
 const fyEnd = y => `${y}-12-31`;
+// 새 내역 입력의 기본 결제일: 오늘(한국 시간). 보고 있는 회계연도 범위를 벗어나면 비워 둔다.
+function defaultEntryDate(){
+  const today = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  return (today >= fyStart(currentYear-1) && today <= fyEnd(currentYear)) ? today : '';
+}
+// 결제일 입력란으로 이동 (기존 내용을 선택해 바로 덮어쓸 수 있게)
+function focusEntryDate(){
+  const input = document.getElementById('f-date');
+  if(!input) return;
+  input.focus();
+  try{ input.select(); }catch(_e){ /* ignore */ }
+}
 let lastStorageError = '';
 
 function hasSharedStorage(){
@@ -2274,8 +2286,9 @@ function renderYearSelect(){
   const datePicker = document.getElementById('f-date-picker');
   datePicker.min = fyStart(currentYear - 1);
   datePicker.max = fyEnd(currentYear);
-  document.getElementById('f-date').value = '';
-  datePicker.value = '';
+  const initialDate = defaultEntryDate();
+  document.getElementById('f-date').value = initialDate;
+  datePicker.value = initialDate;
 }
 
 async function loadYearData(){
@@ -5972,11 +5985,13 @@ if(!Number.isFinite(amount) || !Number.isInteger(amount) || amount===0){
   }
   renderReport();
   renderEntryView();
+  focusEntryDate();
 }
 
 function clearEntryForm(){
-  document.getElementById('f-date').value = '';
-  document.getElementById('f-date-picker').value = '';
+  const initialDate = defaultEntryDate();
+  document.getElementById('f-date').value = initialDate;
+  document.getElementById('f-date-picker').value = initialDate;
   document.getElementById('f-amount').value = '';
   document.getElementById('f-desc').value = '';
   document.getElementById('f-payee').value = '';
@@ -6028,6 +6043,11 @@ document.getElementById('btn-export-ledger').addEventListener('click',exportLedg
 document.getElementById('btn-gubun-income').addEventListener('click', ()=>setGubun('수입'));
 document.getElementById('btn-gubun-expense').addEventListener('click', ()=>setGubun('지출'));
 document.getElementById('btn-add').addEventListener('click', addEntry);
+document.getElementById('btn-new-entry').addEventListener('click',()=>{
+  if(editingEntryId) cancelEntryEdit(); else clearEntryForm();
+  setStatus('');
+  focusEntryDate();
+});
 bindFeatureUI();
 document.getElementById('btn-cancel-entry-edit').addEventListener('click',()=>{
   cancelEntryEdit();
@@ -6096,9 +6116,23 @@ document.getElementById('f-date-picker').addEventListener('change',event=>{
   }
 
   // 세부 계정과목 선택 → 내용
+  // 방향키(↑↓, PageUp/Down, Home/End)로 훑는 동안에는 이동하지 않고, 마우스·터치로 고르거나 Enter를 누를 때만 이동
   const mok = get('f-mok');
   if (mok) {
+    let keyBrowsing = false;
+    const BROWSE_KEYS = ['ArrowDown','ArrowUp','PageDown','PageUp','Home','End'];
+    mok.addEventListener('keydown', event => {
+      if (BROWSE_KEYS.includes(event.key)) {
+        keyBrowsing = true;
+      } else if (event.key === 'Enter') {
+        keyBrowsing = false;
+        if (mok.value) setTimeout(() => focusNext('f-desc'), 0);
+      }
+    });
+    ['mousedown', 'touchstart', 'blur'].forEach(type =>
+      mok.addEventListener(type, () => { keyBrowsing = false; }));
     mok.addEventListener('change', () => {
+      if (keyBrowsing) return;
       if (mok.value) {
         focusNext('f-desc');
       }

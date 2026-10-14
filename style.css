@@ -993,6 +993,7 @@ table:not(.payment-report-document) thead th{
 .entry-form-grid > .field{background:var(--paper-2);padding:12px 14px;min-width:0;}
 .entry-form-footer{padding:16px 18px;border-top:1px solid var(--line);}
 .entry-form-footer #btn-add{margin-top:14px;}
+.entry-form-footer #btn-new-entry{margin-top:14px;margin-left:8px;}
 
 /* 4) 자주 쓰는 지출 템플릿: 제목 줄 오른쪽 정렬 */
 .quick-template-container{margin-bottom:0;}
