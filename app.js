@@ -815,7 +815,7 @@ let ledgerRenderTimer = null;
 
   const ENTRY_PAGE_SIZE = 70;
 let pendingUnsubscribe = null;
-let ledgerSources = {recent:new Map(), pending:new Map(), older:new Map(), approved:new Map()};
+let ledgerSources = {recent:new Map(), pending:new Map(), older:new Map()};
 // 방금 저장한 로컬 변경(승인 등). 실시간 스냅샷이 예전 상태로 덮어쓰지 못하게 한다.
 let localOverrides = new Map();
 let olderCursor = null, cursorSet = false, olderHasMore = false, olderLoading = false;
@@ -1223,11 +1223,9 @@ document.getElementById('deposit-box').addEventListener('click',event=>{
 
 
   
-let approvedUnsubscribe = null;
 function stopLedgerWatcher(){
   if(ledgerUnsubscribe){ ledgerUnsubscribe(); ledgerUnsubscribe = null; }
   if(pendingUnsubscribe){ pendingUnsubscribe(); pendingUnsubscribe = null; }
-  if(approvedUnsubscribe){ approvedUnsubscribe(); approvedUnsubscribe = null; }
 }
 
 function scheduleLedgerRender(){
@@ -1237,7 +1235,7 @@ function scheduleLedgerRender(){
 
 function rebuildLedger(){
   const map = new Map();
-  [ledgerSources.older, ledgerSources.pending, ledgerSources.recent, ledgerSources.approved]
+  [ledgerSources.older, ledgerSources.pending, ledgerSources.recent]
     .forEach(source=>source.forEach((entry,id)=>map.set(id,entry)));
   // 로컬에서 방금 확정한 변경이 스냅샷보다 우선한다 (승인 직후 결의완료로 되돌아가는 현상 방지)
   localOverrides.forEach((entry,id)=>map.set(id, entry));
@@ -1368,6 +1366,15 @@ const isClosedApproved = t => {
   if(txn > 0) return txn <= closedThrough;
   const acct = entryAcctMonth(t) ?? 0;
   return acct > 0 && acct <= closedThrough;
+};
+// 결의 내역 숨김 전용: 승인월(승인번호·acctMonth·approvedAt) 기준으로 마감 여부 판단
+// (승인월이 아직 마감되지 않았다면 결제일이 마감된 달이어도 결의 내역에 남긴다)
+const isClosedByApprovalMonth = t => {
+  if(!APPROVED_STATES.includes(t.status) || !closedThrough) return false;
+  const ay = entryApprovalYear(t);
+  if(ay && ay !== currentYear) return ay < currentYear;
+  const am = entryApprovalMonth(t);
+  return am > 0 && am <= closedThrough;
 };
 // 마감된 달의 미승인(입력완료·결의완료) 건인지
 const isClosedOpenItem = t => {
@@ -2360,7 +2367,7 @@ async function loadLedger(){
   stopLedgerWatcher();
   const year = currentYear;
 reportSummary = null; reportMonthCache = {}; reportLoading = false; reportLoadToken++;
-  ledgerSources = {recent:new Map(), pending:new Map(), older:new Map(), approved:new Map()};
+  ledgerSources = {recent:new Map(), pending:new Map(), older:new Map()};
   localOverrides = new Map();
   olderCursor = null; cursorSet = false; olderHasMore = false; olderLoading = false;
   await ensureLedgerMigrated(year);
@@ -2379,21 +2386,10 @@ reportSummary = null; reportMonthCache = {}; reportLoading = false; reportLoadTo
     ledgerSources.pending = new Map(snapshot.docs.map(doc=>[doc.id,doc.data()]));
     rebuildLedger();
   });
-  // 승인된 거래도 결의 내역에 보이도록 승인 건을 별도로 구독 (보고서 세부 거래와 목록 일치)
-  // orderBy 없이 status in 만 사용 → 추가 복합 인덱스 불필요
-  const approved = watchLedgerQuery(
-    col.where('status','in',APPROVED_STATES),
-    year,
-    snapshot=>{
-      ledgerSources.approved = new Map(snapshot.docs.map(doc=>[doc.id,{...doc.data(),id:doc.id}]));
-      rebuildLedger();
-    }
-  );
   ledgerUnsubscribe = recent.unsub;
   pendingUnsubscribe = pending.unsub;
-  approvedUnsubscribe = approved.unsub;
-  await Promise.all([recent.ready, pending.ready, approved.ready]);
-  setFooter('최근 내역·승인 내역 불러옴');
+  await Promise.all([recent.ready, pending.ready]);
+  setFooter('최근 내역만 불러옴');
 }
 
 // 현재 선택/붙여넣어진 영수증 파일 객체
@@ -2904,10 +2900,8 @@ function applyLocalChanges(upserts,deletes){
     ledgerSources.older.set(id, entry);
     if(APPROVED_STATES.includes(entry.status)){
       ledgerSources.pending.delete(id);
-      ledgerSources.approved.set(id, entry);
     }else if(['input-complete','submitted','rejected'].includes(entry.status)){
       ledgerSources.pending.set(id, entry);
-      ledgerSources.approved.delete(id);
     }else if(ledgerSources.pending.has(id)){
       ledgerSources.pending.set(id, entry);
     }
@@ -3560,7 +3554,8 @@ const source = ledger;
     .filter(t => isReport || currentStatusEntry==='전체' || t.status===currentStatusEntry)
     // 결의 내역에는 입력완료(미결의) 건을 넣지 않음 — 입력 내역 상자에서만 관리
     .filter(t => isReport || t.status!=='input-complete')
-    // 승인된 거래도 결의 내역에 표시 (마감 여부와 무관). 마감된 달은 승인 취소·수정이 막혀 있음
+    // 승인월이 마감된 승인 건은 결의 내역에서 숨기고 보고서에만 표시 (결제일이 아닌 승인월 기준)
+    .filter(t => isReport || !isClosedByApprovalMonth(t))
             .slice()
     .sort(isReport ? ((a,b) => (b.date||'').localeCompare(a.date||'')) : compareByResolution);
 
@@ -4905,7 +4900,7 @@ async function changeClosure(delta){
   const expected = closedThrough, target = expected+delta;
   if(target<0 || target>12) return;
   const question = delta>0
-    ? `${target}월을 마감합니다. 마감된 달의 승인 내역은 결산 관리 목록에 그대로 보이지만, 승인 취소·수정은 할 수 없습니다. 계속할까요?`
+    ? `${target}월을 마감합니다. ${target}월의 승인 내역은 결산 관리에서 숨겨지고 보고서에서만 보입니다. 계속할까요?`
     : `${expected}월 마감을 취소합니다. 계속할까요?`;
   if(!(await confirmAction(question,{
     title: delta>0 ? '월 마감' : '마감 취소',
