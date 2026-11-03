@@ -820,7 +820,7 @@ let ledgerSources = {recent:new Map(), pending:new Map(), older:new Map()};
 let localOverrides = new Map();
 let olderCursor = null, cursorSet = false, olderHasMore = false, olderLoading = false;
 let reportSummary = null, reportMonthCache = {}, reportLoading = false, reportLoadToken = 0;
-const SUMMARY_VERSION = 2;
+const SUMMARY_VERSION = 3; // 승인일 기준 집계로 전환: 기존 결제일 기준 집계는 자동 재생성
 const reportSummaryKey = y => 'report-summary:' + y;
 const reportSummaryRef = year => db.collection('accountingData').doc(reportSummaryKey(year));
   let appReady = false;
