@@ -3497,6 +3497,43 @@ function captureHierarchyForm(){
   return {tree,budget:nextBudget};
 }
 
+// 결의 내역의 월 구분: 승인된 건은 승인월(승인번호·승인일 기준), 그 외는 결제월
+function entryListMonth(t){
+  if(APPROVED_STATES.includes(t.status)){
+    const m = entryApprovalMonth(t);
+    if(m>=1 && m<=12) return monthList[m-1];
+  }
+  return t.month;
+}
+
+// 결의 내역 월 선택 드롭다운: 1~12월을 항상 표시하고 월별 건수를 함께 보여줌
+function renderEntryMonthSelect(){
+  const sel = document.getElementById('month-select-entry');
+  if(!sel) return;
+  const counts = {};
+  let total = 0;
+  ledger.forEach(t=>{
+    if(t.status==='input-complete') return;
+    if(!showClosedEntries && isClosedApproved(t)) return;
+    const m = entryListMonth(t);
+    counts[m] = (counts[m]||0) + 1;
+    total++;
+  });
+  sel.innerHTML = '';
+  ['전체', ...monthList].forEach(m=>{
+    const opt = document.createElement('option');
+    opt.value = m;
+    const n = m==='전체' ? total : (counts[m]||0);
+    opt.textContent = n ? `${m} (${n})` : m;
+    sel.appendChild(opt);
+  });
+  sel.value = currentMonthEntry;
+  if(!sel.dataset.bound){
+    sel.dataset.bound = '1';
+    sel.addEventListener('change', ()=>{ currentMonthEntry = sel.value; renderTxTable('entry'); });
+  }
+}
+
 function renderMonthFilters(containerId, sourceList, current, onClick){
   const el = document.getElementById(containerId);
   el.innerHTML = '';
@@ -3554,7 +3591,7 @@ function renderTxTable(mode){
 
 const source = ledger;
   const filtered = source
-    .filter(t => monthSel==='전체' || t.month===monthSel)
+    .filter(t => monthSel==='전체' || (isReport ? t.month : entryListMonth(t))===monthSel)
     .filter(t => isReport || currentStatusEntry==='전체' || t.status===currentStatusEntry)
     // 결의 내역에는 입력완료(미결의) 건을 넣지 않음 — 입력 내역 상자에서만 관리
     .filter(t => isReport || t.status!=='input-complete')
@@ -4879,13 +4916,13 @@ function renderEntryView(){
     closedChk.checked = showClosedEntries;
     if(!closedChk.dataset.bound){
       closedChk.dataset.bound = '1';
-      closedChk.addEventListener('change', ()=>{ showClosedEntries = closedChk.checked; renderTxTable('entry'); });
+      closedChk.addEventListener('change', ()=>{ showClosedEntries = closedChk.checked; renderEntryMonthSelect(); renderTxTable('entry'); });
     }
   }
     renderClosing();      // ← 추가
   renderPendingBox();
   renderStatusFilters();
-  renderMonthFilters('month-filters-entry', ledger, currentMonthEntry, m=>{ currentMonthEntry=m; renderTxTable('entry'); });
+  renderEntryMonthSelect();
   renderRecentEntryOptions();
   refreshMokOptions();
   renderTxTable('entry');
