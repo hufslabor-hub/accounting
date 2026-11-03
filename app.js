@@ -3178,20 +3178,24 @@ if(chartViewport.addEventListener) chartViewport.addEventListener('change',refre
 else if(chartViewport.addListener) chartViewport.addListener(refreshChartsForViewport);
 
 
-function renderReport(){
- if(reportSummary===null){
-    if(appReady && document.getElementById('view-report').classList.contains('active')) loadReportSummary();
-    return;
-  }
-  const approved = summaryToEntries(reportSummary);
+// 보고서 상단 총 수입·총 지출·잔액 카드와 차트.
+// 월이 선택돼 있으면 '1월~선택 월' 승인월 기준 누적만 반영한다 (선택 월 이후 승인분은 제외).
+function renderReportOverview(allApproved, throughMonth=currentMonthlyReportMonth){
+  const scoped = Number.isInteger(throughMonth) && throughMonth>=1 && throughMonth<=12;
+  const approved = scoped
+    ? allApproved.filter(c=>{ const m = monthNo(c.month); return m>=1 && m<=throughMonth; })
+    : allApproved;
   const approvedCount = approved.reduce((sum,t)=>sum+t._count,0);
   const ag = aggregates(approved);
+  const agAll = aggregates(allApproved);   // 계좌 잔액 대조는 월과 무관하게 현재(전체 승인) 기준
 
   document.getElementById('r-income').textContent = fmt(ag.totalIncome);
   document.getElementById('r-expense').textContent = fmt(ag.totalExpense);
-document.getElementById('r-count').textContent = `승인된 ${approvedCount.toLocaleString('ko-KR')}건 거래`;
+document.getElementById('r-count').textContent = scoped
+    ? `1월~${throughMonth}월 승인 ${approvedCount.toLocaleString('ko-KR')}건 거래`
+    : `승인된 ${approvedCount.toLocaleString('ko-KR')}건 거래`;
   document.getElementById('r-balance').textContent = fmt(ag.totalIncome - ag.totalExpense);
-  renderAccountBalanceCheck(ag.totalIncome - ag.totalExpense);
+  renderAccountBalanceCheck(agAll.totalIncome - agAll.totalExpense);
 
   createResponsiveChart('monthly','chartMonthly','bar',mobile=>{ const P = chartPalette(); return {
     type:'bar',
@@ -3237,7 +3241,15 @@ document.getElementById('r-count').textContent = `승인된 ${approvedCount.toLo
                y:{ticks:{font:{size:CHART_FONT_SIZE}, callback:function(v){ const l=this.getLabelForValue(v); return mobile?truncateLabel(l,9):l; }}, grid:{display:false}} }
     }
   }; });
+}
 
+function renderReport(){
+ if(reportSummary===null){
+    if(appReady && document.getElementById('view-report').classList.contains('active')) loadReportSummary();
+    return;
+  }
+  const approved = summaryToEntries(reportSummary);
+  renderReportOverview(approved);
    renderReportMonthFilters(approved);
   renderReportDetail();
   autoSelectMonthlyReportMonth(approved);   // 월 미선택이면 승인 내역이 있는 가장 최근 월을 자동 선택
@@ -4380,6 +4392,7 @@ async function loadMonthlyBudgetReport(throughMonth, {exact=false}={}) {
       });
       const count = fromSummary.reduce((s, c) => s + c._count, 0);
       renderMonthlyBudgetSection(fromSummary, n);
+      renderReportOverview(summaryToEntries(reportSummary), n);   // 총 수입·총 지출 카드도 선택 월말 기준으로
       if (scrollBox) scrollBox.style.display = '';
       if (mobileBox) mobileBox.classList.add('is-ready');
       if (noteEl) {
@@ -4407,6 +4420,7 @@ async function loadMonthlyBudgetReport(throughMonth, {exact=false}={}) {
     });
 
     renderMonthlyBudgetSection(cumulative, n);
+    { const tmp = emptySummary(); cumulative.forEach(t=>applyToSummary(tmp,t,1)); renderReportOverview(summaryToEntries(tmp), n); }
     if (scrollBox) scrollBox.style.display = '';
     if (mobileBox) mobileBox.classList.add('is-ready');
     if (noteEl) {
