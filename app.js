@@ -4163,10 +4163,10 @@ function safeFileName(text){ return String(text).replace(/[<>:"/\\|?*\x00-\x1f]/
 async function buildReportPdfBlob(entries,spender,approval=null,managementNo=null){
   // 화면 안에 두되 맨 뒤로 보내고 가려서, 캡처는 되지만 사용자에게는 안 보이게 함
   const wrapper = document.createElement('div');
-  wrapper.style.cssText = 'position:absolute;left:0;top:0;width:794px;z-index:-1;opacity:0;pointer-events:none;';
+  wrapper.style.cssText = 'position:absolute;left:0;top:0;width:194mm;z-index:-1;opacity:0;pointer-events:none;';   // 194mm = A4 폭 210mm − 좌우 여백 8mm×2 (PDF 인쇄 영역과 동일)
   const host = document.createElement('div');
   host.className = 'payment-report-sheet';
-  host.style.cssText = 'width:794px;background:#fff;';
+  host.style.cssText = 'width:194mm;max-width:194mm;margin:0;background:#fff;';
   wrapper.appendChild(host);
   document.body.appendChild(wrapper);
   try{
@@ -4177,7 +4177,7 @@ async function buildReportPdfBlob(entries,spender,approval=null,managementNo=nul
     window.scrollTo(0,0);
     return await window.html2pdf().set({
       ...PDF_OPTIONS,
-      html2canvas:{...PDF_OPTIONS.html2canvas,scrollX:0,scrollY:0,windowWidth:794}
+      html2canvas:{...PDF_OPTIONS.html2canvas,scrollX:0,scrollY:0}   // windowWidth 고정 금지: 실제 화면 폭과 달라지면 가운데 정렬된 캡처 위치가 어긋나 왼쪽이 잘림
     }).from(host).outputPdf('blob');
   }finally{
     wrapper.remove();
