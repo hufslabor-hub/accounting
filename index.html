@@ -364,6 +364,7 @@
 </div>
 
         <button class="btn-primary" id="btn-add">내역 추가</button>
+        <button class="btn-revert" id="btn-bulk-entry-open" type="button">여러 건 한꺼번에 입력</button>
         <button class="btn-revert hidden" id="btn-cancel-entry-edit" type="button">수정 취소</button>
         <span id="save-status"></span>
 </div>
@@ -590,6 +591,33 @@
     </div>
   </dialog>
 
+  <dialog class="bulk-entry-dialog" id="bulk-entry-dialog" aria-labelledby="bulk-entry-title">
+    <div class="payment-dialog-header">
+      <h2 id="bulk-entry-title">여러 건 한꺼번에 입력</h2>
+      <button class="btn-auth" type="button" id="btn-bulk-entry-close">닫기</button>
+    </div>
+    <div class="bulk-entry-body">
+      <p class="bulk-entry-help">CSV·TXT 파일을 올리거나, 엑셀에서 복사한 표를 아래에 붙여넣으세요. 첫 줄에 <b>구분, 결제일, 세부 계정과목, 내용, 지급처, 금액, 담당자</b> 제목이 있으면 열 순서가 달라도 읽고, 제목이 없으면 이 순서대로 읽습니다. 구분을 비워 두면 지출로 처리하며, 오류가 있는 행은 등록에서 제외됩니다.</p>
+      <div class="bulk-entry-tools">
+        <input type="file" id="bulk-entry-file" accept=".csv,.txt,.tsv,text/csv,text/plain" hidden>
+        <button type="button" class="btn-revert" id="btn-bulk-entry-pick">📎 파일 선택</button>
+        <button type="button" class="btn-revert" id="btn-bulk-entry-template">서식 파일(CSV) 받기</button>
+        <label class="bulk-entry-spender">담당자 기본값 <input type="text" id="bulk-entry-spender" list="staff-name-options" placeholder="담당자 칸이 빈 행에 적용" autocomplete="off"></label>
+      </div>
+      <textarea id="bulk-entry-text" rows="5" spellcheck="false" placeholder="구분&#9;결제일&#9;세부 계정과목&#9;내용&#9;지급처&#9;금액&#9;담당자&#10;지출&#9;2026-11-03&#9;...&#9;집행부 회의 식비&#9;배달의민족&#9;50000&#9;홍길동"></textarea>
+      <div class="table-scroll bulk-entry-table-scroll">
+        <table class="transaction-table bulk-entry-table">
+          <thead><tr><th>포함</th><th>줄</th><th>구분</th><th>결제일</th><th>목</th><th>내용</th><th>지급처</th><th class="num">금액</th><th>담당자</th><th>확인</th></tr></thead>
+          <tbody id="bulk-entry-body"></tbody>
+        </table>
+      </div>
+      <p id="bulk-entry-summary" role="status">파일을 선택하거나 내용을 붙여넣으면 여기서 확인할 수 있습니다.</p>
+    </div>
+    <div class="payment-dialog-actions">
+      <button class="btn-primary" id="btn-bulk-entry-save" type="button" disabled>등록할 내역 없음</button>
+    </div>
+  </dialog>
+
   <dialog class="payment-report-dialog" id="payment-report-dialog" aria-labelledby="payment-report-dialog-title">
     <div class="payment-dialog-header">
       <h2 id="payment-report-dialog-title">지급 보고서</h2>
@@ -618,7 +646,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <!-- APP_BUILD: stamp-version.mjs 실행 시 자동으로 갱신됩니다 -->
-<script>window.APP_BUILD = '20261103-1245';</script>
+<script>window.APP_BUILD = '20261103-2300';</script>
 <script src="domain.js"></script>
 <script>
 /* 초기 데이터(data.json)를 먼저 읽은 뒤 app.js를 실행합니다.

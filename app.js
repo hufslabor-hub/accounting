@@ -5489,6 +5489,288 @@ function clearEntryForm(){
   resetReceiptInput();
 }
 
+// ---------- 여러 건 한꺼번에 입력 (CSV·TXT 업로드 / 엑셀 붙여넣기) ----------
+const BULK_IMPORT_ALIASES = {
+  gubun:['구분','수입지출','수입/지출'],
+  date:['결제일','결제일자','날짜','일자','거래일'],
+  mok:['세부계정과목','계정과목','세부계정','목'],
+  desc:['내용','적요','내역'],
+  payee:['지급처','거래처','사용처'],
+  amount:['금액','금액(원)','지출액'],
+  spender:['담당자','입력자','사용자','담당'],
+  gwan:['관'],
+  hang:['항']
+};
+const BULK_IMPORT_DEFAULT_ORDER = ['gubun','date','mok','desc','payee','amount','spender'];
+const BULK_IMPORT_MAX = 400;
+let bulkImportItems = [];
+
+// 파일 바이트 → 문자열 (UTF-8 우선, 엑셀 한글 CSV는 CP949/EUC-KR, 유니코드 텍스트는 UTF-16)
+function decodeImportBuffer(buffer){
+  const bytes = new Uint8Array(buffer);
+  if(bytes[0]===0xFF && bytes[1]===0xFE) return new TextDecoder('utf-16le').decode(bytes).replace(/^\uFEFF/,'');
+  if(bytes[0]===0xFE && bytes[1]===0xFF) return new TextDecoder('utf-16be').decode(bytes).replace(/^\uFEFF/,'');
+  try{
+    return new TextDecoder('utf-8',{fatal:true}).decode(bytes).replace(/^\uFEFF/,'');
+  }catch(error){
+    return new TextDecoder('euc-kr').decode(bytes);
+  }
+}
+
+// 탭·쉼표·세미콜론 구분 텍스트 → 행 배열 (따옴표로 감싼 칸, 칸 안의 쉼표·줄바꿈 지원)
+function parseDelimitedText(text){
+  const src = String(text||'').replace(/^\uFEFF/,'').replace(/\r\n?/g,'\n');
+  const firstLine = src.split('\n').find(line=>line.trim()!=='') || '';
+  const count = ch => firstLine.split(ch).length-1;
+  const delimiter = count('\t')>0 ? '\t' : (count(',')>=count(';') ? ',' : ';');
+  const rows = [];
+  let row = [], cell = '', inQuotes = false;
+  const pushCell = ()=>{ row.push(cell); cell=''; };
+  const pushRow = ()=>{ pushCell(); if(row.some(c=>c.trim()!=='')) rows.push(row); row=[]; };
+  for(let i=0;i<src.length;i++){
+    const ch = src[i];
+    if(inQuotes){
+      if(ch==='"'){
+        if(src[i+1]==='"'){ cell+='"'; i++; } else inQuotes=false;
+      }else cell+=ch;
+    }else if(ch==='"' && cell===''){ inQuotes=true; }
+    else if(ch===delimiter){ pushCell(); }
+    else if(ch==='\n'){ pushRow(); }
+    else cell+=ch;
+  }
+  if(cell!=='' || row.length) pushRow();
+  return rows;
+}
+
+function parseLooseDate(value){
+  const t = String(value||'').trim().replace(/\s+/g,'');
+  const m = /^(\d{4})[-./년](\d{1,2})[-./월](\d{1,2})일?$/.exec(t);
+  return parseEntryDate(m ? `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}` : t);
+}
+function parseLooseAmount(value){
+  let t = String(value||'').replace(/[,\s원₩]/g,'');
+  const paren = /^\((.*)\)$/.exec(t);
+  if(paren) t = '-'+paren[1];
+  if(!/^-?\d+$/.test(t)) return NaN;
+  return Number(t);
+}
+
+// 행 배열 → 검증된 미리보기 항목. defaults: {gubun, spender}
+function buildBulkImportItems(rows, defaults={}){
+  if(!rows.length) return [];
+  const norm = v => String(v||'').replace(/\s+/g,'').toLowerCase();
+  const headerKeys = rows[0].map(cell=>{
+    const key = norm(cell);
+    return Object.keys(BULK_IMPORT_ALIASES).find(name=>BULK_IMPORT_ALIASES[name].some(alias=>norm(alias)===key)) || null;
+  });
+  const hasHeader = headerKeys.filter(Boolean).length>=2 && (headerKeys.includes('date') || headerKeys.includes('amount'));
+  const columns = hasHeader ? headerKeys : BULK_IMPORT_DEFAULT_ORDER;
+  const dataRows = hasHeader ? rows.slice(1) : rows;
+  const firstLine = hasHeader ? 2 : 1;
+  const existingKeys = new Set(ledger.map(t=>[t.date,t.gubun,t.amount,(t.payee||'').trim(),(t.desc||'').trim()].join('|')));
+  const batchKeys = new Set();
+  const gubunDefault = defaults.gubun==='수입' ? '수입' : '지출';
+
+  return dataRows.map((cells,index)=>{
+    const raw = {};
+    columns.forEach((name,col)=>{ if(name && raw[name]===undefined) raw[name] = String(cells[col]??'').trim(); });
+    const errors = [], warnings = [];
+
+    let gubun = raw.gubun || gubunDefault;
+    if(['입금','수입','income'].includes(gubun.toLowerCase())) gubun = '수입';
+    else if(['출금','지출','expense'].includes(gubun.toLowerCase())) gubun = '지출';
+    else { errors.push(`구분은 수입/지출 중 하나여야 합니다 (${gubun})`); }
+
+    const date = parseLooseDate(raw.date);
+    if(!date) errors.push('결제일 형식 오류 (YYYY-MM-DD, YYYYMMDD, YYYY.M.D 가능)');
+    else if(date > fyEnd(currentYear)) errors.push(`${currentYear} 회계연도 이후 날짜`);
+
+    const desc = raw.desc || '';
+    if(!desc) errors.push('내용 없음');
+
+    const amount = parseLooseAmount(raw.amount);
+    if(!Number.isInteger(amount) || amount===0) errors.push('금액은 0이 아닌 정수 (환불은 음수)');
+
+    let classification = null;
+    const type = gubun==='수입' ? 'income' : 'expense';
+    if(!raw.mok){
+      errors.push('세부 계정과목(목) 없음');
+    }else if(gubun==='수입' || gubun==='지출'){
+      const matches = [];
+      (accountCategories[type]||[]).forEach(gwan=>(gwan.accounts||[]).forEach(hang=>(hang.items||[]).forEach(mok=>{
+        if(mok.trim()!==raw.mok.trim()) return;
+        if(raw.gwan && normalizeCategoryName(gwan.name,'_관')!==normalizeCategoryName(raw.gwan,'_관')) return;
+        if(raw.hang && normalizeCategoryName(hang.name,'_항')!==normalizeCategoryName(raw.hang,'_항')) return;
+        const candidate = {gwan:gwan.name,hang:hang.name,mok};
+        if(hasAccount(type,candidate)) matches.push(candidate);
+      })));
+      if(matches.length===1) classification = matches[0];
+      else if(!matches.length) errors.push(`등록되지 않은 ${gubun} 목: ${raw.mok}`);
+      else errors.push(`'${raw.mok}'이(가) 여러 분류에 있습니다 — 관·항 열로 지정하세요 (${matches.map(m=>`${normalizeCategoryName(m.gwan,'_관')}/${normalizeCategoryName(m.hang,'_항')}`).join(', ')})`);
+    }
+
+    const spender = raw.spender || (defaults.spender||'').trim();
+    if(!spender) warnings.push('담당자 없음');
+
+    const payee = raw.payee || '';
+    if(!errors.length){
+      const key = [date,gubun,amount,payee,desc].join('|');
+      if(existingKeys.has(key)) warnings.push('이미 같은 내역이 있습니다(중복 의심)');
+      else if(batchKeys.has(key)) warnings.push('이 목록 안에 같은 내역이 있습니다(중복 의심)');
+      batchKeys.add(key);
+    }
+    const entry = errors.length ? null : {
+      date, month:(parseInt(date.split('-')[1],10))+'월', gubun, desc, payee, spender, amount,
+      gwan:classification.gwan, hang:classification.hang, category:classification.mok
+    };
+    const duplicate = warnings.some(w=>w.includes('중복'));
+    return {line:firstLine+index, errors, warnings, entry, include:!!entry && !duplicate,
+            view:{gubun, date:date||raw.date||'', mok:raw.mok||'', desc, payee, amount:Number.isFinite(amount)?amount:raw.amount, spender}};
+  });
+}
+
+function renderBulkImportPreview(){
+  const body = document.getElementById('bulk-entry-body');
+  const summary = document.getElementById('bulk-entry-summary');
+  const saveBtn = document.getElementById('btn-bulk-entry-save');
+  if(!body) return;
+  body.innerHTML = '';
+  bulkImportItems.forEach((item,index)=>{
+    const tr = document.createElement('tr');
+    tr.className = item.errors.length ? 'bulk-row-error' : (item.warnings.length ? 'bulk-row-warn' : '');
+    const v = item.view;
+    const note = [...item.errors.map(e=>`⛔ ${e}`), ...item.warnings.map(w=>`⚠ ${w}`)].join(' / ');
+    tr.innerHTML = `
+      <td><input type="checkbox" data-bulk-index="${index}" ${item.entry?'':'disabled'} ${item.include?'checked':''} aria-label="${item.line}행 등록 포함"></td>
+      <td>${item.line}</td>
+      <td>${escapeHTML(v.gubun)}</td>
+      <td class="col-date">${escapeHTML(String(v.date))}</td>
+      <td>${escapeHTML(v.mok)}</td>
+      <td>${escapeHTML(v.desc)}</td>
+      <td>${escapeHTML(v.payee)}</td>
+      <td class="num">${typeof v.amount==='number'?fmtShort(v.amount):escapeHTML(String(v.amount||''))}</td>
+      <td>${escapeHTML(v.spender)}</td>
+      <td class="bulk-note">${item.entry && !note ? '✅ 등록 가능' : escapeHTML(note)}</td>`;
+    body.appendChild(tr);
+  });
+  body.querySelectorAll('input[data-bulk-index]').forEach(box=>box.addEventListener('change',()=>{
+    bulkImportItems[Number(box.dataset.bulkIndex)].include = box.checked;
+    updateBulkImportSummary();
+  }));
+  updateBulkImportSummary();
+}
+function updateBulkImportSummary(){
+  const summary = document.getElementById('bulk-entry-summary');
+  const saveBtn = document.getElementById('btn-bulk-entry-save');
+  const total = bulkImportItems.length;
+  const errorCount = bulkImportItems.filter(i=>i.errors.length).length;
+  const picked = bulkImportItems.filter(i=>i.entry && i.include);
+  summary.textContent = total
+    ? `${total}행 읽음 · 등록 가능 ${total-errorCount}행 · 오류 ${errorCount}행(등록 제외) · 등록 대상 ${picked.length}건`
+    : '파일을 선택하거나 내용을 붙여넣으면 여기서 확인할 수 있습니다.';
+  summary.classList.toggle('status-error', errorCount>0);
+  saveBtn.disabled = picked.length===0;
+  saveBtn.textContent = picked.length ? `${picked.length}건 등록` : '등록할 내역 없음';
+}
+function refreshBulkImportFromText(){
+  const text = document.getElementById('bulk-entry-text').value;
+  const rows = parseDelimitedText(text);
+  if(rows.length>BULK_IMPORT_MAX+1){
+    bulkImportItems = [];
+    renderBulkImportPreview();
+    document.getElementById('bulk-entry-summary').textContent = `한 번에 ${BULK_IMPORT_MAX}건까지 등록할 수 있습니다. 나누어 올려 주세요.`;
+    return;
+  }
+  bulkImportItems = buildBulkImportItems(rows,{
+    gubun:currentGubun,
+    spender:document.getElementById('bulk-entry-spender').value
+  });
+  renderBulkImportPreview();
+}
+function downloadBulkImportTemplate(){
+  const sample = (type)=>{
+    for(const gwan of (accountCategories[type]||[])) for(const hang of (gwan.accounts||[])) for(const mok of (hang.items||[])){
+      if(hasAccount(type,{gwan:gwan.name,hang:hang.name,mok})) return mok;
+    }
+    return '';
+  };
+  const today = seoulParts().date;
+  const q = v => /[",\n]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v;
+  const lines = [
+    ['구분','결제일','세부 계정과목','내용','지급처','금액','담당자'],
+    ['지출',today,sample('expense'),'예: 집행부 회의 식비','예: 배달의민족','50000','홍길동'],
+    ['지출',today,sample('expense'),'예: 환불 건','예: 배달의민족','-5000','홍길동']
+  ].map(r=>r.map(q).join(',')).join('\r\n');
+  downloadBlob(new Blob(['\uFEFF'+lines],{type:'text/csv;charset=utf-8'}),'내역_일괄입력_서식.csv');
+}
+async function saveBulkImport(){
+  const picked = bulkImportItems.filter(i=>i.entry && i.include);
+  if(!picked.length){ return; }
+  const saveBtn = document.getElementById('btn-bulk-entry-save');
+  const summary = document.getElementById('bulk-entry-summary');
+  saveBtn.disabled = true;
+  const stamp = Date.now(), createdAt = new Date().toISOString();
+  const entries = picked.map((item,index)=>({
+    id:`usr_${stamp}_${index.toString(36)}${Math.random().toString(36).slice(2,6)}`,
+    ...item.entry, createdAt, locked:false, status:'input-complete'
+  }));
+  let saved = 0;
+  try{
+    for(let i=0;i<entries.length;i+=BULK_IMPORT_MAX){
+      const chunk = entries.slice(i,i+BULK_IMPORT_MAX);
+      await entryTransaction(chunk.map(e=>e.id),(found,api)=>{
+        chunk.forEach(entry=>{
+          if(found.has(entry.id)) throw stateChangedError('같은 id의 내역이 이미 있습니다. 다시 시도해 주세요.');
+          api.set(entry);
+        });
+      });
+      saved += chunk.length;
+    }
+  }catch(error){
+    summary.textContent = `${saved}건 등록 후 중단되었습니다: ${error.message || String(error)}. 등록된 내역은 입력 내역에서 확인해 주세요.`;
+    summary.classList.add('status-error');
+    saveBtn.disabled = false;
+    renderReport(); renderEntryView();
+    return;
+  }
+  document.getElementById('bulk-entry-dialog').close();
+  document.getElementById('bulk-entry-text').value = '';
+  bulkImportItems = [];
+  setStatus(`${saved}건이 입력 내역으로 등록되었습니다.`);
+  renderReport();
+  renderEntryView();
+}
+function initBulkEntryImport(){
+  const dialog = document.getElementById('bulk-entry-dialog');
+  if(!dialog) return;
+  const text = document.getElementById('bulk-entry-text');
+  const file = document.getElementById('bulk-entry-file');
+  let timer = null;
+  document.getElementById('btn-bulk-entry-open').addEventListener('click',()=>{
+    text.value = '';
+    bulkImportItems = [];
+    file.value = '';
+    renderBulkImportPreview();
+    dialog.showModal();
+  });
+  document.getElementById('btn-bulk-entry-close').addEventListener('click',()=>dialog.close());
+  document.getElementById('btn-bulk-entry-pick').addEventListener('click',()=>file.click());
+  document.getElementById('btn-bulk-entry-template').addEventListener('click',downloadBulkImportTemplate);
+  document.getElementById('btn-bulk-entry-save').addEventListener('click',saveBulkImport);
+  document.getElementById('bulk-entry-spender').addEventListener('input',()=>{ if(text.value.trim()) refreshBulkImportFromText(); });
+  text.addEventListener('input',()=>{ clearTimeout(timer); timer = setTimeout(refreshBulkImportFromText,300); });
+  file.addEventListener('change', async ()=>{
+    const f = file.files && file.files[0];
+    if(!f) return;
+    try{
+      text.value = decodeImportBuffer(await f.arrayBuffer());
+      refreshBulkImportFromText();
+    }catch(error){
+      document.getElementById('bulk-entry-summary').textContent = `파일을 읽지 못했습니다: ${error.message || String(error)}`;
+    }
+  });
+}
+
 function markEditingRow(){
   document.querySelectorAll('tr[data-entry-row]').forEach(row=>row.classList.toggle('input-row-editing',row.dataset.entryRow===editingEntryId));
 }
@@ -5531,6 +5813,7 @@ document.getElementById('btn-export-ledger').addEventListener('click',exportLedg
 document.getElementById('btn-gubun-income').addEventListener('click', ()=>setGubun('수입'));
 document.getElementById('btn-gubun-expense').addEventListener('click', ()=>setGubun('지출'));
 document.getElementById('btn-add').addEventListener('click', addEntry);
+initBulkEntryImport();
 document.getElementById('btn-cancel-entry-edit').addEventListener('click',()=>{
   cancelEntryEdit();
   setStatus('수정을 취소했습니다.');
