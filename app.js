@@ -35,6 +35,7 @@ let accountCategories = createDefaultAccountCategories();
 let charts = {};
 let currentMonthReport = '전체';
 let currentMonthEntry = '전체';
+let showClosedEntries = false;   // 결의 내역: 마감된 승인 건 포함 보기
 let currentStatusEntry = '전체';
 let currentGubun = '지출';
 let budgetMigrationMessage = '';
@@ -1366,15 +1367,6 @@ const isClosedApproved = t => {
   if(txn > 0) return txn <= closedThrough;
   const acct = entryAcctMonth(t) ?? 0;
   return acct > 0 && acct <= closedThrough;
-};
-// 결의 내역 숨김 전용: 승인월(승인번호·acctMonth·approvedAt) 기준으로 마감 여부 판단
-// (승인월이 아직 마감되지 않았다면 결제일이 마감된 달이어도 결의 내역에 남긴다)
-const isClosedByApprovalMonth = t => {
-  if(!APPROVED_STATES.includes(t.status) || !closedThrough) return false;
-  const ay = entryApprovalYear(t);
-  if(ay && ay !== currentYear) return ay < currentYear;
-  const am = entryApprovalMonth(t);
-  return am > 0 && am <= closedThrough;
 };
 // 마감된 달의 미승인(입력완료·결의완료) 건인지
 const isClosedOpenItem = t => {
@@ -3554,8 +3546,8 @@ const source = ledger;
     .filter(t => isReport || currentStatusEntry==='전체' || t.status===currentStatusEntry)
     // 결의 내역에는 입력완료(미결의) 건을 넣지 않음 — 입력 내역 상자에서만 관리
     .filter(t => isReport || t.status!=='input-complete')
-    // 승인월이 마감된 승인 건은 결의 내역에서 숨기고 보고서에만 표시 (결제일이 아닌 승인월 기준)
-    .filter(t => isReport || !isClosedByApprovalMonth(t))
+    // 마감된 달의 승인 건은 결의 내역에서 숨기고 보고서에만 표시 ('마감 내역 포함 보기' 체크 시 함께 표시)
+    .filter(t => isReport || showClosedEntries || !isClosedApproved(t))
             .slice()
     .sort(isReport ? ((a,b) => (b.date||'').localeCompare(a.date||'')) : compareByResolution);
 
@@ -4868,6 +4860,14 @@ async function approvePaymentReport(){
 }
 
 function renderEntryView(){
+  const closedChk = document.getElementById('chk-show-closed-entries');
+  if(closedChk){
+    closedChk.checked = showClosedEntries;
+    if(!closedChk.dataset.bound){
+      closedChk.dataset.bound = '1';
+      closedChk.addEventListener('change', ()=>{ showClosedEntries = closedChk.checked; renderTxTable('entry'); });
+    }
+  }
     renderClosing();      // ← 추가
   renderPendingBox();
   renderStatusFilters();
