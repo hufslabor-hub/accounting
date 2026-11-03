@@ -4127,9 +4127,30 @@ function checkSequence(value,label){
   }
   return value;
 }
-function paymentDateKey(date){
-  return `${date.getFullYear()}${String(date.getMonth()+1).padStart(2,'0')}${String(date.getDate()).padStart(2,'0')}`;
+// 한국 시간(KST) 기준 날짜·시각 → {date:'YYYY-MM-DD', time:'HH:MM:SS'}
+function seoulParts(date=new Date()){
+  const p = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(date);
+  const g = type => p.find(x=>x.type===type).value;
+  return {date:`${g('year')}-${g('month')}-${g('day')}`, time:`${g('hour')}:${g('minute')}:${g('second')}`};
 }
+function paymentDateKey(date){
+  return seoulParts(date).date.replace(/-/g,'');
+}
+// 지급 보고서 팝업의 승인일 입력란 초기화 (마감된 달·장부 연도 밖은 선택 불가)
+function setupApprovalDateInput(){
+  const field = document.getElementById('approval-date-field');
+  const input = document.getElementById('approval-date-input');
+  if(!field || !input) return;
+  const closed = Number(closedThrough) || 0;
+  const max = `${currentYear}-12-31`;
+  const min = closed>=12 ? max : `${currentYear}-${String(closed+1).padStart(2,'0')}-01`;
+  let value = seoulParts().date;
+  if(value<min) value = min;
+  if(value>max) value = max;
+  input.min = min; input.max = max; input.value = value;
+  field.classList.remove('hidden');
+}
+
 function highestPaymentSequence(list,dateKey){
   const prefix = new RegExp(`^${dateKey}(\\d+)$`);
   return list.reduce((max,entry)=>{
@@ -4718,10 +4739,12 @@ function openPaymentReportWithEntries(entries, status='approved'){
     if(approved){
       const at = entries.map(e=>e.approvedAt).filter(Boolean).sort().slice(-1)[0] || '';
       const by = entries.map(e=>e.approvedBy).filter(Boolean)[0] || '';
-      const dateLabel = at ? formatEntryDate(String(at).slice(0,10)) : formatApprovalDate(entries[0]);
+      const atDate = at ? new Date(at) : null;
+      const kst = atDate && !Number.isNaN(atDate.getTime()) ? seoulParts(atDate) : null;
+      const dateLabel = kst ? formatEntryDate(kst.date) : (at ? formatEntryDate(String(at).slice(0,10)) : formatApprovalDate(entries[0]));
       approval = {
         label: '지급 승인 완료',
-        date: dateLabel + (at && at.length > 10 ? ' ' + String(at).slice(11,16) : ''),
+        date: dateLabel + (kst ? ' ' + kst.time.slice(0,5) : ''),
         approver: by
       };
       paymentReportApproval = {
@@ -4737,9 +4760,11 @@ function openPaymentReportWithEntries(entries, status='approved'){
     const approveButton = document.getElementById('btn-approve-payment-report');
     if(status==='submitted'){
       approveButton?.classList.remove('hidden');
+      setupApprovalDateInput();
       if(statusEl) statusEl.textContent = '';
     }else{
       approveButton?.classList.add('hidden');
+      document.getElementById('approval-date-field')?.classList.add('hidden');
       if(statusEl) statusEl.textContent = approved
         ? '승인 완료된 지출내역보고입니다. PDF로 저장할 수 있습니다.'
         : '조회 모드입니다. 승인은 결의완료 목록에서 진행하세요.';
@@ -4853,14 +4878,34 @@ async function approvePaymentReport(){
   try{ spender = requireSingleSpender(entries); }
   catch(error){ status.textContent = error.message; return; }
 
+  // 승인일: 입력란에서 고른 날짜 (오늘이면 현재 시각, 다른 날이면 그 날짜의 현재 한국 시각)
+  const pickedDate = document.getElementById('approval-date-input')?.value || seoulParts().date;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(pickedDate)){
+    status.textContent = '승인일을 올바르게 입력해 주세요.';
+    return;
+  }
+  if(Number(pickedDate.slice(0,4))!==currentYear){
+    status.textContent = `승인일은 ${currentYear}년 안에서만 지정할 수 있습니다.`;
+    return;
+  }
+  const nowKst = seoulParts();
+  const approvalTime = pickedDate===nowKst.date ? new Date() : new Date(`${pickedDate}T${nowKst.time}+09:00`);
+  if(Number.isNaN(approvalTime.getTime())){
+    status.textContent = '승인일을 올바르게 입력해 주세요.';
+    return;
+  }
+  const pickedMonth = Number(pickedDate.slice(5,7));
+  if(pickedMonth<=(Number(closedThrough)||0)){
+    status.textContent = `${pickedMonth}월은 이미 마감되어 승인할 수 없습니다. 마감을 취소하거나 열린 달의 날짜를 선택해 주세요.`;
+    return;
+  }
+
   button.disabled = true;
   status.textContent = '승인 처리 중…';
   try{
-    const approvalTime = new Date();
     const approver = currentUser.displayName || currentUser.email || '로그인 사용자';
-    const approvalDate = `${approvalTime.getFullYear()}-${String(approvalTime.getMonth()+1).padStart(2,'0')}-${String(approvalTime.getDate()).padStart(2,'0')}`;
     const approval = {
-      date:`${formatEntryDate(approvalDate)} ${approvalTime.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}`,
+      date:`${formatEntryDate(seoulParts(approvalTime).date)} ${approvalTime.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Seoul'})}`,
       approver, label:'승인 완료'
     };
 
@@ -4893,6 +4938,7 @@ async function approvePaymentReport(){
     renderPaymentReport(approvedEntries,spender,approval,managementNo);
     paymentReportApproval = {approval, managementNo};   // PDF 다운로드 시 승인 도장 포함
     button.classList.add('hidden');
+    document.getElementById('approval-date-field')?.classList.add('hidden');
     const approvedLabel = `${mgmtNoLabel(approvedEntries[0] || {})} ${managementNo}`;
     status.textContent = `승인 완료 (${approvedLabel}). 승인 도장이 찍힌 PDF를 저장하는 중입니다…`;
     // 승인 도장이 포함된 PDF를 자동 저장하고, 성공하면 팝업을 닫는다
