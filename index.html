@@ -378,14 +378,14 @@
     <section class="pending-section">
       <div class="sec-head"><span class="sec-num">03</span><h2>결의 내역</h2></div>
       <div class="card flush entry-table-card">
-        <div class="card-toolbar"><div class="filter-row" id="status-filters-entry"></div><div class="filter-row month-select-row"><label for="month-select-entry">월</label><select id="month-select-entry"></select></div><label class="filter-check"><input type="checkbox" id="chk-show-closed-entries"> 마감 내역 포함 보기</label></div>
+        <div class="card-toolbar"><div class="filter-row" id="status-filters-entry"></div><div class="filter-row month-select-row"><label for="month-select-entry">월</label><select id="month-select-entry"></select></div><label class="filter-check"><input type="checkbox" id="chk-show-closed-entries"> 마감 내역 포함 보기</label><div class="filter-row bulk-unapprove-bar"><span id="bulk-unapprove-count">승인 건 선택 없음</span><label class="filter-check"><input type="checkbox" id="chk-bulk-group" checked> 같은 승인번호 함께 선택</label><button class="btn-revert btn-unapprove" id="btn-bulk-unapprove" type="button" disabled>선택 승인 취소</button></div></div>
         <div class="table-scroll transaction-table-scroll entry-table-container">
           <table class="transaction-table entry-table">
             <colgroup>
               <col class="col-mgmt"><col class="col-date"><col class="col-type"><col class="col-description"><col class="col-mok">
               <col class="col-payee"><col class="col-spender"><col class="col-amount"><col class="col-status"><col class="col-approval"><col class="col-actions">
             </colgroup>
-            <thead><tr><th>결의번호</th><th>결제일</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th>담당자</th><th class="num">금액</th><th>상태</th><th>승인번호</th><th class="col-actions-head">추가 작업</th></tr></thead>
+            <thead><tr><th class="bulk-head"><input type="checkbox" id="chk-bulk-unapprove-all" aria-label="화면의 승인 건 전체 선택" title="화면의 승인 건 전체 선택"> 결의번호</th><th>결제일</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th>담당자</th><th class="num">금액</th><th>상태</th><th>승인번호</th><th class="col-actions-head">추가 작업</th></tr></thead>
             <tbody id="tx-body-entry"></tbody>
           </table>
         </div>
@@ -618,7 +618,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <!-- APP_BUILD: stamp-version.mjs 실행 시 자동으로 갱신됩니다 -->
-<script>window.APP_BUILD = '20261103-1234';</script>
+<script>window.APP_BUILD = '20261103-1245';</script>
 <script src="domain.js"></script>
 <script>
 /* 초기 데이터(data.json)를 먼저 읽은 뒤 app.js를 실행합니다.

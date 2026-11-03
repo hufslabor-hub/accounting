@@ -36,6 +36,8 @@ let charts = {};
 let currentMonthReport = '전체';
 let currentMonthEntry = '전체';
 let showClosedEntries = false;   // 결의 내역: 마감된 승인 건 포함 보기
+let bulkUnapproveIds = new Set();   // 결의 내역: 일괄 승인 취소 대상으로 체크한 내역 id
+let bulkGroupByApprovalNo = true;   // 같은 승인번호는 함께 선택
 let currentStatusEntry = '전체';
 let currentGubun = '지출';
 let budgetMigrationMessage = '';
@@ -3602,6 +3604,11 @@ const source = ledger;
 
   const shown = filtered;
 
+  if(!isReport){
+    const eligible = new Set(shown.filter(t=>APPROVED_STATES.includes(t.status) && !unapproveBlockReason(t)).map(t=>t.id));
+    bulkUnapproveIds = new Set([...bulkUnapproveIds].filter(id=>eligible.has(id)));
+  }
+
   shown.forEach(t=>{
     const tr = document.createElement('tr');
     tr.className = t.gubun==='수입' ? 'income-row' : 'expense-row';
@@ -3618,8 +3625,12 @@ const source = ledger;
     } else {
       const resolutionNo = entryResolutionNo(t);
       const approvalNo = entryApprovalNo(t);
+      const bulkOk = APPROVED_STATES.includes(t.status) && !unapproveBlockReason(t);
+      const bulkBox = bulkOk
+        ? `<input type="checkbox" class="bulk-unapprove-chk" data-bulk-id="${escapeHTML(t.id)}" data-mgmt="${escapeHTML(approvalNo)}" aria-label="승인 일괄 취소 대상 선택"${bulkUnapproveIds.has(t.id)?' checked':''}> `
+        : '';
       tr.innerHTML = `
-        <td>${resolutionNo ? escapeHTML(resolutionNo) : ''}</td>
+        <td>${bulkBox}${resolutionNo ? escapeHTML(resolutionNo) : ''}</td>
         <td class="col-date">${escapeHTML(formatEntryDate(t.date))}</td>
         <td style="color:${t.gubun==='수입'?'var(--income)':'var(--expense)'}">${escapeHTML(t.gubun||'')}</td>
         <td>${escapeHTML(t.desc||'')}</td>
@@ -3647,7 +3658,128 @@ const source = ledger;
   
   if(!isReport){
     bindRowActions(body);
+    bindBulkUnapproveRows(body);
   }
+}
+
+// 승인 취소를 막는 사유 (없으면 '')
+function unapproveBlockReason(entry){
+  if(entry.locked) return '가져온 내역은 변경할 수 없습니다.';
+  if(!APPROVED_STATES.includes(entry.status)) return '이미 승인 상태가 아닙니다.';
+  if(typeof ShowMeDomain !== 'undefined'){
+    const gate = ShowMeDomain.assertNotClosedForUnapprove(entry, closedThrough);
+    if(!gate.ok) return gate.reason;
+  }else if(entry.acctMonth && monthNo(entry.acctMonth)<=closedThrough){
+    return `${entry.acctMonth}월은 마감되어 승인 취소할 수 없습니다. 마감을 취소한 뒤 시도해 주세요.`;
+  }
+  return '';
+}
+// 승인 취소된 내역 사본: 승인번호만 제거하고 결의번호(submissionSequence)는 유지
+function unapprovedCopy(entry){
+  const next = {
+    ...entry, status:'submitted', locked:false,
+    approvalCancelledAt:new Date().toISOString(),
+    approvalCancelledBy:currentUser?.email || currentUser?.displayName || ''
+  };
+  ['approvedAt','approvedBy','paidAt','paidBy','confirmedAt','confirmedBy','acctMonth','acctYear']
+    .forEach(key=>delete next[key]);
+  if(next.submissionSequence != null && String(next.submissionSequence).trim() !== ''){
+    next.managementNo = String(next.submissionSequence);
+  } else {
+    delete next.managementNo;
+  }
+  return next;
+}
+
+// ── 일괄 승인 취소 ──
+function updateBulkUnapproveUI(){
+  const boxes = [...document.querySelectorAll('#tx-body-entry .bulk-unapprove-chk')];
+  const count = bulkUnapproveIds.size;
+  const batches = new Set(boxes.filter(b=>b.checked).map(b=>b.dataset.mgmt||b.dataset.bulkId)).size;
+  const label = document.getElementById('bulk-unapprove-count');
+  if(label) label.textContent = count ? `승인 건 ${count}건 선택 (승인번호 ${batches}개)` : '승인 건 선택 없음';
+  const btn = document.getElementById('btn-bulk-unapprove');
+  if(btn) btn.disabled = count===0;
+  const all = document.getElementById('chk-bulk-unapprove-all');
+  if(all){
+    all.disabled = boxes.length===0;
+    all.checked = boxes.length>0 && boxes.every(b=>b.checked);
+    all.indeterminate = count>0 && !all.checked;
+  }
+}
+function bindBulkUnapproveRows(container){
+  container.querySelectorAll('.bulk-unapprove-chk').forEach(box=>{
+    box.addEventListener('change', ()=>{
+      const targets = (bulkGroupByApprovalNo && box.dataset.mgmt)
+        ? [...container.querySelectorAll('.bulk-unapprove-chk')].filter(b=>b.dataset.mgmt===box.dataset.mgmt)
+        : [box];
+      targets.forEach(b=>{
+        b.checked = box.checked;
+        if(box.checked) bulkUnapproveIds.add(b.dataset.bulkId); else bulkUnapproveIds.delete(b.dataset.bulkId);
+      });
+      updateBulkUnapproveUI();
+    });
+  });
+  updateBulkUnapproveUI();
+}
+function initBulkUnapprove(){
+  const all = document.getElementById('chk-bulk-unapprove-all');
+  const group = document.getElementById('chk-bulk-group');
+  const btn = document.getElementById('btn-bulk-unapprove');
+  if(group && !group.dataset.bound){
+    group.dataset.bound = '1';
+    group.checked = bulkGroupByApprovalNo;
+    group.addEventListener('change', ()=>{ bulkGroupByApprovalNo = group.checked; });
+  }
+  if(all && !all.dataset.bound){
+    all.dataset.bound = '1';
+    all.addEventListener('change', ()=>{
+      document.querySelectorAll('#tx-body-entry .bulk-unapprove-chk').forEach(b=>{
+        b.checked = all.checked;
+        if(all.checked) bulkUnapproveIds.add(b.dataset.bulkId); else bulkUnapproveIds.delete(b.dataset.bulkId);
+      });
+      updateBulkUnapproveUI();
+    });
+  }
+  if(btn && !btn.dataset.bound){
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', bulkUnapproveSelected);
+  }
+}
+async function bulkUnapproveSelected(){
+  const ids = [...bulkUnapproveIds];
+  const entries = ids.map(id=>ledger.find(e=>e.id===id)).filter(Boolean);
+  if(!entries.length){ setStatus('승인 취소할 내역을 체크해 주세요.', true); return; }
+  const blocked = entries.filter(e=>unapproveBlockReason(e));
+  if(blocked.length){
+    setStatus(`선택한 내역 중 ${blocked.length}건은 승인 취소할 수 없습니다: ${unapproveBlockReason(blocked[0])}`, true);
+    return;
+  }
+  const batches = new Set(entries.map(e=>entryApprovalNo(e)||e.id)).size;
+  const total = entries.reduce((sum,e)=>sum+Number(e.amount||0),0);
+  const ok = await confirmAction(
+    `승인된 ${entries.length}건(승인번호 ${batches}개, 합계 ${fmt(total)})의 승인을 모두 취소하고 결의완료(지급 대기) 목록으로 되돌리시겠습니까?\n하나라도 처리할 수 없으면 전체가 취소되지 않고 그대로 유지됩니다.`,
+    {title:'승인 일괄 취소',confirmLabel:`${entries.length}건 승인 취소`,danger:true});
+  if(!ok) return;
+  const btn = document.getElementById('btn-bulk-unapprove');
+  if(btn) btn.disabled = true;
+  try{
+    await entryTransaction(ids,(found,api)=>{
+      ids.forEach(id=>{
+        const entry = found.get(id);
+        if(!entry) throw stateChangedError('내역을 찾을 수 없습니다. 다른 담당자가 이미 삭제했을 수 있습니다.');
+        const reason = unapproveBlockReason(entry);
+        if(reason) throw stateChangedError(reason);
+        api.set(unapprovedCopy(entry));
+      });
+    });
+    bulkUnapproveIds = new Set();
+    setStatus(`${entries.length}건의 승인을 취소해 결의완료 대기 목록으로 되돌렸습니다.`);
+  }catch(error){
+    setStatus(`일괄 승인 취소에 실패했습니다. 변경된 내역은 없습니다: ${error.message || String(error)}`, true);
+  }
+  renderReport();
+  renderEntryView();
 }
 
 function rowActions(t){
@@ -3709,27 +3841,9 @@ function bindRowActions(container){
             editedEntry = next;
             api.set(next);
           }else if(act==='unapprove'){
-            if(!approvedStates.includes(entry.status)) throw stateChangedError('이미 승인 상태가 아닙니다.');
-            if(typeof ShowMeDomain !== 'undefined'){
-              const gate = ShowMeDomain.assertNotClosedForUnapprove(entry, closedThrough);
-              if(!gate.ok) throw stateChangedError(gate.reason);
-            }else if(entry.acctMonth && monthNo(entry.acctMonth)<=closedThrough){
-              throw stateChangedError(`${entry.acctMonth}월은 마감되어 승인 취소할 수 없습니다. 마감을 취소한 뒤 시도해 주세요.`);
-            }
-            const next = {
-              ...entry, status:'submitted', locked:false,
-              approvalCancelledAt:new Date().toISOString(),
-              approvalCancelledBy:currentUser?.email || currentUser?.displayName || ''
-            };
-            // 승인 취소 시 승인번호만 제거하고 결의번호(submissionSequence)는 유지
-            ['approvedAt','approvedBy','paidAt','paidBy','confirmedAt','confirmedBy','acctMonth','acctYear']
-              .forEach(key=>delete next[key]);
-            if(next.submissionSequence != null && String(next.submissionSequence).trim() !== ''){
-              next.managementNo = String(next.submissionSequence);
-            } else {
-              delete next.managementNo;
-            }
-            api.set(next);
+            const reason = unapproveBlockReason(entry);
+            if(reason) throw stateChangedError(reason);
+            api.set(unapprovedCopy(entry));
           }
         });
         const msg = act==='unapprove' ? '승인을 취소해 결의완료 대기 목록으로 되돌렸습니다.'
@@ -4957,6 +5071,7 @@ async function approvePaymentReport(){
 }
 
 function renderEntryView(){
+  initBulkUnapprove();
   const closedChk = document.getElementById('chk-show-closed-entries');
   if(closedChk){
     closedChk.checked = showClosedEntries;
