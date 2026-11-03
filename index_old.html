@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#3B4953">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <title> 쇼미더머니 — 한국외국어대학교 노동조합 회계프로그램</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23112D4E'/%3E%3Ctext x='32' y='45' text-anchor='middle' font-size='38' font-family='Arial,sans-serif' fill='%23F9F7F7'%3E%24%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+<header class="masthead">
+    <span class="version-tag"></span>
+    <div class="masthead-inner">
+
+    <p class="org">한국외국어대학교 노동조합 회계 프로그램</p>
+    <h1 class="title">쇼미더머니
+       <span id="title-year" style="color:var(--gold-soft);white-space:nowrap;"></span></h1>
+    <div class="auth-bar">
+      <span id="auth-status">Firebase 연결 확인 중...</span>
+      <button class="btn-auth hidden" id="btn-sign-in" type="button">Google 로그인</button>
+      <button class="btn-auth hidden" id="btn-sign-out" type="button">로그아웃</button>
+    </div>
+
+    <!-- ▼ 앱 조작부 (로그인 완료 시 JS에서 hidden 제거됨) -->
+    <div id="app-controls" class="hidden">
+      <div class="year-bar">
+        <label for="year-select">회계연도</label>
+        <select id="year-select"></select>
+      </div>
+    </div>
+  </div>
+</header>
+
+  
+
+<div id="app-tabs" class="tabs-sticky hidden">
+  <div class="tabs-inner">
+    <nav class="tabs">
+      <button class="tab-btn" data-view="entry">결산</button>
+      <button class="tab-btn active" data-view="report">보고서</button>
+      <button class="tab-btn" data-view="fund">기금</button>
+      <button class="tab-btn" data-view="budget">예산</button>
+      <button class="tab-btn" data-view="staff">담당자·계좌</button>
+      <button class="tab-btn" data-view="donation">기부금영수증</button>
+    </nav>
+        <time id="app-date" class="app-date" datetime="" aria-label="한국 표준시">--:--:--</time>
+    <time id="app-clock" class="app-clock" datetime="" aria-label="한국 표준시">--:--:--</time>
+  </div>
+</div>
+
+<div class="auth-gate" id="auth-gate">
+  <h2 id="auth-gate-title">자료를 불러오고 있습니다</h2>
+  <p id="auth-gate-message">잠시만 기다려 주세요.</p>
+  <p id="auth-user-id" class="hidden"></p>
+  <p id="quota-countdown" class="hidden"></p>
+  <button class="btn-primary hidden" id="gate-sign-in" type="button">Google 로그인</button>
+</div>
+
+<div class="wrap hidden" id="app-content">
+
+  <!-- ============ REPORT VIEW ============ -->
+  <div class="view active" id="view-report">
+    <div class="notice" id="report-data-note" style="margin-top:28px;">
+  <span id="report-data-text">보고서 데이터를 불러오는 중…</span>
+  <div class="report-actions">
+    <button class="btn-primary btn-compact" id="btn-reload-report" type="button"><span class="btn-step">1</span>보고서 새로고침</button>
+    <button class="btn-primary btn-compact btn-soft" id="btn-rebuild-report" type="button"><span class="btn-step">2</span>집계 다시 계산</button>
+    <span class="report-actions-hint">숫자가 이상하면 먼저 1번으로 새로고침하고, 그래도 맞지 않을 때만 2번을 실행하세요. 2번은 승인 내역 전체를 다시 읽습니다.</span>
+  </div>
+</div>
+
+<!-- 월별 누적 보고서: 선택 월말 기준 관·항·목 예산 대비 실적 -->
+<section style="margin-top:20px;">
+<div class="sec-head"><span class="sec-num">01</span><h2>월별 누적 보고서</h2></div>
+<div id="report-section" class="card">
+  <p class="sec-desc" style="margin:0 0 8px;">월 버튼을 누르면 <b>해당 월말 기준</b>으로 예산 대비 결산(1월~선택 월 승인 내역 누적)을 표시합니다. 예산은 연간 예산이며, 결산액은 월이 올라갈수록 누적됩니다.</p>
+  <div id="report-tabs-container" class="report-tabs" style="display: flex; gap: 8px; flex-wrap: wrap; margin: 15px 0;"></div>
+  <h3 id="report-title">월을 선택하세요</h3>
+  <div class="stats" id="report-totals">
+    <div class="stat"><p class="label">총 수입</p><p class="value income" id="r-income">-</p><p class="sub">전기이월금 포함</p></div>
+    <div class="stat"><p class="label">총 지출</p><p class="value expense" id="r-expense">-</p><p class="sub" id="r-count">-</p></div>
+    <div class="stat"><p class="label">현재 잔액(계산)</p><p class="value" id="r-balance">-</p><p class="sub">총 수입 − 총 지출</p></div>
+  </div>
+  <div class="table-scroll" id="monthly-budget-scroll" style="display:none;">
+    <table class="budget-report-table">
+      <thead><tr><th>구분</th><th>관</th><th>항</th><th>목</th><th class="num">예산액</th><th class="num">결산액(누적)</th><th class="num">집행률</th><th class="num">잔여</th></tr></thead>
+      <tbody id="monthly-budget-body"></tbody>
+      <tfoot id="monthly-budget-total"></tfoot>
+    </table>
+  </div>
+  <div class="mbr" id="monthly-budget-mobile">
+    <div class="mbr-toolbar">
+      <button type="button" class="mbr-chip is-on" data-mbr-filter="active" aria-pressed="true">집행 있는 항목만</button>
+      <button type="button" class="mbr-chip" data-mbr-filter="high" aria-pressed="false">지출 80%↑·초과만</button>
+      <button type="button" class="mbr-chip mbr-chip-plain" data-mbr-expand="toggle">모두 펴기</button>
+    </div>
+    <div data-mbr-list></div>
+    <p class="mbr-unit">단위: 원 · 관을 누르면 항·목이 펼쳐집니다.</p>
+  </div>
+  <p class="count-note" id="monthly-budget-note">상단 월 탭을 눌러 해당 월말 기준 보고서를 조회하세요.</p>
+  <button class="btn-text" id="btn-monthly-exact" type="button">정밀 재조회 (전체 승인 내역 직접 읽기)</button>
+</div>
+</section>
+
+    <section>
+      <div class="sec-head"><span class="sec-num">02</span><h2>세부 거래 내역</h2></div>
+      <div class="card flush">
+        <div class="card-toolbar"><div class="filter-row" id="month-filters-report"></div></div>
+        <div class="tx-tools" id="tx-tools-report"></div>
+        <div class="table-scroll transaction-table-scroll">
+          <table class="transaction-table report-transaction-table">
+            <colgroup>
+              <col class="col-date"><col class="col-date"><col class="col-description"><col class="col-mok">
+              <col class="col-payee"><col class="col-amount"><col class="col-amount"><col class="col-mgmt">
+            </colgroup>
+            <thead><tr><th>결제일</th><th>승인일</th><th>내용</th><th>목</th><th>지급처</th><th>담당자</th><th class="num">수입</th><th class="num">지출</th><th id="th-report-mgmt">승인번호</th></tr></thead>
+            <tbody id="tx-body-report"></tbody>
+            <tfoot id="tx-report-total"></tfoot>
+          </table>
+        </div>
+      </div>
+      <p class="count-note" id="tx-count-report"></p>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="sec-num">03</span><h2>활동비 계좌 잔액 대조</h2></div>
+      <p class="sec-desc">실제 활동비 계좌 잔액을 입력하면 승인된 내역의 총 수입 − 총 지출과 비교합니다.</p>
+      <div class="card">
+        <div class="balance-check">
+          <div class="field">
+            <label for="account-balance-input">실제 활동비 계좌 잔액(원)</label>
+            <input type="text" id="account-balance-input" inputmode="numeric" pattern="[0-9,]*" placeholder="예: 1,000,000">
+          </div>
+          <div class="field">
+            <label>계산된 잔액(총 수입 − 총 지출)</label>
+            <strong id="account-balance-calculated">-</strong>
+          </div>
+<div class="field">
+  <label>예치 중인 원금</label>
+  <strong id="account-balance-parked">-</strong>
+</div>
+         
+          <div class="field">
+            <label>차액(실제 − 계산)</label>
+            <strong id="account-balance-difference">-</strong>
+          </div>
+          <button class="btn-primary" id="btn-save-account-balance" type="button">잔액 저장</button>
+          <span id="account-balance-save-status" role="status"></span>
+          <div id="account-balance-result" class="balance-check-result unset" role="status">실제 계좌 잔액을 입력해 주세요.</div>
+        </div>
+        <div id="deposit-box" style="margin-top:22px;border-top:1px solid var(--line);padding-top:16px;">
+  <h3 style="font-size:16px;margin:0 0 6px;">단기예치 (활동비 안의 미니 기금계좌)</h3>
+  <p class="count-note" style="margin:0 0 10px;">입출금통장에서 1개월 정기예금 등으로 옮겨 둔 돈입니다. 수입·지출이 아니므로 결산에는 넣지 않고, 위 잔액 대조에만 더해집니다. 회수할 때 붙은 이자는 결산 관리에 이자수입으로 따로 입력하세요.</p>
+  <div id="deposit-list"></div>
+  <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr 1.4fr;align-items:end;margin-top:12px;">
+    <div class="field"><label for="dp-date">예치일</label><input type="text" id="dp-date" placeholder="YYYY-MM-DD"></div>
+    <div class="field"><label for="dp-amount">원금(원)</label><input type="text" id="dp-amount" inputmode="numeric"></div>
+    <div class="field"><label for="dp-maturity">만기 예정일</label><input type="text" id="dp-maturity" placeholder="YYYY-MM-DD"></div>
+    <div class="field"><label for="dp-memo">메모(은행·계좌 등)</label><input type="text" id="dp-memo"></div>
+    <button class="btn-primary btn-wide" id="btn-add-deposit" type="button">예치 등록</button>
+  </div>
+  <span id="deposit-msg" role="status"></span>
+</div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="sec-num">04</span><h2>그래프 분석</h2></div>
+      <p class="sec-desc">월별 수입·지출 추이와 수입·지출 구성, 예산 집행 현황을 그래프로 확인합니다. 마지막 그래프는 위 월별 누적 보고서에서 선택한 월에 맞춰 바뀝니다.</p>
+      <div class="card"><div class="chart-box"><canvas id="chartMonthly"></canvas></div></div>
+      <div class="two-col" style="margin-top:20px;">
+        <div class="card"><div class="chart-box tall"><canvas id="chartExpenseHang"></canvas></div></div>
+        <div class="card flush">
+          <table><thead><tr><th>관·항·목</th><th class="num">지출액</th></tr></thead><tbody id="tbl-top-mok"></tbody><tfoot id="tbl-top-mok-total"></tfoot></table>
+        </div>
+      </div>
+      <div class="card" style="margin-top:20px;"><div class="chart-box"><canvas id="chartIncome"></canvas></div></div>
+      <div class="card" style="margin-top:20px;"><h3 class="chart-title" id="budget-chart-title">관별 예산 대비 집행</h3><div class="chart-box tall"><canvas id="chartBudget"></canvas></div></div>
+    </section>
+  </div>
+
+  <!-- ============ BUDGET VIEW ============ -->
+  <div class="view" id="view-budget">
+    <div class="notice" id="storage-notice" style="margin-top:28px;">
+      관·항·목 분류를 관리합니다. 결산 관리에서는 <b>목</b>만 선택하며, 선택한 목의 관과 항은 거래 내역에 자동으로 연결됩니다. 예산은 회계연도별로 <b>목마다 입력·수정</b>하고, 항·관 예산은 소속 목 예산을 합산해 보고서에 표시합니다.
+    </div>
+    <section>
+      <div class="sec-head"><span class="sec-num">☰</span><h2>관·항·목 분류</h2></div>
+      <p class="sec-desc">표에서 구분과 관·항·목을 한 행씩 관리하고 <b id="budget-year-label"></b> 예산을 입력합니다. 새 분류는 ‘목 추가’로 행을 만든 뒤 입력하고 저장하세요. 예산 대비 집행 현황은 지출 예산을 기준으로 표시됩니다.</p>
+      <div class="notice hidden" id="budget-migration-notice"></div>
+      <div class="hierarchy-toolbar"><button class="btn-text" id="btn-add-hierarchy-row" type="button">＋ 목 추가</button></div>
+      <div class="type-budget-summary" aria-label="수입·지출 예산 합계와 차액">
+        <div class="type-budget-summary-item"><span class="type-budget-summary-label">수입 예산 합계</span><div class="type-budget-summary-values" id="hierarchy-income-total-top">0원</div></div>
+        <div class="type-budget-summary-item"><span class="type-budget-summary-label">지출 예산 합계</span><div class="type-budget-summary-values" id="hierarchy-expense-total-top">0원</div></div>
+        <div class="type-budget-summary-item"><span class="type-budget-summary-label">전체 예산 차액 (수입 − 지출)</span><div class="type-budget-summary-values hierarchy-summary-difference" id="hierarchy-grand-total-top" role="status">0원 · 수입·지출 예산 동일</div></div>
+      </div>
+      <div class="hierarchy-table-scroll">
+        <table class="hierarchy-table">
+          <thead><tr><th>구분</th><th>관</th><th>항</th><th>목</th><th class="num"><span id="budget-year-column"></span> 예산(원)</th><th></th></tr></thead>
+          <tbody id="hierarchy-form-body"></tbody>
+          <tfoot>
+            <tr class="hierarchy-total-row"><td class="hierarchy-total-label" colspan="4">지출 예산 합계</td><td class="hierarchy-total-value" id="hierarchy-expense-total">0원</td><td></td></tr>
+            <tr class="hierarchy-total-row" id="hierarchy-grand-total-row"><td class="hierarchy-total-label" colspan="4">전체 예산 차액 (수입 − 지출)</td><td class="hierarchy-total-value" id="hierarchy-grand-total">0원</td><td class="hierarchy-total-message" id="hierarchy-total-message">수입·지출 예산 동일</td></tr>
+          </tfoot>
+        </table>
+      </div>
+      <div class="hierarchy-save-actions">
+        <button class="btn-primary" id="btn-import-previous-budget" type="button">전년도 예산 불러오기</button>
+        <button class="btn-primary" id="btn-save-hierarchy" type="button">분류 및 예산 저장</button>
+      </div>
+      <span id="budget-save-status"></span>
+    </section>
+  </div>
+  <div class="view" id="view-staff">
+    <section>
+      <div class="sec-head"><span class="sec-num">☰</span><h2>담당자 이름 관리</h2></div>
+      <div class="card">
+        <p class="sec-desc" style="margin:0 0 8px;">여기에 등록한 이름은 결산 관리의 담당자 입력란에서 선택할 수 있습니다. 목록에 없는 이름도 입력란에 직접 입력할 수 있습니다.</p>
+        <p class="sec-desc" style="margin:0 0 16px;">은행명과 계좌번호는 이 앱을 사용할 수 있는 <b>모든 허가된 담당자에게 공유</b>됩니다. 공유해도 되는 정보만 입력해 주세요.</p>
+        <div class="staff-add-grid">
+          <div class="field">
+            <label for="staff-group-input">구분</label>
+            <select id="staff-group-input">
+              <option value="">미지정</option>
+              <option value="집행부">집행부</option>
+              <option value="대의원">대의원</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="staff-name-input">담당자 이름</label>
+            <input type="text" id="staff-name-input" placeholder="이름 입력">
+          </div>
+          <button class="btn-primary" id="btn-add-staff-name" type="button">이름 추가</button>
+        </div>
+        <div class="staff-toolbar">
+          <label for="staff-sort-select">정렬</label>
+          <select id="staff-sort-select">
+            <option value="exec-first">구분순 (집행부 → 대의원)</option>
+            <option value="delegate-first">구분순 (대의원 → 집행부)</option>
+            <option value="name">이름순</option>
+          </select>
+        </div>
+        <div id="staff-name-list" class="staff-table-scroll" style="margin-top:12px;"></div>
+        <p id="staff-name-status" role="status"></p>
+      </div>
+    </section>
+    <section id="transfer-section" style="margin-top:24px;">
+      <div class="sec-head"><span class="sec-num">☰</span><h2>우리은행 다계좌이체 파일</h2></div>
+      <p class="sec-desc">위 담당자 목록에서 은행이 <b>우리은행</b>이고 계좌번호가 등록된 사람만 표시됩니다. 금액을 입력하고 선택한 뒤 다운로드하면 우리은행 다계좌이체용 엑셀(.xls) 파일이 만들어집니다.</p>
+      <div class="card">
+        <div class="transfer-grid">
+          <div class="field">
+            <label for="transfer-group-filter">구분 보기</label>
+            <select id="transfer-group-filter">
+              <option value="전체">전체</option>
+              <option value="집행부">집행부</option>
+              <option value="대의원">대의원</option>
+              <option value="미지정">미지정</option>
+            </select>
+          </div>
+          <div class="transfer-bulk">
+            <div class="field">
+              <label for="transfer-bulk-amount">일괄 금액(원)</label>
+              <input type="text" id="transfer-bulk-amount" inputmode="numeric" placeholder="예: 50000" autocomplete="off">
+            </div>
+            <button class="btn-primary" id="btn-transfer-bulk" type="button">일괄 적용</button>
+          </div>
+          <div class="field">
+            <label for="transfer-recv-memo">받는 통장 표시내용</label>
+            <input type="text" id="transfer-recv-memo" placeholder="예: 1월활동비" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="transfer-my-memo">내 통장 표시내용</label>
+            <input type="text" id="transfer-my-memo" placeholder="예: 노동조합1월" autocomplete="off">
+          </div>
+        </div>
+        <div id="transfer-list" class="staff-table-scroll" style="margin-top:16px;"></div>
+        <p id="transfer-summary" class="transfer-summary"></p>
+        <div class="transfer-actions">
+          <button class="btn-primary" id="btn-transfer-download" type="button">이체 파일 다운로드 (.xls)</button>
+        </div>
+        <p id="transfer-status" role="status"></p>
+      </div>
+    </section>
+  </div>
+  <div class="view" id="view-entry">
+    <div class="notice" style="margin-top:12px;">
+      새 내역은 <b>입력 내역</b>으로 등록되며, 같은 담당자의 내역만을 선택해 결의할 수 있습니다. 승인(입금 완료)된 내역만 보고서 탭 집계에 반영됩니다.
+      <b id="entry-storage-warning"></b>
+    </div>
+    <section style="margin-top:16px;">
+<!-- 자주 쓰는 지출 템플릿: 제목 줄 오른쪽 정렬. 설정 편집기는 제목 아래에 펼쳐짐 (로그인한 허가 담당자 모두 사용·설정 가능) -->
+<div class="quick-template-container" id="quick-template-container">
+  <div class="sec-head sec-head-entry">
+    <span class="sec-num">01</span><h2>새 내역 입력</h2>
+    <div class="qt-bar">
+      <span class="qt-title">⚡ 자주 쓰는 지출 템플릿</span>
+      <span id="quick-template-buttons" class="qt-buttons"></span>
+      <button type="button" id="btn-template-manage" class="btn-text hidden">⚙ 템플릿 설정</button>
+    </div>
+  </div>
+  <div id="template-editor" class="qt-editor hidden">
+    <p class="qt-note">버튼 이름과 입력값을 정해 두면 새 내역 입력에서 한 번에 채워 줍니다. 결제일은 채우지 않습니다.</p>
+    <div id="template-editor-list"></div>
+    <div class="qt-actions">
+      <button type="button" class="btn-text" id="btn-template-add">＋ 빈 템플릿 추가</button>
+      <button type="button" class="btn-text" id="btn-template-add-form">＋ 현재 입력값으로 추가</button>
+      <span class="qt-spacer"></span>
+      <button type="button" class="btn-primary" id="btn-template-save">저장</button>
+      <button type="button" class="btn-text" id="btn-template-close">닫기</button>
+    </div>
+    <p id="template-status" role="status"></p>
+  </div>
+</div>
+
+      <div class="card flush entry-form-card">
+        <div class="form-grid entry-form-grid">
+          <div class="field">
+            <label>구분</label>
+            <div class="gubun-toggle">
+              <button type="button" id="btn-gubun-income" class="on-income">수입</button>
+              <button type="button" id="btn-gubun-expense" class="on-expense selected">지출</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="f-date">결제일</label>
+            <div class="date-entry-control">
+              <input type="text" id="f-date" inputmode="numeric" placeholder="YYYY-MM-DD" autocomplete="off">
+              <input type="date" id="f-date-picker" class="date-picker-native" tabindex="-1" aria-label="달력에서 결제일 선택">
+              <button class="date-picker-button" id="btn-open-date-picker" type="button" aria-label="달력 열기">달력</button>
+            </div>
+          </div>
+          <div class="field"><label for="f-mok">세부 계정과목</label><select id="f-mok"></select><div id="budget-hint" class="budget-hint" role="status" aria-live="polite" hidden></div></div>
+          <div class="field"><label>내용</label><input type="text" id="f-desc" placeholder="예: 집행부 회의 식비" list="dl-desc" autocomplete="off"></div>
+          <div class="field span2"><label>지급처</label><input type="text" id="f-payee" placeholder="예: 배달의민족" list="recent-payee-options"><datalist id="recent-payee-options"></datalist></div>
+          <div class="field"><label>금액(원)</label><input type="text" id="f-amount" inputmode="numeric" placeholder="예: 50,000 또는 ₩50,000 (환불은 -50,000)" list="dl-amount" autocomplete="off"><div id="dup-hint" class="dup-hint" role="status" aria-live="polite" hidden></div></div>
+          <div class="field span2"><label>담당자</label><input type="text" id="f-spender" placeholder="입력자 이름" list="staff-name-options"><datalist id="staff-name-options"></datalist></div>
+        </div>
+        <datalist id="dl-desc"></datalist>
+        <datalist id="dl-amount"></datalist>
+
+<div class="entry-form-footer">
+<!-- 영수증 첨부 영역 -->
+<div class="mb-3 receipt-field">
+  <label class="form-label font-weight-bold">🧾 영수증 증빙 첨부</label>
+
+  <!-- 점선 상자: 안내문 · 파일 선택 버튼 · 붙여넣은 이미지 미리보기가 모두 이 안에 들어갑니다 -->
+  <div id="receipt-drop-zone" class="receipt-drop-zone">
+    <p class="receipt-hint">클릭하여 영수증 파일을 선택하거나, 캡처한 이미지를 <b>Ctrl+V</b>로 붙여넣으세요.</p>
+    <input type="file" id="f-receipt-file" accept="image/*,.pdf" style="display: none;" onchange="handleFileSelect(event)">
+    <button type="button" class="receipt-pick-btn" onclick="document.getElementById('f-receipt-file').click()"><span class="ico" aria-hidden="true">📎</span><span>파일 선택</span></button>
+
+    <div id="receipt-preview-container" class="receipt-preview" style="display: none;">
+      <div class="receipt-preview-row">
+        <img id="receipt-preview-img" src="" alt="영수증 미리보기">
+        <button type="button" class="receipt-del-btn" onclick="clearReceipt()">삭제</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+        <button class="btn-primary" id="btn-add">내역 추가</button>
+        <button class="btn-revert" id="btn-new-entry" type="button">새 입력</button>
+        <button class="btn-revert hidden" id="btn-cancel-entry-edit" type="button">수정 취소</button>
+        <span id="save-status"></span>
+</div>
+      </div>
+    </section>
+
+    <section class="pending-section" style="margin-top:28px;">
+      <div class="sec-head"><span class="sec-num">02</span><h2>입력 내역 <span class="pending-count" id="pending-count">0</span></h2></div>
+      <div class="pending-box" id="pending-box"><div id="pending-list"></div></div>
+    </section>
+
+    <section class="pending-section">
+      <div class="sec-head"><span class="sec-num">03</span><h2>결의 내역</h2></div>
+      <div class="card flush entry-table-card">
+        <div class="card-toolbar"><div class="filter-row" id="status-filters-entry"></div><div class="filter-row" id="month-filters-entry"></div></div>
+        <div class="tx-tools" id="tx-tools-entry"></div>
+        <div class="table-scroll transaction-table-scroll entry-table-container">
+          <table class="transaction-table entry-table">
+            <colgroup>
+              <col class="col-mgmt"><col class="col-date"><col class="col-type"><col class="col-description"><col class="col-mok">
+              <col class="col-payee"><col class="col-spender"><col class="col-amount"><col class="col-status"><col class="col-approval"><col class="col-actions">
+            </colgroup>
+            <thead><tr><th>결의번호</th><th>결제일</th><th>구분</th><th>내용</th><th>목</th><th>지급처</th><th>담당자</th><th class="num">금액</th><th>상태</th><th>승인번호</th><th class="col-actions-head">추가 작업</th></tr></thead>
+            <tbody id="tx-body-entry"></tbody>
+          </table>
+        </div>
+      </div>
+      <p class="count-note" id="tx-count-entry"></p>
+<button class="btn-primary hidden" id="btn-load-more-entries" type="button" style="margin-top:12px;">이전 내역 더 보기</button>
+    </section>
+
+    <section class="pending-section" style="margin-top:28px;">
+      <div class="sec-head"><span class="sec-num">04</span><h2>지급 대기 <span class="pending-count" id="submitted-count">0</span></h2></div>
+      <div class="pending-box" id="submitted-box"><div id="submitted-list"></div></div>
+    </section>
+
+    <section style="margin-top:48px;">
+      <div class="sec-head"><span class="sec-num">05</span><h2>월 마감</h2></div>
+      <div class="card">
+        <p id="closing-status" style="margin:0 0 6px;font-weight:700;"></p>
+        <p id="closing-detail" class="count-note" style="margin:0 0 14px;"></p>
+        <button class="btn-primary" id="btn-close-month" type="button"></button>
+        <button class="btn-primary btn-soft" id="btn-reopen-month" type="button">마지막 마감 취소</button>
+        <span id="closing-msg" role="status"></span>
+        <div class="bundle-box" id="bundle-box">
+          <p class="bundle-title">감사용 증빙 묶음</p>
+          <p class="count-note">마감한 달의 승인 내역으로 <b>지급신청서 PDF · 영수증 원본 · 승인내역 엑셀</b>을 ZIP 한 파일로 만듭니다.</p>
+          <div class="bundle-row">
+            <select id="bundle-month" aria-label="증빙 묶음을 만들 달"></select>
+            <button class="btn-primary" id="btn-bundle-download" type="button">증빙 묶음 받기 (.zip)</button>
+          </div>
+          <p class="count-note" id="bundle-status" role="status"></p>
+        </div>
+        <details class="carryover-box" id="carryover-box">
+          <summary>이월 자료 일괄 입력 (엑셀 → 승인 내역)</summary>
+          <p class="count-note">기준일까지의 <b>누계 집행액</b>이 적힌 결산 엑셀을 올리면 항목마다 세부 계정과목을 맞춰, <b>승인된 내역</b>으로 한꺼번에 입력합니다. 결제일은 기준일로, 담당자는 아래 이름으로 기록됩니다.</p>
+          <div class="carryover-grid">
+            <div class="field"><label for="carryover-file">엑셀 파일 (.xlsx)</label><input type="file" id="carryover-file" accept=".xlsx,.xls"></div>
+            <div class="field"><label for="carryover-date">기준일 (결제일)</label><input type="text" id="carryover-date" placeholder="YYYY-MM-DD" autocomplete="off"></div>
+            <div class="field"><label for="carryover-spender">담당자 이름</label><input type="text" id="carryover-spender" value="전월 이월 자료" autocomplete="off"></div>
+          </div>
+          <div id="carryover-preview"></div>
+          <p class="count-note carryover-summary" id="carryover-summary" role="status"></p>
+          <div class="carryover-actions">
+            <button class="btn-primary" id="btn-carryover-import" type="button" disabled>승인 내역으로 일괄 입력</button>
+            <button class="btn-revert" id="btn-carryover-undo" type="button" hidden>이 기준일의 이월 입력 되돌리기</button>
+          </div>
+          <p class="count-note" id="carryover-existing" role="status"></p>
+        </details>
+      </div>
+    </section>
+
+  </div>
+<div class="view" id="view-donation">
+  <section>
+    <div class="sec-head"><span class="sec-num">☰</span><h2>전자기부금영수증 만들기</h2></div>
+    <div class="card">
+      <p class="sec-desc" style="margin:0 0 8px;">매월 들어오는 노동조합비 파일을 올리면 국세청 <b>전자기부금영수증 양식(40 종교단체외일반(지정))</b>으로 만들어 줍니다.</p>
+      <p class="sec-desc" style="margin:0 0 16px;">주민등록번호는 노동조합·후생파트 파일에 있으면 그 값을 쓰고, 없으면 <b>저장된 명단</b>에서 이름(연구산학협력단은 생년월일 포함)으로 찾습니다. 새로 확인된 번호는 다운로드할 때 명단에 자동 저장됩니다.</p>
+      <p class="sec-desc don-privacy" style="margin:0 0 16px;">주민등록번호는 허가된 모든 앱 사용자에게 공유되는 Firestore에 저장됩니다. 공유해도 되는 담당자에게만 접근을 허용해 주세요.</p>
+
+      <div class="don-box">
+        <div class="don-box-head"><b>주민등록번호 명단</b><span id="don-registry-status" class="don-hint">불러오는 중…</span></div>
+        <details class="don-seed">
+          <summary>기존 전자기부금영수증 파일로 명단 가져오기 (처음 한 번)</summary>
+          <p class="don-hint" style="margin:8px 0;">이전에 만든 전자기부금영수증(.xls/.xlsx)을 올리면 주민번호를 명단에 저장하고, 지식출판콘텐츠원 인원의 금액도 기본값으로 가져옵니다.</p>
+          <div class="don-inline">
+            <input type="file" id="don-file-seed" accept=".xls,.xlsx">
+            <button class="btn-primary btn-soft" id="don-btn-seed" type="button">명단 저장</button>
+          </div>
+        </details>
+      </div>
+
+      <div class="don-box">
+        <div class="don-box-head"><b>노동조합 파일 암호</b><span id="don-pw-status" class="don-hint"></span></div>
+        <div class="don-inline" id="don-pw-edit">
+          <input type="password" id="don-password" autocomplete="new-password" placeholder="새 암호">
+          <button class="btn-primary btn-soft" id="don-btn-pw-save" type="button">암호 저장</button>
+          <button class="btn-text" id="don-btn-pw-cancel" type="button">취소</button>
+        </div>
+        <button class="btn-text" id="don-btn-pw-change" type="button">암호 변경</button>
+      </div>
+
+      <div class="don-grid">
+        <div class="field">
+          <label for="don-file-union">노동조합 조합비</label>
+          <input type="file" id="don-file-union" accept=".xls,.xlsx">
+        </div>
+        <div class="field">
+          <label for="don-file-research">연구산학협력단 조합비</label>
+          <input type="file" id="don-file-research" accept=".xls,.xlsx">
+        </div>
+        <div class="field">
+          <label for="don-file-welfare">후생파트 조합비</label>
+          <input type="file" id="don-file-welfare" accept=".xls,.xlsx">
+        </div>
+        <div class="field">
+          <label for="don-ym">대상 연월</label>
+          <input type="month" id="don-ym">
+          <small>비워 두면 파일에서 읽습니다. 후생파트는 이 월의 열을 사용합니다.</small>
+        </div>
+        <div class="field">
+          <label for="don-date">기부일자</label>
+          <input type="date" id="don-date">
+          <small>기본값은 해당 월 25일입니다.</small>
+        </div>
+      </div>
+
+      <div class="don-box">
+        <div class="don-box-head"><b>지식출판콘텐츠원 (수동 입력)</b><span class="don-hint">금액은 매달 이어지며, 바뀐 달에만 수정하세요. 0 또는 빈칸이면 이번 달에서 제외됩니다.</span></div>
+        <div class="staff-table-scroll">
+          <table class="staff-table don-table">
+            <thead><tr><th>성명</th><th>이번 달 금액(원)</th><th>주민등록번호</th></tr></thead>
+            <tbody id="don-manual-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="don-actions">
+        <button class="btn-primary" id="don-btn-preview" type="button">미리보기 만들기</button>
+        <span id="don-status" class="don-status" role="status"></span>
+      </div>
+    </div>
+  </section>
+  <section id="don-result" class="hidden">
+    <div class="sec-head"><span class="sec-num">☰</span><h2>변환 결과</h2></div>
+    <div class="card">
+      <div id="don-summary" class="don-summary"></div>
+      <div id="don-notices" class="don-notices"></div>
+      <div id="don-attention" class="hidden">
+        <h3 class="don-sub">확인이 필요한 항목</h3>
+        <div class="staff-table-scroll">
+          <table class="staff-table don-table">
+            <thead><tr><th>구분</th><th>성명</th><th>생년월일</th><th>주민등록번호</th><th>금액</th><th>상태</th></tr></thead>
+            <tbody id="don-attention-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <details class="don-full">
+        <summary id="don-full-count">전체 보기</summary>
+        <div class="staff-table-scroll">
+          <table class="staff-table don-table">
+            <thead><tr><th>No.</th><th>구분</th><th>성명</th><th>주민등록번호</th><th>금액</th><th>관리번호</th></tr></thead>
+            <tbody id="don-full-body"></tbody>
+          </table>
+        </div>
+      </details>
+      <div class="don-actions">
+        <button class="btn-primary" id="don-btn-download" type="button" disabled>전자기부금영수증 다운로드 (.xls)</button>
+        <span id="don-download-hint" class="don-hint"></span>
+      </div>
+    </div>
+  </section>
+</div>
+<div class="view" id="view-fund">
+  <div class="notice" style="margin-top:28px;">
+    기금 회계입니다. 입력한 내역은 <b>바로 확정</b>되며(결의·승인 없음), 잘못 입력하면 수정·삭제할 수 있습니다. 연도는 위의 회계연도 선택을 따르고, 담당자 정보는 활동비와 공유합니다.
+  </div>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">01</span><h2>기금 요약</h2></div>
+    <div class="card flush" id="fund-summary"></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">02</span><h2>계좌</h2></div>
+    <div class="card">
+      <div id="fund-accounts"></div>
+      <div class="form-grid" style="margin-top:16px;">
+        <div class="field"><label for="fa-bank">은행</label><input type="text" id="fa-bank" placeholder="예: 전북은행"></div>
+        <div class="field"><label for="fa-number">계좌번호</label><input type="text" id="fa-number"></div>
+        <div class="field"><label for="fa-kind">종류</label><select id="fa-kind"><option>정기예금</option><option>자유입출금</option></select></div>
+        <div class="field"><label for="fa-rate">금리(%)</label><input type="text" id="fa-rate" placeholder="예: 3.2"></div>
+        <div class="field"><label for="fa-maturity">만기일</label><input type="text" id="fa-maturity" placeholder="YYYY-MM-DD"></div>
+        <div class="field"><label for="fa-note">비고</label><input type="text" id="fa-note"></div>
+      </div>
+      <button class="btn-primary" id="btn-fund-add-account" type="button">계좌 추가</button>
+      <span id="fund-account-msg" role="status"></span>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">03</span><h2>거래 입력</h2></div>
+    <div class="card">
+      <div class="form-grid">
+        <div class="field"><label for="fe-date">날짜</label><input type="text" id="fe-date" placeholder="YYYY-MM-DD"></div>
+        <div class="field"><label for="fe-type">유형</label><select id="fe-type"></select></div>
+        <div class="field"><label for="fe-account" id="fe-account-label">계좌</label><select id="fe-account"></select></div>
+        <div class="field hidden" id="fe-to-field"><label for="fe-to">받는 계좌</label><select id="fe-to"></select></div>
+        <div class="field"><label for="fe-amount">금액(원)</label><input type="text" id="fe-amount" inputmode="numeric"></div>
+        <div class="field"><label for="fe-memo">메모</label><input type="text" id="fe-memo" placeholder="예: 신규 3.2% 금리"></div>
+      </div>
+      <button class="btn-primary" id="btn-fund-save-event" type="button">거래 추가</button>
+      <button class="btn-revert hidden" id="btn-fund-cancel-edit" type="button">수정 취소</button>
+      <span id="fund-event-msg" role="status"></span>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">04</span><h2>거래 내역</h2></div>
+    <div class="card flush">
+      <div class="table-scroll"><table class="transaction-table" style="min-width:640px;table-layout:auto;">
+        <thead><tr><th>날짜</th><th>유형</th><th>계좌</th><th class="num">금액</th><th>메모</th><th></th></tr></thead>
+        <tbody id="fund-events"></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">05</span><h2>활동비 전입 대조</h2></div>
+    <p class="sec-desc">기금에서 "활동비로 전출"한 금액과, 활동비 결산의 "기금회계 전입금" 수입이 맞는지 확인합니다.</p>
+    <div class="card">
+      <button class="btn-primary" id="btn-fund-compare" type="button">대조하기</button>
+      <div id="fund-compare" style="margin-top:14px;"></div>
+    </div>
+  </section>
+</div>
+  <dialog class="app-confirm-dialog" id="app-confirm-dialog" aria-labelledby="app-confirm-title">
+    <div class="app-confirm-panel">
+      <h2 id="app-confirm-title">확인</h2>
+      <p id="app-confirm-message" class="app-confirm-message"></p>
+      <div class="app-confirm-actions">
+        <button type="button" class="btn-revert" id="app-confirm-cancel">취소</button>
+        <button type="button" class="btn-primary" id="app-confirm-ok">확인</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="payment-report-dialog" id="payment-report-dialog" aria-labelledby="payment-report-dialog-title">
+    <div class="payment-dialog-header">
+      <h2 id="payment-report-dialog-title">지급 보고서</h2>
+      <button class="btn-auth" type="button" data-close-payment-report>닫기</button>
+    </div>
+    <div class="payment-dialog-body">
+      <div class="payment-report-sheet" id="payment-report-sheet"></div>
+      <p id="payment-report-status" role="status"></p>
+    </div>
+    <div class="payment-dialog-actions">
+  <button class="btn-revert" id="btn-download-payment-report" type="button">PDF 다운로드</button>
+  <button class="btn-primary" id="btn-approve-payment-report" type="button">승인</button>
+</div>
+  </dialog>
+
+  <footer>
+<span>한국외국어대학교 노동조합</span>
+<button class="btn-text" id="btn-export-ledger" type="button">장부 백업(JSON)</button>
+<span id="footer-sync">-</span>
+  </footer>
+</div>
+
+<div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<!-- APP_BUILD: stamp-version.mjs 실행 시 자동으로 갱신됩니다 -->
+<script>window.APP_BUILD = '20261008-2201';</script>
+<script src="domain.js"></script>
+<script>
+/* 초기 데이터(data.json)를 먼저 읽은 뒤 app.js를 실행합니다.
+   data.json을 못 읽어도 빈 데이터로 앱은 동작합니다.
+   CSS/JS 캐시 버스팅은 APP_BUILD 값을 사용합니다 (수동 ?v= 불필요). */
+(function(){
+  var build = window.APP_BUILD || String(Date.now());
+  var css = document.querySelector('link[href*="style.css"]');
+  if(css) css.href = 'style.css?v=' + encodeURIComponent(build);
+  var tag = document.querySelector('.version-tag');
+  if(tag) tag.textContent = 'v' + build;
+  // 오프라인 캐시(PWA): HTTPS 또는 localhost 에서만 등록. API(Firestore·로그인) 요청은 가로채지 않습니다.
+  if('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('sw.js?v=' + encodeURIComponent(build)).catch(function(e){ console.warn('서비스 워커 등록 실패:', e); });
+    });
+  }
+  function start(){
+    // 순서를 지켜 불러옵니다 (기부금영수증 모듈 → app.js)
+    ['features.js', 'donation.js', 'xls-protected.js', 'donation-ui.js', 'app.js'].forEach(function(src){
+      var s = document.createElement('script');
+      s.src = src + '?v=' + encodeURIComponent(build);
+      s.async = false;
+      document.body.appendChild(s);
+    });
+  }
+  fetch('data.json', {cache:'no-cache'})
+    .then(function(r){ return r.ok ? r.json() : {}; })
+    .catch(function(e){ console.warn('data.json을 불러오지 못했습니다:', e); return {}; })
+    .then(function(d){ window.APP_DATA = d || {}; start(); });
+})();
+</script>
+</body>
+</html>
