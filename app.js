@@ -864,7 +864,7 @@ let ledgerSources = {recent:new Map(), pending:new Map(), older:new Map()};
 let localOverrides = new Map();
 let olderCursor = null, cursorSet = false, olderHasMore = false, olderLoading = false;
 let reportSummary = null, reportMonthCache = {}, reportLoading = false, reportLoadToken = 0;
-const SUMMARY_VERSION = 1;
+const SUMMARY_VERSION = 2;
 const reportSummaryKey = y => 'report-summary:' + y;
 const reportSummaryRef = year => db.collection('accountingData').doc(reportSummaryKey(year));
   let appReady = false;
@@ -2708,14 +2708,10 @@ function parseSummary(raw){
 
 function emptySummary(){ return {version:SUMMARY_VERSION, cells:{}}; }
 
-// 집계 키: 거래 결제일 월 + 관·항·목 (승인월이 아님 — 월별 누적 보고서와 일치)
+// 집계 키: 승인월 + 관·항·목 (세부 거래 내역과 동일 기준 — 월별 누적 보고서 일치)
 function entrySummaryMonth(entry){
-  if(entry.month) return String(entry.month);
-  const txn = entryTxnMonth(entry);
-  if(txn) return txn + '월';
-  const acct = entryAcctMonth(entry);
-  if(acct) return acct + '월';
-  return '';
+  const m = entryApprovalMonth(entry);
+  return m ? (m + '월') : '';
 }
 function resolveEntryClassification(entry){
   let gwan = entry.gwan || '';
@@ -4500,26 +4496,23 @@ async function loadMonthlyBudgetReport(throughMonth, {exact=false}={}) {
         noteEl.textContent =
           year + '년 1월~' + n + '월 승인 실적 누적 · ' + count.toLocaleString('ko-KR') + '건 (보고서 집계 기준)' +
           (n <= closedThrough ? ' · ' + n + '월까지 마감됨' : '') +
-          ' · 예산은 연간 예산, 결산액은 해당 기간 거래일 기준 승인분 합계입니다.';
+          ' · 예산은 연간 예산, 결산액은 해당 기간 승인월 기준 승인분 합계입니다.';
       }
       return;
     }
 
-    // 정밀 조회: 집계 문서가 아닌 실제 승인 건을 거래 결제일 월 기준으로 합산
+    // 정밀 조회: 집계 문서가 아닌 실제 승인 건을 승인월 기준으로 합산 (세부 거래 내역과 동일)
     const snapshot = await entriesRef(year).where('status', 'in', APPROVED_STATES).get();
     if (year !== currentYear) return;
 
     const cumulative = [];
     snapshot.docs.forEach(doc => {
       const t = doc.data();
-      // 거래 결제일 기준 월 (승인월 아님)
-      let m = entryTxnMonth(t);
-      if (!m && t.month) m = monthNo(t.month);
-      if (!m) return;
-      if (m < 1 || m > n) return;
-      // 날짜 연도가 있으면 회계연도와 일치하는 건만
-      const dateYear = Number(String(t.date || '').slice(0, 4));
-      if (dateYear && dateYear !== year) return;
+      // 승인월 기준 (세부 거래 내역과 동일)
+      const m = entryApprovalMonth(t);
+      if (!m || m < 1 || m > n) return;
+      const ay = entryApprovalYear(t);
+      if (ay && ay !== year) return;
       cumulative.push(t);
     });
 
@@ -4530,7 +4523,7 @@ async function loadMonthlyBudgetReport(throughMonth, {exact=false}={}) {
       noteEl.textContent =
         year + '년 1월~' + n + '월 승인 실적 누적 · ' + cumulative.length.toLocaleString('ko-KR') + '건 (전체 내역 직접 조회)' +
         (n <= closedThrough ? ' · ' + n + '월까지 마감됨' : '') +
-        ' · 예산은 연간 예산, 결산액은 해당 기간 거래일 기준 승인분 합계입니다.';
+        ' · 예산은 연간 예산, 결산액은 해당 기간 승인월 기준 승인분 합계입니다.';
     }
   } catch (err) {
     console.error('월별 예산 대비 실적 조회 오류:', err);
