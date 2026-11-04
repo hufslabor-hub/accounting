@@ -2829,10 +2829,14 @@ function formatApprovalDate(t){
   const key = entryApprovalDateKey(t);
   return key ? formatEntryDate(key) : '-';
 }
-function compareByApprovalDateDesc(a,b){
+// 승인일 오름차순 (같은 날은 승인번호 순 → 결제일 순)
+function compareByApprovalDateAsc(a,b){
   const ka = entryApprovalDateKey(a);
   const kb = entryApprovalDateKey(b);
-  return (kb||'').localeCompare(ka||'') || (b.date||'').localeCompare(a.date||'') || String(b.id||'').localeCompare(String(a.id||''));
+  return (ka||'').localeCompare(kb||'')
+    || String(a.managementNo||'').localeCompare(String(b.managementNo||''),'ko',{numeric:true})
+    || (a.date||'').localeCompare(b.date||'')
+    || String(a.id||'').localeCompare(String(b.id||''));
 }
 
 async function renderReportDetail(){
@@ -2855,8 +2859,8 @@ async function renderReportDetail(){
     catch(error){ note.textContent = `${month} 내역을 불러오지 못했습니다: ${error.message || String(error)}`; return; }
     if(month!==currentMonthReport || !reportMonthCache[month]) return;
   }
-  // 승인일(승인번호·approvedAt) 기준 정렬 — 최신 승인 먼저
-  const list = reportMonthCache[month].slice().sort(compareByApprovalDateDesc);
+  // 승인일(승인번호·approvedAt) 기준 정렬 — 오래된 승인 먼저(오름차순)
+  const list = reportMonthCache[month].slice().sort(compareByApprovalDateAsc);
   body.innerHTML = '';
   list.forEach(t=>{
     const tr = document.createElement('tr');
@@ -2880,7 +2884,7 @@ async function renderReportDetail(){
   const expense = list.reduce((sum,t)=>sum+(t.gubun==='지출'?Number(t.amount||0):0),0);
   total.innerHTML = `<tr class="report-total-row"><th colspan="6">${month} 합계 · ${list.length}건</th><td class="num">${fmtShort(income)}</td><td class="num">${fmtShort(expense)}</td><td></td></tr>`;
   note.textContent = list.length
-    ? `${month} 승인 거래 ${list.length.toLocaleString('ko-KR')}건 · 승인일(승인번호) 기준 · 행을 클릭하면 지출내역보고를 볼 수 있습니다`
+    ? `${month} 승인 거래 ${list.length.toLocaleString('ko-KR')}건 · 승인일(승인번호) 오름차순 · 행을 클릭하면 지출내역보고를 볼 수 있습니다`
     : `${month}에 승인된 거래가 없습니다.`;
   bindReportDetailClicks();
 }
@@ -3600,7 +3604,7 @@ const source = ledger;
     // 마감된 달의 승인 건은 결의 내역에서 숨기고 보고서에만 표시 ('마감 내역 포함 보기' 체크 시 함께 표시)
     .filter(t => isReport || showClosedEntries || !isClosedApproved(t))
             .slice()
-    .sort(isReport ? ((a,b) => (b.date||'').localeCompare(a.date||'')) : compareByResolution);
+    .sort(isReport ? compareByApprovalDateAsc : compareByResolution);
 
   const shown = filtered;
 
@@ -3758,7 +3762,7 @@ async function bulkUnapproveSelected(){
   const batches = new Set(entries.map(e=>entryApprovalNo(e)||e.id)).size;
   const total = entries.reduce((sum,e)=>sum+Number(e.amount||0),0);
   const ok = await confirmAction(
-    `승인된 ${entries.length}건(승인번호 ${batches}개, 합계 ${fmt(total)})의 승인을 모두 취소하고 결의완료(지급 대기) 목록으로 되돌리시겠습니까?\n하나라도 처리할 수 없으면 전체가 취소되지 않고 그대로 유지됩니다.`,
+    `승인된 ${entries.length}건(승인번호 ${batches}개, 합계 ${fmt(total)})의 승인을 모두 취소하고 결의완료(승인 대기) 목록으로 되돌리시겠습니까?\n하나라도 처리할 수 없으면 전체가 취소되지 않고 그대로 유지됩니다.`,
     {title:'승인 일괄 취소',confirmLabel:`${entries.length}건 승인 취소`,danger:true});
   if(!ok) return;
   const btn = document.getElementById('btn-bulk-unapprove');
@@ -4070,7 +4074,7 @@ function renderPendingBox(){
     ...[...document.querySelectorAll('[data-workflow-group]:checked')].flatMap(input=>(input.dataset.workflowIds||'').split(',').filter(Boolean))
   ]);
   const byDate = (a,b)=>(b.date||'').localeCompare(a.date||'');
-  // 마감 여부와 관계없이 입력·결의 대기 목록에 표시 (새 내역 입력은 항상 가능)
+  // 마감 여부와 관계없이 입력·결의 대기 목록에 표시 (새 입력은 항상 가능)
   const inputComplete = ledger.filter(t=>t.status==='input-complete' && !t.locked).sort(byDate);
   const submitted = ledger.filter(t=>t.status==='submitted' && !t.locked).sort(byDate);
   const submittedGroups = groupSubmittedEntries(submitted);
@@ -4093,7 +4097,7 @@ function renderPendingBox(){
   bindWorkflowControls(list);
   updateWorkflowSummary('input-complete');
 
-  // 결의완료·지급 대기 상자는 전체 내역 아래 / 월 마감 위에 별도 렌더
+  // 결의완료·승인 대기 상자는 전체 내역 아래 / 월 마감 위에 별도 렌더
   renderSubmittedBox(submittedGroups, submitted, checkedIds);
 }
 
@@ -4104,7 +4108,7 @@ function renderSubmittedBox(submittedGroups, submitted, checkedIds){
   if(countEl) countEl.textContent = submitted.length;
   box.innerHTML = `
     <div class="workflow-stage">
-      <h3>지급 대기 (${submittedGroups.length}묶음 / ${submitted.length}건)</h3>
+      <h3>승인 대기 (${submittedGroups.length}묶음 / ${submitted.length}건)</h3>
       ${submittedGroupsTable(submittedGroups, checkedIds)}
       <p class="workflow-summary" data-workflow-summary="submitted" role="status"></p>
       <div class="workflow-actions">
@@ -5042,7 +5046,7 @@ async function approvePaymentReport(){
       }
     }
 
-    // 화면 즉시 갱신: 지급 대기에서 사라지고 결의 내역에 승인으로 남음 (마감 전)
+    // 화면 즉시 갱신: 승인 대기에서 사라지고 결의 내역에 승인으로 남음 (마감 전)
     paymentReportSourceStatus = 'approved';
     currentStatusEntry = '전체';
     currentMonthEntry = '전체';
@@ -5385,6 +5389,7 @@ function setGubun(g){
 }
 
 async function addEntry(){
+  let justAdded = false;
   const date = parseEntryDate(document.getElementById('f-date').value);
   const amountRaw = document.getElementById('f-amount').value;
   const desc = document.getElementById('f-desc').value.trim();
@@ -5450,6 +5455,7 @@ if(!Number.isFinite(amount) || !Number.isInteger(amount) || amount===0){
     cancelEntryEdit();
     setStatus('내역을 수정했습니다.');
   }else{
+    justAdded = true;
     const entry = {
       id:'usr_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
       ...values,
@@ -5476,6 +5482,8 @@ if(!Number.isFinite(amount) || !Number.isInteger(amount) || amount===0){
   }
   renderReport();
   renderEntryView();
+  // 다음 내역을 바로 입력할 수 있도록 결제일 칸으로 커서 이동
+  if(justAdded) document.getElementById('f-date')?.focus();
 }
 
 function clearEntryForm(){

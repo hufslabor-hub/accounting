@@ -111,7 +111,7 @@
       <div class="sec-head"><span class="sec-num">02</span><h2>세부 거래 내역</h2></div>
       <div class="card flush">
         <div class="card-toolbar"><div class="filter-row" id="month-filters-report"></div></div>
-        <div class="table-scroll transaction-table-scroll">
+        <div class="table-scroll transaction-table-scroll report-detail-scroll">
           <table class="transaction-table report-transaction-table">
             <colgroup>
               <col class="col-date"><col class="col-date"><col class="col-description"><col class="col-mok">
@@ -296,7 +296,7 @@
 <!-- 자주 쓰는 지출 템플릿: 제목 줄 오른쪽 정렬. 설정 편집기는 제목 아래에 펼쳐짐 (로그인한 허가 담당자 모두 사용·설정 가능) -->
 <div class="quick-template-container" id="quick-template-container">
   <div class="sec-head sec-head-entry">
-    <span class="sec-num">01</span><h2>새 내역 입력</h2>
+    <span class="sec-num">01</span><h2>새 입력</h2>
     <div class="qt-bar">
       <span class="qt-title">⚡ 자주 쓰는 지출 템플릿</span>
       <span id="quick-template-buttons" class="qt-buttons"></span>
@@ -304,7 +304,7 @@
     </div>
   </div>
   <div id="template-editor" class="qt-editor hidden">
-    <p class="qt-note">버튼 이름과 입력값을 정해 두면 새 내역 입력에서 한 번에 채워 줍니다. 결제일은 채우지 않습니다.</p>
+    <p class="qt-note">버튼 이름과 입력값을 정해 두면 새 입력에서 한 번에 채워 줍니다. 결제일은 채우지 않습니다.</p>
     <div id="template-editor-list"></div>
     <div class="qt-actions">
       <button type="button" class="btn-text" id="btn-template-add">＋ 빈 템플릿 추가</button>
@@ -396,7 +396,7 @@
     </section>
 
     <section class="pending-section" style="margin-top:28px;">
-      <div class="sec-head"><span class="sec-num">04</span><h2>지급 대기 <span class="pending-count" id="submitted-count">0</span></h2></div>
+      <div class="sec-head"><span class="sec-num">04</span><h2>승인 대기 <span class="pending-count" id="submitted-count">0</span></h2></div>
       <div class="pending-box" id="submitted-box"><div id="submitted-list"></div></div>
     </section>
 
@@ -646,7 +646,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <!-- APP_BUILD: stamp-version.mjs 실행 시 자동으로 갱신됩니다 -->
-<script>window.APP_BUILD = '20261103-2300';</script>
+<script>window.APP_BUILD = '20261104-0032';</script>
 <script src="domain.js"></script>
 <script>
 /* 초기 데이터(data.json)를 먼저 읽은 뒤 app.js를 실행합니다.

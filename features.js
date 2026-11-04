@@ -26,7 +26,7 @@
 
   /**
    * 금액 해석: '50000', '50,000', '₩50,000', '50,000원', '-50,000', '△50,000', '(50,000)', 전각 숫자 모두 허용.
-   * 앱의 parseEntryAmount(새 내역 입력)와 같은 규칙. 비어 있으면 null, 정수가 아니면 NaN.
+   * 앱의 parseEntryAmount(새 입력)와 같은 규칙. 비어 있으면 null, 정수가 아니면 NaN.
    */
   function parseAmount(v) {
     if (v == null) return null;

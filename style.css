@@ -1314,3 +1314,10 @@ dialog.bulk-entry-dialog::backdrop{background:rgba(59,73,83,.55);}
 .bulk-entry-table{min-width:820px;}
 .bulk-entry-table td{white-space:nowrap;}
 .bulk-entry-table td.bulk-note{white-space:normal;min-width:240px;}
+
+/* 합계 행 항상 보이게: 표 영역을 화면 높이에 맞추고 합계 행을 아래쪽에 고정 (보고서 탭) */
+.report-detail-scroll,#monthly-budget-scroll{max-height:880px;max-height:min(880px,calc(100vh - 150px));max-height:min(880px,calc(100dvh - 150px));overflow:auto;}
+.report-detail-scroll tfoot th,.report-detail-scroll tfoot td,
+#monthly-budget-scroll tfoot th,#monthly-budget-scroll tfoot td{position:sticky;bottom:0;z-index:2;background:var(--gold-soft);border-top:0;box-shadow:0 -2px 0 var(--navy-2);}
+/* 모바일 월별 누적 보고서: 전체 합계 막대를 화면 아래에 고정 */
+.mbr-total{position:sticky;bottom:0;bottom:env(safe-area-inset-bottom,0px);z-index:5;box-shadow:0 -3px 8px rgba(59,73,83,.25);}
