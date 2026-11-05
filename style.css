@@ -1321,3 +1321,11 @@ dialog.bulk-entry-dialog::backdrop{background:rgba(59,73,83,.55);}
 #monthly-budget-scroll tfoot th,#monthly-budget-scroll tfoot td{position:sticky;bottom:0;z-index:2;background:var(--gold-soft);border-top:0;box-shadow:0 -2px 0 var(--navy-2);}
 /* 모바일 월별 누적 보고서: 전체 합계 막대를 화면 아래에 고정 */
 .mbr-total{position:sticky;bottom:0;bottom:env(safe-area-inset-bottom,0px);z-index:5;box-shadow:0 -3px 8px rgba(59,73,83,.25);}
+
+.payment-audit-log{margin-top:14px;padding:12px 14px;border:1px solid var(--line);background:var(--paper);font-size:12.5px;line-height:1.7;}
+.payment-audit-log h3{margin:0 0 6px;font-size:13px;}
+.payment-audit-log ol{margin:0;padding-left:18px;}
+.payment-audit-log .audit-when{font-weight:700;white-space:nowrap;}
+.payment-audit-log .audit-by{color:var(--ink-soft);}
+.payment-audit-log .audit-count{color:var(--ink-soft);white-space:nowrap;}
+.payment-audit-log.hidden{display:none;}

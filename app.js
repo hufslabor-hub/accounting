@@ -2870,7 +2870,7 @@ async function renderReportDetail(){
     if(t.managementNo) tr.dataset.managementNo = String(t.managementNo);
     tr.innerHTML = `
       <td>${escapeHTML(formatEntryDate(t.date))}</td>
-      <td>${escapeHTML(formatApprovalDate(t))}</td>
+      <td${t.approvalDateSpecified ? ` title="${escapeHTML('승인일을 직접 지정함' + (t.approvalActualAt ? ` (실제 처리일 ${seoulParts(new Date(t.approvalActualAt)).date})` : ''))}"` : ''}>${escapeHTML(formatApprovalDate(t))}${t.approvalDateSpecified ? ' ⚑' : ''}</td>
       <td>${escapeHTML(t.desc||'')}</td>
       <td>${escapeHTML(t.category||'-')}</td>
       <td>${escapeHTML(t.payee||'-')}</td>
@@ -3666,6 +3666,55 @@ const source = ledger;
   }
 }
 
+// ---------- 감사 이력: 내역 문서 안의 auditLog 배열 (결의·승인·승인 취소·반려·수정 되돌림) ----------
+const AUDIT_LOG_MAX = 40;
+function auditActor(){ return currentUser?.email || currentUser?.displayName || ''; }
+// at: 같은 처리(일괄 처리 등)에 속한 내역은 같은 시각 값을 넘겨 화면에서 한 줄로 묶이게 한다
+function withAudit(entry, action, detail={}, at=new Date().toISOString()){
+  const clean = Object.fromEntries(Object.entries(detail).filter(([,value])=>value!==undefined && value!==null));
+  const log = Array.isArray(entry.auditLog) ? entry.auditLog.slice(-(AUDIT_LOG_MAX-1)) : [];
+  log.push({at, by:auditActor(), action, ...clean});
+  return {...entry, auditLog:log};
+}
+function describeAuditEvent(ev){
+  switch(ev.action){
+    case 'submit':
+      return `결의${ev.resolutionNo ? ` · 결의번호 ${ev.resolutionNo}` : ''}`;
+    case 'approve': {
+      const actual = ev.at ? seoulParts(new Date(ev.at)).date : '';
+      return `승인 · 승인번호 ${ev.managementNo||'-'} · 승인일 ${ev.approvalDate||'-'}`
+        + (ev.specified ? ` ⚠ 승인일을 직접 지정함 (실제 처리일 ${actual})` : '');
+    }
+    case 'unapprove':
+      return `승인 취소${ev.bulk ? ' (일괄)' : ''} · 이전 승인번호 ${ev.managementNo||'-'}${ev.approvalDate ? ` (승인일 ${ev.approvalDate}${ev.specified ? ', 직접 지정' : ''})` : ''}`;
+    case 'reject':
+      return `반려${ev.resolutionNo ? ` · 결의번호 ${ev.resolutionNo}` : ''}`;
+    case 'edit-reopen':
+      return `수정을 위해 입력 내역으로 되돌림 (이전 상태: ${STATUS_LABEL[ev.fromStatus]||ev.fromStatus||'-'})`;
+    default:
+      return String(ev.action||'');
+  }
+}
+// 지급 보고서 팝업 아래에 선택한 묶음의 처리 이력을 시간순으로 표시
+function renderPaymentAuditLog(entries){
+  const box = document.getElementById('payment-audit-log');
+  if(!box) return;
+  const groups = new Map();
+  entries.forEach(entry=>(Array.isArray(entry.auditLog) ? entry.auditLog : []).forEach(ev=>{
+    const key = [ev.at, ev.by, ev.action].join('|');
+    if(!groups.has(key)) groups.set(key,{ev,count:0});
+    groups.get(key).count++;
+  }));
+  const rows = [...groups.values()].sort((a,b)=>String(a.ev.at).localeCompare(String(b.ev.at)));
+  if(!rows.length){ box.classList.add('hidden'); box.innerHTML = ''; return; }
+  box.innerHTML = '<h3>처리 이력</h3><ol>' + rows.map(({ev,count})=>{
+    const d = new Date(ev.at);
+    const when = Number.isNaN(d.getTime()) ? String(ev.at||'') : (()=>{ const p = seoulParts(d); return `${p.date} ${p.time.slice(0,5)}`; })();
+    return `<li><span class="audit-when">${escapeHTML(when)}</span> <span class="audit-by">${escapeHTML(ev.by||'-')}</span> ${escapeHTML(describeAuditEvent(ev))} <span class="audit-count">· ${count}건</span></li>`;
+  }).join('') + '</ol>';
+  box.classList.remove('hidden');
+}
+
 // 승인 취소를 막는 사유 (없으면 '')
 function unapproveBlockReason(entry){
   if(entry.locked) return '가져온 내역은 변경할 수 없습니다.';
@@ -3679,20 +3728,26 @@ function unapproveBlockReason(entry){
   return '';
 }
 // 승인 취소된 내역 사본: 승인번호만 제거하고 결의번호(submissionSequence)는 유지
-function unapprovedCopy(entry){
+function unapprovedCopy(entry, opts={}){
   const next = {
     ...entry, status:'submitted', locked:false,
     approvalCancelledAt:new Date().toISOString(),
     approvalCancelledBy:currentUser?.email || currentUser?.displayName || ''
   };
-  ['approvedAt','approvedBy','paidAt','paidBy','confirmedAt','confirmedBy','acctMonth','acctYear']
+  ['approvedAt','approvedBy','paidAt','paidBy','confirmedAt','confirmedBy','acctMonth','acctYear','approvalActualAt','approvalDateSpecified']
     .forEach(key=>delete next[key]);
   if(next.submissionSequence != null && String(next.submissionSequence).trim() !== ''){
     next.managementNo = String(next.submissionSequence);
   } else {
     delete next.managementNo;
   }
-  return next;
+  // 감사 기록: 취소된 승인의 번호·승인일·직접 지정 여부를 누적해서 남김 (마지막 취소만 남기지 않음)
+  return withAudit(next,'unapprove',{
+    managementNo:String(entry.managementNo||''),
+    approvalDate:entryApprovalDateKey(entry)||'',
+    specified:!!entry.approvalDateSpecified,
+    bulk:!!opts.bulk
+  }, opts.at);
 }
 
 // ── 일괄 승인 취소 ──
@@ -3769,12 +3824,13 @@ async function bulkUnapproveSelected(){
   if(btn) btn.disabled = true;
   try{
     await entryTransaction(ids,(found,api)=>{
+      const bulkAt = new Date().toISOString();   // 같은 일괄 처리는 같은 시각으로 기록
       ids.forEach(id=>{
         const entry = found.get(id);
         if(!entry) throw stateChangedError('내역을 찾을 수 없습니다. 다른 담당자가 이미 삭제했을 수 있습니다.');
         const reason = unapproveBlockReason(entry);
         if(reason) throw stateChangedError(reason);
-        api.set(unapprovedCopy(entry));
+        api.set(unapprovedCopy(entry,{bulk:true,at:bulkAt}));
       });
     });
     bulkUnapproveIds = new Set();
@@ -3830,7 +3886,7 @@ function bindRowActions(container){
             next.rejectedAt = new Date().toISOString();
             next.rejectedBy = currentUser?.email || currentUser?.displayName || '';
             ['managementNo','submissionSequence','submittedAt','submittedBy'].forEach(key=>delete next[key]);
-            api.set(next);
+            api.set(withAudit(next,'reject',{resolutionNo:String(entry.managementNo||'')}));
           }else if(act==='edit'){
             if(entry.status==='input-complete') throw stateChangedError('이미 입력 내역에 있는 내역입니다.');
             if(typeof ShowMeDomain !== 'undefined'){
@@ -3839,9 +3895,10 @@ function bindRowActions(container){
             }else if(approvedStates.includes(entry.status) && entry.acctMonth && monthNo(entry.acctMonth)<=closedThrough){
               throw stateChangedError(`${entry.acctMonth}월은 마감되어 수정할 수 없습니다. 마감을 취소한 뒤 시도해 주세요.`);
             }
-            const next = {...entry, status:'input-complete', locked:false, editReopenedAt:new Date().toISOString(), editReopenedBy:currentUser?.email || currentUser?.displayName || ''};
-            ['approvedAt','approvedBy','paidAt','paidBy','confirmedAt','confirmedBy','managementNo','submissionSequence','submittedAt','submittedBy','acctMonth','acctYear']
-              .forEach(key=>delete next[key]);
+            const reopened = {...entry, status:'input-complete', locked:false, editReopenedAt:new Date().toISOString(), editReopenedBy:currentUser?.email || currentUser?.displayName || ''};
+            ['approvedAt','approvedBy','paidAt','paidBy','confirmedAt','confirmedBy','managementNo','submissionSequence','submittedAt','submittedBy','acctMonth','acctYear','approvalActualAt','approvalDateSpecified']
+              .forEach(key=>delete reopened[key]);
+            const next = withAudit(reopened,'edit-reopen',{fromStatus:entry.status, managementNo:String(entry.managementNo||'')});
             editedEntry = next;
             api.set(next);
           }else if(act==='unapprove'){
@@ -4230,10 +4287,10 @@ async function persistSubmissionBatch(entries,submittedAt,submittedBy){
     const sequenceSnapshot = await api.tx.get(sequenceRef);
     const stored = sequenceSnapshot.exists ? Number(sequenceSnapshot.data().value) : highestSubmissionSequenceForMonth(ledger,submittedMonthKey);
     assigned = checkSequence(stored,'결의번호')+1;
-    targets.forEach(entry=>api.set({
+    targets.forEach(entry=>api.set(withAudit({
       ...entry, status:'submitted', submittedAt, submittedBy,
       submissionSequence:assigned, managementNo:String(assigned)
-    }));
+    },'submit',{resolutionNo:String(assigned)},submittedAt)));
     api.tx.set(sequenceRef,{value:String(assigned),...writeMeta()});
   });
   return assigned;
@@ -4311,16 +4368,22 @@ if(ap.year===currentYear && ap.month<=closedThrough){
 }
         
     const at = approvalTime.toISOString();
+    // 감사 기록: 실제 처리 시각과, 승인일을 직접 지정했는지(선택한 날짜 ≠ 처리한 날) 함께 남김
+    const auditAt = new Date().toISOString();
+    const approvalDateKey = seoulParts(approvalTime).date;
+    const specified = approvalDateKey !== seoulParts(new Date(auditAt)).date;
     targets.forEach(entry=>{
       const next = {
      ...entry, status:'approved', approvedAt:at, approvedBy,
   acctYear:acctPeriod(approvalTime).year,
   acctMonth:acctPeriod(approvalTime).month,
-  managementNo
+  managementNo,
+  approvalActualAt:auditAt,
+  approvalDateSpecified:specified
 };
       if(entry.gubun==='수입'){ next.confirmedAt = at; next.confirmedBy = approvedBy; }
       else{ next.paidAt = at; next.paidBy = approvedBy; }
-      api.set(next);
+      api.set(withAudit(next,'approve',{managementNo,approvalDate:approvalDateKey,specified},auditAt));
     });
     api.tx.set(sequenceRef,{value:String(sequence),...writeMeta()});
   });
@@ -4421,7 +4484,9 @@ async function updateSelectedWorkflow(fromStatus,toStatus){
       }
       targets.forEach(entry=>{
         const next = {...entry,status:toStatus};
+        let rejected = false;
         if(toStatus==='input-complete' && fromStatus==='submitted'){
+          rejected = true;
           // 반려: 결의완료 → 입력완료로 되돌림
           next.rejectedAt = now;
           next.rejectedBy = actor;
@@ -4430,8 +4495,9 @@ async function updateSelectedWorkflow(fromStatus,toStatus){
           next.rejectedAt = now;
           next.rejectedBy = actor;
           delete next.managementNo;
+          rejected = true;
         }
-        api.set(next);
+        api.set(rejected ? withAudit(next,'reject',{resolutionNo:String(entry.managementNo||'')},now) : next);
       });
     });
     setStatus(`${spender} 담당자의 ${ids.length}건을 반려하여 입력완료로 되돌렸습니다.`);
@@ -4874,6 +4940,7 @@ function openPaymentReportWithEntries(entries, status='approved'){
     }
     const mgmtOverride = paymentReportApproval?.managementNo || null;
     renderPaymentReport(entries, spender, approval, mgmtOverride);
+    renderPaymentAuditLog(entries);
     const statusEl = document.getElementById('payment-report-status');
     const approveButton = document.getElementById('btn-approve-payment-report');
     if(status==='submitted'){

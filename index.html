@@ -626,6 +626,7 @@
     <div class="payment-dialog-body">
       <div class="payment-report-sheet" id="payment-report-sheet"></div>
       <p id="payment-report-status" role="status"></p>
+      <div class="payment-audit-log hidden" id="payment-audit-log" aria-label="처리 이력"></div>
     </div>
     <div class="payment-dialog-actions">
   <label class="approval-date-field hidden" id="approval-date-field">승인일 <input type="date" id="approval-date-input"></label>
@@ -646,7 +647,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <!-- APP_BUILD: stamp-version.mjs 실행 시 자동으로 갱신됩니다 -->
-<script>window.APP_BUILD = '20261104-0032';</script>
+<script>window.APP_BUILD = '20261105-0742';</script>
 <script src="domain.js"></script>
 <script>
 /* 초기 데이터(data.json)를 먼저 읽은 뒤 app.js를 실행합니다.
