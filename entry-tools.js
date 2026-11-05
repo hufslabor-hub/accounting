@@ -108,6 +108,50 @@
       || String(a.id || '').localeCompare(String(b.id || ''));
   }
 
+  // ───────── 2-2) 결의일 · 결의 내역의 월 구분 ─────────
+
+  /** 결의번호: submissionSequence 우선, 없으면 결의완료 상태의 managementNo */
+  function entryResolutionNo(t) {
+    if (t.submissionSequence != null && String(t.submissionSequence).trim() !== '') return String(t.submissionSequence);
+    if (t.status === 'submitted' && t.managementNo) return String(t.managementNo);
+    return '';
+  }
+
+  /** 결의일: '결의' 버튼을 누른 날(submittedAt)을 한국 시간 기준 'YYYY-MM-DD'로. 없으면 '' */
+  function entrySubmittedDateKey(t) {
+    if (!t || !t.submittedAt) return '';
+    const d = new Date(t.submittedAt);
+    if (Number.isNaN(d.getTime())) return '';
+    return seoulParts(d).date;
+  }
+
+  /** 결의번호는 달마다 1번부터 시작하므로, 같은 번호를 구분하는 '결의월' 키 (YYYYMM) */
+  function resolutionMonthKey(t) {
+    const key = entrySubmittedDateKey(t);
+    return key ? key.slice(0, 4) + key.slice(5, 7) : '';
+  }
+
+  /**
+   * 결의 내역의 월 구분('11월'): 결의한 날짜(결의월) 기준.
+   * 결의일이 없는 내역(결의 전 단계·가져온 옛 내역)은 결제월을 쓴다.
+   */
+  function entryListMonth(t) {
+    const key = entrySubmittedDateKey(t);
+    if (key) return `${parseInt(key.slice(5, 7), 10)}월`;
+    return t.month;
+  }
+
+  /** 결의번호 순 정렬 (결의월 → 번호, 번호 없는 내역은 맨 뒤) */
+  function compareByResolution(a, b) {
+    const na = entryResolutionNo(a), nb = entryResolutionNo(b);
+    const sa = na !== '' && Number.isFinite(Number(na)) ? Number(na) : null;
+    const sb = nb !== '' && Number.isFinite(Number(nb)) ? Number(nb) : null;
+    if ((sa === null) !== (sb === null)) return sa === null ? 1 : -1;
+    if (sa === null) return (b.date || '').localeCompare(a.date || '') || String(a.id).localeCompare(String(b.id));
+    return resolutionMonthKey(a).localeCompare(resolutionMonthKey(b)) || sa - sb
+      || (a.date || '').localeCompare(b.date || '') || String(a.id).localeCompare(String(b.id));
+  }
+
   // ───────── 3) 감사 이력 ─────────
 
   const AUDIT_LOG_MAX = 40;
@@ -356,6 +400,7 @@
   return {
     seoulParts, paymentDateKey, entryTxnMonth, approvalSeoulParts,
     entryApprovalDateKey, entryApprovalMonth, entryApprovalYear, compareByApprovalDateAsc,
+    entryResolutionNo, entrySubmittedDateKey, resolutionMonthKey, entryListMonth, compareByResolution,
     AUDIT_LOG_MAX, withAudit, describeAuditEvent, unapprovedCopy,
     normalizeCategoryName, parseEntryDate, parseLooseDate, parseLooseAmount,
     decodeImportBuffer, parseDelimitedText, hasAccount, buildBulkImportItems

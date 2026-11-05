@@ -59,6 +59,37 @@ eq(early, ['dawn', 'later'], '새벽 승인(UTC 전날)도 같은 날 안에서 
 eq([{ id: 'x', date: '2026-10-02' }, { id: 'y', date: '2026-10-01' }].sort(T.compareByApprovalDateAsc).map((t) => t.id), ['y', 'x'], '승인 정보 없는 내역은 결제일 순');
 
 // ─────────────────────────────────────────────
+console.log('4-2) 결의일 · 결의 내역의 월 구분');
+eq(T.entrySubmittedDateKey({ submittedAt: '2026-11-03T05:00:00.000Z' }), '2026-11-03', '결의일은 submittedAt의 한국 날짜');
+eq(T.entrySubmittedDateKey({ submittedAt: '2026-11-03T15:30:00.000Z' }), '2026-11-04', '한국 시간 자정 이후(UTC 전날)는 다음 날');
+eq(T.entrySubmittedDateKey({}), '', '결의 전 내역은 결의일 없음');
+eq(T.entrySubmittedDateKey({ submittedAt: 'bad' }), '', '잘못된 값은 없음 처리');
+eq(T.resolutionMonthKey({ submittedAt: '2026-10-31T15:00:00.000Z' }), '202611', '월말 한국 시간 자정은 다음 달 결의월 (결의번호 카운터 기준)');
+const listCases = [
+  ['결의 건: 결제월이 아니라 결의월', { status: 'submitted', month: '9월', date: '2026-09-07', submittedAt: '2026-11-03T05:00:00.000Z' }, '11월'],
+  ['승인 건도 승인월이 아니라 결의월', { status: 'approved', month: '9월', submittedAt: '2026-10-10T01:00:00.000Z', approvedAt: '2026-11-04T05:00:00.000Z', acctMonth: 11, managementNo: '20261104001' }, '10월'],
+  ['한국 시간 월초 새벽 결의', { status: 'submitted', month: '9월', submittedAt: '2026-10-31T16:00:00.000Z' }, '11월'],
+  ['결의일이 없으면 결제월', { status: 'rejected', month: '9월', date: '2026-09-07' }, '9월'],
+  ['결의일이 잘못돼도 결제월', { status: 'submitted', month: '9월', submittedAt: 'x' }, '9월']
+];
+listCases.forEach(([name, entry, want]) => eq(T.entryListMonth(entry), want, name));
+const resolutionOrder = [
+  { id: 'nov2', status: 'submitted', submissionSequence: 2, managementNo: '2', submittedAt: '2026-11-03T05:00:00.000Z', date: '2026-09-01' },
+  { id: 'none', status: 'rejected', date: '2026-09-30' },
+  { id: 'oct5', status: 'approved', submissionSequence: 5, managementNo: '20261014001', submittedAt: '2026-10-10T05:00:00.000Z', date: '2026-09-01' },
+  { id: 'nov1', status: 'submitted', submissionSequence: 1, managementNo: '1', submittedAt: '2026-11-02T05:00:00.000Z', date: '2026-09-20' }
+].sort(T.compareByResolution).map((e) => e.id);
+eq(resolutionOrder, ['oct5', 'nov1', 'nov2', 'none'], '결의월 → 결의번호 순, 결의번호 없는 내역은 맨 뒤');
+// 기기 시간대와 무관해야 함: 다른 시간대로 같은 계산을 돌려 본다
+const { execFileSync } = require('child_process');
+['America/Los_Angeles', 'Asia/Seoul', 'UTC'].forEach((tz) => {
+  const out = execFileSync(process.execPath, ['-e',
+    "const T=require('./entry-tools.js');process.stdout.write(T.entrySubmittedDateKey({submittedAt:'2026-11-03T15:30:00.000Z'})+'|'+T.entryListMonth({month:'9월',submittedAt:'2026-10-31T16:00:00.000Z'}))"],
+  { cwd: __dirname, env: { ...process.env, TZ: tz } }).toString();
+  eq(out, '2026-11-04|11월', `기기 시간대 ${tz}에서도 같은 결과`);
+});
+
+// ─────────────────────────────────────────────
 console.log('5) 감사 이력 — withAudit');
 const base = { id: 'e1', status: 'submitted' };
 const a1 = T.withAudit(base, 'submit', { resolutionNo: '7' }, '2026-11-03T05:00:00.000Z', 'kim@union.kr');

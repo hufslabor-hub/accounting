@@ -3457,14 +3457,8 @@ function captureHierarchyForm(){
   return {tree,budget:nextBudget};
 }
 
-// 결의 내역의 월 구분: 승인된 건은 승인월(승인번호·승인일 기준), 그 외는 결제월
-function entryListMonth(t){
-  if(APPROVED_STATES.includes(t.status)){
-    const m = entryApprovalMonth(t);
-    if(m>=1 && m<=12) return monthList[m-1];
-  }
-  return t.month;
-}
+// 결의 내역의 월 구분: 결의한 날짜(결의월) 기준. 결의일이 없는 내역(결의 전·가져온 옛 내역)은 결제월
+function entryListMonth(t){ return ShowMeEntryTools.entryListMonth(t); }
 
 // 결의 내역 월 선택 드롭다운: 1~12월을 항상 표시하고 월별 건수를 함께 보여줌
 function renderEntryMonthSelect(){
@@ -3507,34 +3501,14 @@ function renderMonthFilters(containerId, sourceList, current, onClick){
   });
 }
 
-// 결의번호: submissionSequence 우선, 없으면 결의완료 상태의 managementNo
-function entryResolutionNo(t){
-  if(t.submissionSequence != null && String(t.submissionSequence).trim() !== '') return String(t.submissionSequence);
-  if(t.status === 'submitted' && t.managementNo) return String(t.managementNo);
-  return '';
-}
-// 결의일: '결의' 버튼을 누른 날(submittedAt, 로컬 날짜) → 'YYYY-MM-DD'
-function entrySubmittedDateKey(t){
-  if(!t || !t.submittedAt) return '';
-  const d = new Date(t.submittedAt);
-  if(Number.isNaN(d.getTime())) return '';
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
+// 결의번호·결의일(한국 시간)·결의월·결의번호 순 정렬 규칙은 entry-tools.js (테스트: entry-tools.test.js)
+function entryResolutionNo(t){ return ShowMeEntryTools.entryResolutionNo(t); }
+// 결의일: '결의' 버튼을 누른 날(submittedAt, 한국 시간) → 'YYYY-MM-DD'
+function entrySubmittedDateKey(t){ return ShowMeEntryTools.entrySubmittedDateKey(t); }
 // 결의번호는 달마다 1번부터 시작하므로, 같은 번호를 구분하는 '결의월' 키 (YYYYMM)
-function resolutionMonthKey(t){
-  const key = entrySubmittedDateKey(t);
-  return key ? key.slice(0,4)+key.slice(5,7) : '';
-}
+function resolutionMonthKey(t){ return ShowMeEntryTools.resolutionMonthKey(t); }
 // 결의번호 순 정렬 (결의월 → 번호, 번호 없는 내역은 맨 뒤)
-function compareByResolution(a,b){
-  const na = entryResolutionNo(a), nb = entryResolutionNo(b);
-  const sa = na!=='' && Number.isFinite(Number(na)) ? Number(na) : null;
-  const sb = nb!=='' && Number.isFinite(Number(nb)) ? Number(nb) : null;
-  if((sa===null)!==(sb===null)) return sa===null ? 1 : -1;
-  if(sa===null) return (b.date||'').localeCompare(a.date||'') || String(a.id).localeCompare(String(b.id));
-  return resolutionMonthKey(a).localeCompare(resolutionMonthKey(b)) || sa-sb
-    || (a.date||'').localeCompare(b.date||'') || String(a.id).localeCompare(String(b.id));
-}
+function compareByResolution(a,b){ return ShowMeEntryTools.compareByResolution(a,b); }
 // 승인번호: 승인(approved/paid/confirmed) 상태일 때 managementNo
 function entryApprovalNo(t){
   if(APPROVED_STATES.includes(t.status) && t.managementNo) return String(t.managementNo);
@@ -3588,7 +3562,7 @@ const source = ledger;
         ? `<input type="checkbox" class="bulk-unapprove-chk" data-bulk-id="${escapeHTML(t.id)}" data-mgmt="${escapeHTML(approvalNo)}" aria-label="승인 일괄 취소 대상 선택"${bulkUnapproveIds.has(t.id)?' checked':''}> `
         : '';
       tr.innerHTML = `
-        <td>${bulkBox}${resolutionNo ? escapeHTML(resolutionNo) : ''}</td>
+        <td${entrySubmittedDateKey(t) ? ` title="결의일 ${escapeHTML(entrySubmittedDateKey(t))}"` : ''}>${bulkBox}${resolutionNo ? escapeHTML(resolutionNo) : ''}</td>
         <td class="col-date">${escapeHTML(formatEntryDate(t.date))}</td>
         <td style="color:${t.gubun==='수입'?'var(--income)':'var(--expense)'}">${escapeHTML(t.gubun||'')}</td>
         <td>${escapeHTML(t.desc||'')}</td>
