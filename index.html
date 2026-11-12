@@ -342,6 +342,10 @@
         </div>
         <datalist id="dl-desc"></datalist>
         <datalist id="dl-amount"></datalist>
+        <div class="budget-balance hidden" id="budget-balance" role="status" aria-live="polite">
+          <p class="budget-balance-headline hidden" id="budget-balance-headline"></p>
+          <p class="budget-balance-detail hidden" id="budget-balance-detail"></p>
+        </div>
 
 <div class="entry-form-footer">
 <!-- 영수증 첨부 영역 -->
@@ -647,7 +651,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <!-- APP_BUILD: stamp-version.mjs 실행 시 자동으로 갱신됩니다 -->
-<script>window.APP_BUILD = '20261105-1258';</script>
+<script>window.APP_BUILD = '20261112-1433';</script>
 <script src="domain.js"></script>
 <script>
 /* 초기 데이터(data.json)를 먼저 읽은 뒤 app.js를 실행합니다.
@@ -660,8 +664,8 @@
   var tag = document.querySelector('.version-tag');
   if(tag) tag.textContent = 'v' + build;
   function start(){
-    // 순서를 지켜 불러옵니다 (내역 처리 규칙 → 기부금영수증 모듈 → app.js)
-    ['entry-tools.js', 'donation.js', 'xls-protected.js', 'donation-ui.js', 'app.js'].forEach(function(src){
+    // 순서를 지켜 불러옵니다 (내역 처리 규칙 → 화면 기능 규칙 → 기부금영수증 모듈 → app.js)
+    ['entry-tools.js', 'features.js', 'donation.js', 'xls-protected.js', 'donation-ui.js', 'app.js'].forEach(function(src){
       var s = document.createElement('script');
       s.src = src + '?v=' + encodeURIComponent(build);
       s.async = false;

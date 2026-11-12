@@ -38,6 +38,9 @@ let currentMonthEntry = '전체';
 let showClosedEntries = false;   // 결의 내역: 마감된 승인 건 포함 보기
 let bulkUnapproveIds = new Set();   // 결의 내역: 일괄 승인 취소 대상으로 체크한 내역 id
 let bulkGroupByApprovalNo = true;   // 같은 승인번호는 함께 선택
+let budgetBalanceTimer = null;     // 새 입력: 예산 잔액 표시 재계산 타이머
+let budgetSummaryRequested = false;   // 새 입력: 승인 집행액(보고서 집계)을 이미 한 번 불러와 봤는지
+let budgetSummaryLoading = false;     // 새 입력: 승인 집행액을 불러오는 중인지
 let currentStatusEntry = '전체';
 let currentGubun = '지출';
 let budgetMigrationMessage = '';
@@ -2732,6 +2735,7 @@ async function loadReportSummary(force=false){
     if(token===reportLoadToken) reportLoading = false;
   }
   renderReport();
+  updateBudgetBalance();
 }
 
 // ---------- 세부 거래 내역: 선택한 월만 읽기 (승인일·승인번호 기준 월) ----------
@@ -4105,6 +4109,7 @@ function beginEntryEdit(entry){
   document.getElementById('f-spender').value = entry.spender || '';
   document.getElementById('f-amount').value = entry.amount ?? '';
   mokSelect.value = classification;
+  updateBudgetBalance();
   document.getElementById('btn-add').textContent = '수정 저장';
   document.getElementById('btn-cancel-entry-edit').classList.remove('hidden');
   showExistingReceipt(entry);
@@ -5306,6 +5311,61 @@ function refreshMokOptions(){
     option.textContent = '예산 관리에서 목을 먼저 등록해주세요';
     select.appendChild(option);
   }
+  updateBudgetBalance();
+}
+
+// ---------- 새 입력: 선택한 목의 예산 잔액·소진 경고 ----------
+// 판정·문구 규칙은 features.js(budgetStatus·describeBudget), 테스트는 features.test.js.
+// 승인 집행액은 보고서 집계(reportSummary), 진행 중 금액은 화면에 불러온 입력완료·결의완료 내역에서 가져온다.
+function updateBudgetBalance(){
+  const box = document.getElementById('budget-balance');
+  if(!box || typeof ShowMeFeatures === 'undefined') return;
+  const headlineEl = document.getElementById('budget-balance-headline');
+  const detailEl = document.getElementById('budget-balance-detail');
+  const show = (level, headline, detail)=>{
+    box.className = `budget-balance ${level}`;
+    headlineEl.textContent = headline || '';
+    detailEl.textContent = detail || '';
+    headlineEl.classList.toggle('hidden', !headline);
+    detailEl.classList.toggle('hidden', !detail);
+  };
+  const type = currentGubun==='수입' ? 'income' : 'expense';
+  let cls = null;
+  try{ cls = JSON.parse(document.getElementById('f-mok').value || 'null'); }catch(e){}
+  if(!cls || !cls.mok || !hasAccount(type, cls)){ box.className = 'budget-balance hidden'; return; }
+
+  if(reportSummary === null){
+    // 승인 집행액이 아직 없으면 보고서 집계를 한 번 불러온 뒤 다시 계산한다 (실패해도 반복해서 읽지 않음)
+    const failed = budgetSummaryRequested && !budgetSummaryLoading && !reportLoading;
+    show('info', failed ? '승인 집행액을 불러오지 못했습니다. 보고서 탭을 한 번 열어 주세요.' : '승인 집행액을 불러오는 중…', '');
+    if(!budgetSummaryRequested && !reportLoading){
+      budgetSummaryRequested = true;
+      budgetSummaryLoading = true;
+      loadReportSummary().finally(()=>{ budgetSummaryLoading = false; updateBudgetBalance(); });
+    }else if(reportLoading && !budgetSummaryLoading){
+      clearTimeout(budgetBalanceTimer);   // 다른 곳에서 이미 불러오는 중이면 잠시 뒤 다시 확인
+      budgetBalanceTimer = setTimeout(updateBudgetBalance, 1000);
+    }
+    return;
+  }
+
+  const normGwan = v => normalizeCategoryName(v,'_관');
+  const normHang = v => normalizeCategoryName(v,'_항');
+  const target = {gubun:currentGubun, gwan:normGwan(cls.gwan), hang:normHang(cls.hang), category:cls.mok};
+  const approved = ShowMeFeatures.approvedSpentFromSummary(reportSummary.cells, currentGubun, cls.gwan, cls.hang, cls.mok, {normGwan, normHang});
+  const pending = ShowMeFeatures.pendingSpent(ledger, target, {
+    excludeId: editingEntryId || undefined,   // 수정 중인 내역 자신은 진행 중 금액에서 뺀다
+    resolve: e=>{ const r = resolveEntryClassification(e); return {gwan:normGwan(r.gwan), hang:normHang(r.hang), category:r.category}; }
+  });
+  const typed = ShowMeFeatures.parseAmount(document.getElementById('f-amount').value);
+  const status = ShowMeFeatures.budgetStatus({
+    type,
+    budget: Number(budget[mokBudgetKey(type, cls.gwan, cls.hang, cls.mok)]) || 0,
+    approved, pending,
+    newAmount: Number.isFinite(typed) ? typed : 0
+  });
+  const text = ShowMeFeatures.describeBudget(status, fmt);
+  show(status.level, text.headline, text.detail);
 }
 
 function hasAccount(type, classification){ return ShowMeEntryTools.hasAccount(accountCategories, type, classification); }
@@ -5340,7 +5400,7 @@ async function addEntry(){
     setStatus(`${currentYear} 회계연도 이후 날짜는 입력할 수 없습니다.`, true);
     return;
   }
-const amount = Number(amountRaw);
+const amount = ShowMeFeatures.parseAmount(amountRaw);   // 쉼표·원·△·괄호 허용 (features.js)
 if(!Number.isFinite(amount) || !Number.isInteger(amount) || amount===0){
   setStatus('금액은 0이 아닌 정수로 입력해주세요. 환불·반환은 음수로 입력합니다.', true);
   return;
@@ -5424,6 +5484,7 @@ function clearEntryForm(){
   document.getElementById('f-spender').value = '';
   receiptRemoveOnSave = false;
   resetReceiptInput();
+  updateBudgetBalance();
 }
 
 // ---------- 여러 건 한꺼번에 입력 (CSV·TXT 업로드 / 엑셀 붙여넣기) ----------
@@ -5621,6 +5682,8 @@ document.getElementById('btn-export-ledger').addEventListener('click',exportLedg
 document.getElementById('btn-gubun-income').addEventListener('click', ()=>setGubun('수입'));
 document.getElementById('btn-gubun-expense').addEventListener('click', ()=>setGubun('지출'));
 document.getElementById('btn-add').addEventListener('click', addEntry);
+document.getElementById('f-mok').addEventListener('change', updateBudgetBalance);
+document.getElementById('f-amount').addEventListener('input', updateBudgetBalance);
 initBulkEntryImport();
 document.getElementById('btn-cancel-entry-edit').addEventListener('click',()=>{
   cancelEntryEdit();

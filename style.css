@@ -1348,3 +1348,15 @@ dialog.bulk-entry-dialog::backdrop{background:rgba(59,73,83,.55);}
   .hierarchy-table .hierarchy-row-delete{font-size:12px;}
   .hierarchy-total-message{white-space:normal;font-size:10px;line-height:1.3;padding:2px;word-break:keep-all;}
 }
+
+/* 새 입력: 선택한 목의 예산 잔액·소진 경고 */
+.budget-balance{margin:12px 0 0;padding:10px 14px;border:1px solid var(--line);border-left:4px solid var(--line);background:var(--paper);font-size:13px;line-height:1.6;}
+.budget-balance p{margin:0;}
+.budget-balance .budget-balance-headline{font-weight:700;}
+.budget-balance .budget-balance-detail{color:var(--ink-soft);}
+.budget-balance.ok{border-left-color:#4a8f5a;}
+.budget-balance.warn{background:#fff6d6;border-color:#e0b100;border-left-color:#e0b100;color:#5e4500;}
+.budget-balance.warn .budget-balance-detail{color:#5e4500;}
+.budget-balance.over{background:#fbe5e3;border-color:#c0392b;border-left-color:#c0392b;color:#8a1f14;}
+.budget-balance.over .budget-balance-detail{color:#8a1f14;}
+.budget-balance .hidden,.budget-balance.hidden{display:none;}

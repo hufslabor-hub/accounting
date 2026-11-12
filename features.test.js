@@ -38,6 +38,50 @@ assert(noBudgetSpend.level === 'over', '예산 없이 지출하면 over');
 const inc = F.budgetStatus({ type: 'income', budget: 1000, approved: 2000, pending: 0, newAmount: 0 });
 assert(inc.level === 'info' && inc.overBy === 0, '수입은 경고 없이 info');
 
+console.log('2-2) 예산 문구 (describeBudget)');
+{
+  const won = (n) => `${Math.round(n).toLocaleString('ko-KR')}원`;
+  const desc = (p) => F.describeBudget(F.budgetStatus(p), won);
+  let d = desc({ type: 'expense', budget: 1000000, approved: 300000, pending: 100000, newAmount: 0 });
+  assert(d.level === 'ok' && d.headline === '', '여유 있고 금액 미입력이면 안내 문구 없음');
+  assert(d.detail.includes('예산 1,000,000원') && d.detail.includes('승인 300,000원') && d.detail.includes('진행 중 100,000원') && d.detail.includes('잔여 600,000원') && d.detail.includes('소진 40.0%'), '예산·승인·진행 중·잔여·소진율 요약');
+  d = desc({ type: 'expense', budget: 1000000, approved: 300000, pending: 100000, newAmount: 50000 });
+  assert(d.level === 'ok' && d.headline.includes('잔여 550,000원') && d.headline.includes('45.0%'), '금액 입력 시 입력 후 잔여·소진율');
+  d = desc({ type: 'expense', budget: 1000000, approved: 800000, pending: 50000, newAmount: 0 });
+  assert(d.level === 'warn' && d.headline.startsWith('⚠ 주의') && d.headline.includes('이미') && d.headline.includes('85.0%'), '이미 80% 넘게 소진한 목은 금액을 넣기 전에도 주의');
+  d = desc({ type: 'expense', budget: 1000000, approved: 700000, pending: 50000, newAmount: 60000 });
+  assert(d.level === 'warn' && d.headline.includes('이 금액을 입력하면') && d.headline.includes('81.0%'), '입력하면 80%를 넘는 경우 주의');
+  d = desc({ type: 'expense', budget: 1000000, approved: 900000, pending: 50000, newAmount: 80000 });
+  assert(d.level === 'over' && d.headline.startsWith('⛔ 예산 초과') && d.headline.includes('30,000원'), '입력하면 예산 초과 → 초과액 표시');
+  d = desc({ type: 'expense', budget: 1000000, approved: 1100000, pending: 0, newAmount: 0 });
+  assert(d.level === 'over' && d.headline.includes('이미') && d.headline.includes('100,000원'), '이미 초과한 목');
+  d = desc({ type: 'expense', budget: 1000000, approved: 800000, pending: 0, newAmount: 200000 });
+  assert(d.level === 'warn' && d.headline.includes('100.0%'), '정확히 예산만큼 쓰면 초과가 아니라 주의(100%)');
+  d = desc({ type: 'expense', budget: 0, approved: 0, pending: 0, newAmount: 0 });
+  assert(d.level === 'nobudget' && d.headline.includes('예산이 설정되지 않았습니다') && d.detail === '', '예산도 지출도 없으면 안내만');
+  d = desc({ type: 'expense', budget: 0, approved: 0, pending: 0, newAmount: 30000 });
+  assert(d.level === 'over' && d.headline.includes('예산이 없는 목') && d.headline.includes('30,000원'), '예산 없는 목에 입력하면 경고');
+  d = desc({ type: 'income', budget: 5000000, approved: 1000000, pending: 200000, newAmount: 0 });
+  assert(d.level === 'info' && d.headline === '' && d.detail.includes('수입 예산 5,000,000원') && d.detail.includes('진행 중 200,000원'), '수입은 경고 없이 정보만');
+  d = desc({ type: 'expense', budget: 1000000, approved: 900000, pending: 0, newAmount: -300000 });
+  assert(d.level === 'ok' && d.headline.includes('잔여 400,000원'), '환불(음수)은 잔여를 늘림');
+}
+
+console.log('2-3) 승인 집행액 — 관·항 이름의 접미사 차이 무시');
+{
+  const cells = {
+    [JSON.stringify(['9월', '지출', '사업비_관', '회의비_항', '회의비'])]: { a: 100000, n: 2 },
+    [JSON.stringify(['10월', '지출', '사업비', '회의비', '회의비'])]: { a: 50000, n: 1 },
+    [JSON.stringify(['10월', '지출', '운영비_관', '회의비_항', '회의비'])]: { a: 7000, n: 1 },
+    [JSON.stringify(['10월', '수입', '사업비_관', '회의비_항', '회의비'])]: { a: 999, n: 1 }
+  };
+  const strip = (suffix) => (v) => String(v || '').replace(new RegExp(`${suffix}$`), '');
+  assert(F.approvedSpentFromSummary(cells, '지출', '사업비_관', '회의비_항', '회의비') === 100000, '옵션 없으면 이름이 정확히 같은 칸만 (기존 동작)');
+  assert(F.approvedSpentFromSummary(cells, '지출', '사업비_관', '회의비_항', '회의비', { normGwan: strip('_관'), normHang: strip('_항') }) === 150000, '접미사를 무시하면 옛 내역(접미사 없음)도 합산, 월은 모두 합산');
+  assert(F.approvedSpentFromSummary(cells, '지출', '사업비_관', '회의비_항', '회의비', { normGwan: strip('_관'), normHang: strip('_항') }) !== 157000, '관이 다르면 합산하지 않음');
+  assert(F.approvedSpentFromSummary(cells, '수입', '사업비_관', '회의비_항', '회의비') === 999, '구분(수입/지출)을 구분');
+}
+
 console.log('3) 집계·미승인 합계');
 const cells = {
   [JSON.stringify(['1월', '지출', '사업비_관', '조직_항', '조직강화비'])]: { a: 100, n: 1 },

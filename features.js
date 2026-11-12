@@ -103,10 +103,59 @@
   }
 
   /**
+   * budgetStatus 결과를 화면 문구로. fmt: 금액 → '1,234원' (기본값 제공)
+   * @returns {{level, headline, detail}}  headline: 한 줄 안내/경고(없으면 ''), detail: 예산·집행·진행 중·잔여 요약
+   */
+  function describeBudget(s, fmt) {
+    const f = typeof fmt === 'function' ? fmt : (n) => `${Math.round(n).toLocaleString('ko-KR')}원`;
+    const pct = (v) => `${(Math.round(v * 10) / 10).toFixed(1)}%`;
+    const out = { level: s.level, headline: '', detail: '' };
+    const parts = (label) => [`${label} ${f(s.budget)}`, `승인 ${f(s.approved)}`, `진행 중 ${f(s.pending)}`];
+
+    if (s.level === 'info') {
+      out.detail = s.budget > 0
+        ? `수입 예산 ${f(s.budget)} · 승인 ${f(s.approved)}${s.pending ? ` · 진행 중 ${f(s.pending)}` : ''}`
+        : `수입 예산이 설정되지 않은 목입니다 · 승인 ${f(s.approved)}`;
+      return out;
+    }
+    if (s.budget <= 0) {
+      if (s.level === 'nobudget') {
+        out.headline = '이 목은 예산이 설정되지 않았습니다.';
+        return out;
+      }
+      out.headline = s.newAmount
+        ? `⛔ 예산이 없는 목입니다. 이 금액을 입력하면 ${f(s.used + s.newAmount)}을 지출하게 됩니다.`
+        : `⛔ 예산이 없는 목인데 이미 ${f(s.used)}이 집행·진행 중입니다.`;
+      out.detail = `예산 ${f(0)} · 승인 ${f(s.approved)} · 진행 중 ${f(s.pending)}`;
+      return out;
+    }
+    out.detail = `${parts('예산').join(' · ')} · 잔여 ${f(s.remaining)} (소진 ${pct(s.pctNow)})`;
+    if (s.level === 'over') {
+      out.headline = s.newAmount
+        ? `⛔ 예산 초과: 이 금액을 입력하면 예산을 ${f(s.overBy)} 초과합니다.`
+        : `⛔ 예산 초과: 이미 예산을 ${f(s.overBy)} 초과했습니다.`;
+    } else if (s.level === 'warn') {
+      out.headline = s.newAmount
+        ? `⚠ 주의: 이 금액을 입력하면 예산의 ${pct(s.pctAfter)}를 소진합니다 (잔여 ${f(s.remainingAfter)}).`
+        : `⚠ 주의: 이미 예산의 ${pct(s.pctNow)}를 소진한 목입니다 (잔여 ${f(s.remaining)}).`;
+    } else if (s.newAmount) {
+      out.headline = `이 금액을 입력하면 잔여 ${f(s.remainingAfter)} (소진 ${pct(s.pctAfter)})`;
+    }
+    return out;
+  }
+
+  /**
    * 보고서 집계(report-summary)의 cells 에서 한 목의 승인 합계.
    * cells 키: JSON.stringify([월, 구분(수입/지출), 관, 항, 목]) → {a:금액, n:건수}
    */
-  function approvedSpentFromSummary(cells, gubun, gwan, hang, category) {
+  function approvedSpentFromSummary(cells, gubun, gwan, hang, category, opts) {
+    // opts.normGwan / opts.normHang: 관·항 이름을 비교용으로 바꾸는 함수(예: '_관'·'_항' 접미사 제거).
+    // 옛 내역은 접미사 없이 저장돼 있을 수 있어 앱에서는 이 옵션으로 접미사 차이를 무시한다.
+    const o = opts || {};
+    const ng = typeof o.normGwan === 'function' ? o.normGwan : (v) => v;
+    const nh = typeof o.normHang === 'function' ? o.normHang : (v) => v;
+    const wantGwan = ng(gwan);
+    const wantHang = nh(hang);
     let sum = 0;
     Object.keys(cells || {}).forEach((key) => {
       let k;
@@ -116,7 +165,7 @@
         return;
       }
       if (!Array.isArray(k)) return;
-      if (k[1] === gubun && k[2] === gwan && k[3] === hang && k[4] === category) sum += Number(cells[key].a) || 0;
+      if (k[1] === gubun && ng(k[2]) === wantGwan && nh(k[3]) === wantHang && k[4] === category) sum += Number(cells[key].a) || 0;
     });
     return sum;
   }
@@ -510,6 +559,7 @@
     norm,
     parseAmount,
     budgetStatus,
+    describeBudget,
     approvedSpentFromSummary,
     pendingSpent,
     findDuplicates,
