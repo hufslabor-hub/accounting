@@ -5317,27 +5317,25 @@ function refreshMokOptions(){
 // ---------- 새 입력: 선택한 목의 예산 잔액·소진 경고 ----------
 // 판정·문구 규칙은 features.js(budgetStatus·describeBudget), 테스트는 features.test.js.
 // 승인 집행액은 보고서 집계(reportSummary), 진행 중 금액은 화면에 불러온 입력완료·결의완료 내역에서 가져온다.
+// 화면 모양은 세부 계정과목 칸 바로 아래의 '예산 힌트' 카드(.budget-hint: 숫자 2열 + 진행 막대 + 안내 문구).
 function updateBudgetBalance(){
-  const box = document.getElementById('budget-balance');
+  const box = document.getElementById('budget-hint');
   if(!box || typeof ShowMeFeatures === 'undefined') return;
-  const headlineEl = document.getElementById('budget-balance-headline');
-  const detailEl = document.getElementById('budget-balance-detail');
-  const show = (level, headline, detail)=>{
-    box.className = `budget-balance ${level}`;
-    headlineEl.textContent = headline || '';
-    detailEl.textContent = detail || '';
-    headlineEl.classList.toggle('hidden', !headline);
-    detailEl.classList.toggle('hidden', !detail);
+  const hide = ()=>{ box.hidden = true; box.className = 'budget-hint'; box.innerHTML = ''; };
+  const messageOnly = (text, level)=>{
+    box.className = 'budget-hint' + (level ? ` level-${level}` : '');
+    box.innerHTML = `<div class="budget-hint-msg">${escapeHTML(text)}</div>`;
+    box.hidden = false;
   };
   const type = currentGubun==='수입' ? 'income' : 'expense';
   let cls = null;
   try{ cls = JSON.parse(document.getElementById('f-mok').value || 'null'); }catch(e){}
-  if(!cls || !cls.mok || !hasAccount(type, cls)){ box.className = 'budget-balance hidden'; return; }
+  if(!cls || !cls.mok || !hasAccount(type, cls)){ hide(); return; }
 
   if(reportSummary === null){
     // 승인 집행액이 아직 없으면 보고서 집계를 한 번 불러온 뒤 다시 계산한다 (실패해도 반복해서 읽지 않음)
     const failed = budgetSummaryRequested && !budgetSummaryLoading && !reportLoading;
-    show('info', failed ? '승인 집행액을 불러오지 못했습니다. 보고서 탭을 한 번 열어 주세요.' : '승인 집행액을 불러오는 중…', '');
+    messageOnly(failed ? '승인 집행액을 불러오지 못했습니다. 보고서 탭을 한 번 열어 주세요.' : '승인 집행액을 불러오는 중…');
     if(!budgetSummaryRequested && !reportLoading){
       budgetSummaryRequested = true;
       budgetSummaryLoading = true;
@@ -5365,7 +5363,24 @@ function updateBudgetBalance(){
     newAmount: Number.isFinite(typed) ? typed : 0
   });
   const text = ShowMeFeatures.describeBudget(status, fmt);
-  show(status.level, text.headline, text.detail);
+
+  if(status.level === 'nobudget'){ messageOnly(text.headline); return; }   // 예산도 집행도 없는 목: 안내 한 줄만
+  const cell = (label, value)=>`<span>${label} <b>${escapeHTML(value)}</b></span>`;
+  const pct = v => (v === null || v === undefined) ? '-' : `${(Math.round(v*10)/10).toFixed(1)}%`;
+  const cells = status.type==='income'
+    ? [cell('수입 예산', fmt(status.budget)), cell('승인', fmt(status.approved)), cell('진행 중', fmt(status.pending)), cell('달성률', pct(status.pctNow))]
+    : [cell('예산', fmt(status.budget)), cell('승인', fmt(status.approved)), cell('진행 중', fmt(status.pending)), cell('잔여', fmt(status.remaining))];
+  // 진행 막대: 금액을 입력했으면 입력 후 소진율, 아니면 현재 소진율 (0~100%로 제한)
+  const barPct = status.budget > 0
+    ? Math.max(0, Math.min(100, (status.newAmount ? status.pctAfter : status.pctNow) || 0))
+    : (status.level==='over' ? 100 : 0);
+  const level = status.level==='warn' || status.level==='over' ? status.level : '';
+  box.className = 'budget-hint' + (level ? ` level-${level}` : '');
+  box.innerHTML =
+    `<div class="budget-hint-row">${cells.join('')}</div>` +
+    `<div class="budget-bar"><i style="width:${barPct}%"></i></div>` +
+    (text.headline ? `<div class="budget-hint-msg">${escapeHTML(text.headline)}</div>` : '');
+  box.hidden = false;
 }
 
 function hasAccount(type, classification){ return ShowMeEntryTools.hasAccount(accountCategories, type, classification); }
